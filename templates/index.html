@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WireGuard Manager</title>
+<link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+<div id="app">
+  <div class="login-overlay" id="loginOverlay">
+    <div class="login-box">
+      <h1>WireGuard Manager</h1>
+      <p>Введите пароль</p>
+      <form id="loginForm">
+        <input type="password" id="password" placeholder="Пароль" autofocus>
+        <button type="submit">Войти</button>
+      </form>
+      <p class="hint">По умолчанию: admin</p>
+    </div>
+  </div>
+
+  <header class="topbar">
+    <h1>WireGuard Manager</h1>
+    <div>
+      <span class="status-badge" id="statusBadge">Проверка...</span>
+      <button onclick="toggleServer()" id="btnToggle">Запустить</button>
+      <button onclick="logout()">Выход</button>
+    </div>
+  </header>
+
+  <nav class="tabs">
+    <button class="tab active" onclick="switchTab('peers', this)">Пиры</button>
+    <button class="tab" onclick="switchTab('settings', this)">Настройки</button>
+    <button class="tab" onclick="switchTab('logs', this)">Логи</button>
+  </nav>
+
+  <main>
+    <section class="card" id="tab-peers">
+      <h2>Пиры</h2>
+      <div class="add-peer">
+        <input id="peerName" placeholder="Имя пира">
+        <button onclick="addPeer()">Добавить</button>
+      </div>
+      <div id="peersTable"></div>
+    </section>
+
+    <section class="card" id="tab-settings" style="display:none">
+      <h2>Настройки сервера</h2>
+      <form id="serverForm" class="grid-form">
+        <label>Интерфейс<input id="iInterface" value="wg0"></label>
+        <label>Порт<input id="iPort" type="number" value="51820"></label>
+        <label>Endpoint<input id="iEndpoint" placeholder="AUTO"></label>
+        <label>DNS<input id="iDns" value="1.1.1.1"></label>
+        <label>Подсеть<input id="iSubnet" value="10.0.0.0/24" placeholder="10.0.0.0/24"></label>
+        <div class="actions">
+          <button type="submit">Сохранить</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="card" id="tab-logs" style="display:none">
+      <h2>Логи</h2>
+      <button onclick="loadLogs()" class="btn-dl" style="margin-bottom:12px">Обновить</button>
+      <pre id="logOutput" style="background:#0f172a;padding:12px;border-radius:4px;overflow:auto;max-height:500px;font-size:0.8rem;white-space:pre-wrap;word-break:break-all;">Загрузка...</pre>
+    </section>
+  </main>
+
+  <div class="modal" id="qrModal">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeQR()">✕</button>
+      <h3>QR-код пира</h3>
+      <p id="qrPeerName" style="margin-bottom:12px;color:#64748b"></p>
+      <img id="qrImage" src="" alt="QR Code">
+    </div>
+  </div>
+
+  <div class="modal" id="textModal">
+    <div class="modal-content" style="max-width:600px;text-align:left">
+      <button class="modal-close" onclick="closeText()">✕</button>
+      <h3>Конфиг пира</h3>
+      <p id="textPeerName" style="margin-bottom:12px;color:#64748b"></p>
+      <pre id="textOutput" style="background:#0f172a;color:#e2e8f0;padding:12px;border-radius:4px;overflow:auto;max-height:60vh;font-size:0.85rem"></pre>
+      <button onclick="copyText()" class="btn-dl" style="margin-top:12px">Скопировать</button>
+    </div>
+  </div>
+
+  <div class="modal" id="routerModal">
+    <div class="modal-content" style="max-width:520px">
+      <button class="modal-close" onclick="closeRouterModal()">✕</button>
+      <h3>Импорт в Keenetic</h3>
+      <div id="routerLog" style="background:var(--color-bg-tertiary);color:var(--color-text-primary);padding:12px;border-radius:4px;overflow:auto;max-height:60vh;font-size:0.8rem;white-space:pre-wrap;word-break:break-all;margin-bottom:12px;"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button id="keeneticDownloadBtn" onclick="keeneticDownload()" class="btn-dl" style="display:none">⬇ Скачать конфиг (ручной импорт)</button>
+        <button id="routerCloseBtn" onclick="closeRouterModal()" class="btn-dl" style="display:none">Закрыть</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/app.js?v=2026062906"></script>
+</body>
+</html>

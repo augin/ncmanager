@@ -1,0 +1,14 @@
+[Unit]
+Description=WireGuard Manager
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/wg-manager
+ExecStart=/opt/wg-manager/wg-manager
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

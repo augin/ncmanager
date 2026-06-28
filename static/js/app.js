@@ -1,0 +1,681 @@
+const API = '/api';
+const TOKEN_KEY = 'wg_token';
+let currentTab = 'peers';
+let refreshTimer = null;
+let expandedPeers = new Set();
+let expandedInputs = {};
+let activeElementId = null;
+let activeElementCursorPos = null;
+let _keeneticPeerId = null;
+
+function getToken() {
+	return sessionStorage.getItem(TOKEN_KEY) || '';
+}
+
+function setToken(token) {
+	if (token) {
+		sessionStorage.setItem(TOKEN_KEY, token);
+	} else {
+		sessionStorage.removeItem(TOKEN_KEY);
+	}
+}
+
+function xhr(method, path, body) {
+	return new Promise((resolve, reject) => {
+		const x = new XMLHttpRequest();
+		x.open(method, API + path, true);
+		x.setRequestHeader('Content-Type', 'application/json');
+		const token = getToken();
+		if (token) {
+			x.setRequestHeader('Authorization', 'Bearer ' + token);
+		}
+		x.onreadystatechange = function() {
+			if (x.readyState !== 4) return;
+			if (x.status === 401) {
+				setToken('');
+				showLogin();
+				reject(new Error('Unauthorized'));
+				return;
+			}
+			resolve({
+				ok: x.status >= 200 && x.status < 300,
+				status: x.status,
+				json: () => { try { return JSON.parse(x.responseText); } catch(e) { return {}; } },
+				text: () => x.responseText
+			});
+		};
+		x.onerror = () => reject(new Error('Network error'));
+		x.send(body ? JSON.stringify(body) : null);
+	});
+}
+
+function showLogin() {
+	document.getElementById('loginOverlay').classList.remove('hidden');
+}
+
+function hideLogin() {
+	document.getElementById('loginOverlay').classList.add('hidden');
+}
+
+async function login() {
+	try {
+		const pw = document.getElementById('password').value;
+		const res = await xhr('POST', '/login', { password: pw });
+		if (res.ok) {
+			const data = res.json();
+			if (data && data.token) {
+				setToken(data.token);
+			}
+			hideLogin();
+			await init();
+		} else {
+			alert('Неверный пароль');
+		}
+	} catch (e) {
+		alert('Ошибка: ' + e.message);
+	}
+}
+
+async function logout() {
+	stopAutoRefresh();
+	setToken('');
+	await xhr('POST', '/logout');
+	showLogin();
+}
+
+function switchTab(name, btn) {
+	currentTab = name;
+	document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+	if (btn) btn.classList.add('active');
+	document.querySelectorAll('[id^="tab-"]').forEach(el => el.style.display = 'none');
+	const target = document.getElementById('tab-' + name);
+	if (target) target.style.display = '';
+	if (name === 'logs') loadLogs();
+}
+
+async function loadConfig() {
+	return (await xhr('GET', '/config')).json();
+}
+
+async function loadPeers() {
+	return (await xhr('GET', '/peers')).json();
+}
+
+async function loadStatus() {
+	return (await xhr('GET', '/status')).json();
+}
+
+function renderPeers(peers) {
+	const tbody = document.getElementById('peersTable');
+	if (!peers.length) {
+		tbody.innerHTML = '<p style="color:#64748b;padding:12px">Нет пиров</p>';
+		return;
+	}
+	let html = '<table><thead><tr><th>Имя</th><th>IP</th><th>Создан</th><th>Handshake</th><th>Endpoint</th><th>Трафик</th><th>Действия</th><th></th></tr></thead><tbody>';
+	for (const p of peers) {
+		const hs = humanTimeAgo(p.lastHandshake);
+		const age = getPeerAge(p.lastHandshake);
+		const status = getPeerStatus(age);
+		const rx = formatBytes(p.transferRx || 0);
+		const tx = formatBytes(p.transferTx || 0);
+		const created = new Date(p.createdAt).toLocaleDateString('ru-RU');
+		const endpoint = p.endpoint && p.endpoint !== '::' && p.endpoint !== '(none)' ? p.endpoint : '—';
+		const rowClass = status.class === 'offline' ? 'peer-row-offline' : '';
+		const isExpanded = expandedPeers.has(p.id);
+		const arrow = isExpanded ? '▼' : '▶';
+		html += `<tr class="${rowClass}">
+			<td><span class="peer-name-toggle" onclick="togglePeerDetails('${p.id}', event)" style="cursor:pointer;color:#38bdf8">${escapeHtml(p.name)}</span></td>
+			<td><code>${escapeHtml(p.allowedIPs)}</code></td>
+			<td>${created}</td>
+			<td><span class="peer-age ${status.class}" title="${p.lastHandshake && new Date(p.lastHandshake).getTime() >= MIN_REASONABLE_DATE ? new Date(p.lastHandshake).toLocaleString('ru-RU') : 'никогда'}">${status.text} · ${hs}</span></td>
+			<td><code>${escapeHtml(endpoint)}</code></td>
+			<td><span title="↑ ${tx}">↑ ${tx}</span> / <span title="↓ ${rx}">↓ ${rx}</span></td>
+			<td class="peer-actions">
+				<button class="btn-qr" onclick="showQR('${p.id}','${escapeHtml(p.name)}')">QR</button>
+				<button class="btn-dl" onclick="showText('${p.id}','${escapeHtml(p.name)}')">📋</button>
+				<button class="btn-dl" onclick="downloadConf('${p.id}')">⬇</button>
+ 			<button class="btn-dl" onclick="configureRouter('${p.id}')" title="Настроить VPN на роутере Keenetic">⚙</button>
+ 			<button class="btn-dl" onclick="configureDnsRouter('${p.id}')" title="Настроить DNS на роутере Keenetic">🌐</button>
+				<button class="btn-del" onclick="removePeer('${p.id}')">✕</button>
+			</td>
+			<td style="text-align:right;width:30px"><span class="peer-arrow" onclick="togglePeerDetails('${p.id}', event)" style="cursor:pointer;color:#64748b">${arrow}</span></td>
+		</tr>
+		<tr id="details-${p.id}" class="peer-details" style="display:${isExpanded ? '' : 'none'}">
+			<td colspan="8">
+				<div class="peer-details-content">
+					<h4>Настройки роутера для ${escapeHtml(p.name)}</h4>
+					<div class="grid-form">
+						<label>Домен<input id="rd-${p.id}" value="${escapeHtml(p.routerDomain || '')}" placeholder="router.local"></label>
+						<label>Логин<input id="rl-${p.id}" value="${escapeHtml(p.routerLogin || '')}" placeholder="admin"></label>
+						<label>Пароль<input type='password' id='rp-${p.id}' value='${escapeHtml(p.routerPassword || '')}' placeholder='••••••'></label><label>Описание<input id='rdesc-${p.id}' value='${escapeHtml(p.description || '')}' placeholder='Комментарий'></label>
+					</div>
+ 					<button onclick="savePeerRouter('${p.id}')" class="btn-dl" style="margin-top:8px">Сохранить настройки роутера</button>
+ 					<button onclick="configureRouter('${p.id}')" class="btn-qr" style="margin-top:8px;margin-left:8px">Настроить VPN</button>
+ 					<button onclick="configureDnsRouter('${p.id}')" class="btn-qr" style="margin-top:8px;margin-left:8px">Настроить DNS</button>
+				</div>
+			</td>
+		</tr>`;
+	}
+	html += '</tbody></table>';
+	tbody.innerHTML = html;
+}
+
+function togglePeerDetails(id, e) {
+	if (e) e.preventDefault();
+	const row = document.getElementById('details-' + id);
+	if (row) {
+		const isHidden = row.style.display === 'none';
+		if (isHidden) {
+			expandedPeers.clear();
+			expandedPeers.add(id);
+		} else {
+			expandedPeers.delete(id);
+		}
+		document.querySelectorAll('.peer-details').forEach(r => {
+			const rid = r.id.replace('details-', '');
+			r.style.display = expandedPeers.has(rid) ? '' : 'none';
+		});
+	}
+}
+
+async function savePeerRouter(id, silent) {
+	const routerDomain = document.getElementById('rd-' + id).value.trim();
+	const routerLogin = document.getElementById('rl-' + id).value.trim();
+	const routerPassword = document.getElementById('rp-' + id).value;
+	const description = document.getElementById('rdesc-' + id).value.trim();
+	try {
+		const res = await xhr('POST', '/peers/update', {
+			id: id,
+			routerDomain: routerDomain,
+			routerLogin: routerLogin,
+			routerPassword: routerPassword,
+			description: description,
+		});
+		if (!silent && res.ok) {
+			alert('Настройки роутера сохранены');
+		}
+		return res.ok;
+	} catch (e) {
+		if (!silent) alert('Ошибка: ' + e.message);
+		return false;
+	}
+}
+
+const MIN_REASONABLE_DATE = new Date('2020-01-01T00:00:00Z').getTime();
+
+function humanTimeAgo(iso) {
+	if (!iso) return '—';
+	const d = new Date(iso);
+	if (isNaN(d.getTime()) || d.getTime() < MIN_REASONABLE_DATE) return '—';
+	const diff = Math.floor((Date.now() - d.getTime()) / 1000);
+	if (diff < 60) return `${diff} сек.`;
+	if (diff < 3600) {
+		const m = Math.floor(diff / 60);
+		const s = diff % 60;
+		return `${m} мин. ${s} сек.`;
+	}
+	if (diff < 86400) {
+		const h = Math.floor(diff / 3600);
+		const m = Math.floor((diff % 3600) / 60);
+		return `${h} ч. ${m} мин.`;
+	}
+	const days = Math.floor(diff / 86400);
+	const h = Math.floor((diff % 86400) / 3600);
+	return `${days} дн. ${h} ч.`;
+}
+
+function getPeerAge(hs) {
+	if (!hs) return Infinity;
+	const d = new Date(hs);
+	if (isNaN(d.getTime()) || d.getTime() < MIN_REASONABLE_DATE) return Infinity;
+	return Date.now() - d.getTime();
+}
+
+function getPeerStatus(ageSec) {
+	if (ageSec === Infinity) return { text: 'Нет', class: 'offline' };
+	if (ageSec < 3 * 60 * 1000) return { text: 'Онлайн', class: 'online' };
+	if (ageSec < 10 * 60 * 1000) return { text: 'Недавно', class: 'recent' };
+	return { text: 'Оффлайн', class: 'offline' };
+}
+
+function formatBytes(b) {
+	if (b < 1024) return b + ' B';
+	const u = 1024, e = Math.floor(Math.log(b) / Math.log(u));
+	return (b / Math.pow(u, e)).toFixed(1) + ' ' + 'KMGTPE'[e-1] + 'iB';
+}
+
+function escapeHtml(s) {
+	if (s == null) return '';
+	return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function addPeer() {
+	const name = document.getElementById('peerName').value.trim();
+	if (!name) return alert('Введите имя пира');
+	try {
+		const res = await xhr('POST', '/peers/add', { name });
+		if (res.ok) {
+			document.getElementById('peerName').value = '';
+			refresh();
+		} else {
+			alert('Ошибка: ' + res.text());
+		}
+	} catch (e) {
+		alert('Ошибка: ' + e.message);
+	}
+}
+
+async function removePeer(id) {
+	if (!confirm('Удалить пира?')) return;
+	try {
+		const res = await xhr('POST', '/peers/remove', { id });
+		if (res.ok) refresh();
+	} catch (e) {
+		alert('Ошибка: ' + e.message);
+	}
+}
+
+async function toggleServer() {
+	try {
+		const status = await loadStatus();
+		if (status.running) {
+			await xhr('POST', '/server/stop');
+		} else {
+			await xhr('POST', '/server/start');
+		}
+		refresh();
+	} catch (e) {
+		alert('Ошибка: ' + e.message);
+	}
+}
+
+function showQR(id, name) {
+	document.getElementById('qrPeerName').textContent = name || id;
+	const img = document.getElementById('qrImage');
+	img.src = '';
+	img.style.opacity = '0.3';
+	document.getElementById('qrModal').classList.add('show');
+	const token = getToken();
+	fetch(API + '/peers/qrcode/?id=' + encodeURIComponent(id), {
+		headers: { 'Authorization': 'Bearer ' + token }
+	}).then(r => {
+		if (!r.ok) throw new Error('HTTP ' + r.status);
+		return r.arrayBuffer();
+	}).then(buf => {
+		const blob = new Blob([buf], { type: 'image/png' });
+		const url = URL.createObjectURL(blob);
+		img.onload = () => URL.revokeObjectURL(url);
+		img.src = url;
+		img.style.opacity = '1';
+	}).catch(() => {
+		img.style.opacity = '1';
+	});
+}
+
+function closeQR() {
+	document.getElementById('qrModal').classList.remove('show');
+	document.getElementById('qrImage').src = '';
+	document.getElementById('qrPeerName').textContent = '';
+}
+
+function showText(id, name) {
+	document.getElementById('textPeerName').textContent = name || id;
+	document.getElementById('textOutput').textContent = 'Загрузка...';
+	document.getElementById('textModal').classList.add('show');
+	xhr('GET', '/peers/config/?id=' + encodeURIComponent(id)).then(res => {
+		document.getElementById('textOutput').textContent = res.text();
+	}).catch(e => {
+		document.getElementById('textOutput').textContent = 'Ошибка: ' + e.message;
+	});
+}
+
+function closeText() {
+	document.getElementById('textModal').classList.remove('show');
+	document.getElementById('textOutput').textContent = '';
+	document.getElementById('textPeerName').textContent = '';
+}
+
+function closeRouterModal() {
+	document.getElementById('routerModal').classList.remove('show');
+}
+
+async function configureRouter(id) {
+	const routerDomain = document.getElementById('rd-' + id).value.trim();
+	const routerLogin = document.getElementById('rl-' + id).value.trim();
+	const routerPassword = document.getElementById('rp-' + id).value;
+	if (!routerDomain) return alert('Укажите домен/адрес роутера');
+	if (!routerLogin) return alert('Укажите логин');
+	if (!routerPassword) return alert('Укажите пароль');
+
+	await savePeerRouter(id, true);
+
+	_keeneticPeerId = id;
+
+	const log = document.getElementById('routerLog');
+	if (!log) return;
+	log.textContent = 'Импорт конфигурации в Keenetic...\n';
+	log.scrollTop = log.scrollHeight;
+
+	const closeBtn = document.getElementById('routerCloseBtn');
+	if (closeBtn) closeBtn.style.display = 'none';
+	const dlBtn = document.getElementById('keeneticDownloadBtn');
+	if (dlBtn) dlBtn.style.display = 'none';
+
+	document.getElementById('routerModal').classList.add('show');
+	document.getElementById('routerLog').style.display = '';
+
+	try {
+		log.textContent += '📡 Подключение к ' + routerDomain + '...\n';
+		const res = await xhr('POST', '/peers/keenetic/' + encodeURIComponent(id), {});
+		const data = await res.json();
+		if (data.status === 'ok') {
+			if (data.intersects) {
+				log.textContent += '🔄 Интерфейс обновлён: ' + data.created + '\n';
+			} else {
+				log.textContent += '✅ Интерфейс создан: ' + data.created + '\n';
+			}
+			if (data.messages && data.messages.length) {
+				for (const msg of data.messages) {
+					log.textContent += '   ↳ ' + msg + '\n';
+				}
+			}
+			log.textContent += '\n';
+			log.textContent += 'Готово! Интерфейс активен.\n';
+			log.textContent += 'Проверьте: ' + routerDomain + ' → Другие подключения → WireGuard\n';
+		} else {
+			log.textContent += '❌ Ошибка: ' + (data.error || 'неизвестно') + '\n';
+		}
+	} catch (e) {
+		log.textContent += '❌ Ошибка импорта: ' + e.message + '\n';
+		log.textContent += '\nВы можете скачать конфиг и импортировать вручную:\n';
+		log.textContent += '1. Нажмите «Скачать конфиг»\n';
+		log.textContent += '2. В Keenetic: Другие подключения → WireGuard → Загрузить из файла\n';
+		const dlBtn = document.getElementById('keeneticDownloadBtn');
+		if (dlBtn) dlBtn.style.display = '';
+	}
+
+	if (closeBtn) closeBtn.style.display = '';
+ }
+
+async function configureDnsRouter(id) {
+	const routerDomain = document.getElementById('rd-' + id).value.trim();
+	const routerLogin = document.getElementById('rl-' + id).value.trim();
+	const routerPassword = document.getElementById('rp-' + id).value;
+	if (!routerDomain) return alert('Укажите домен/адрес роутера');
+	if (!routerLogin) return alert('Укажите логин');
+	if (!routerPassword) return alert('Укажите пароль');
+
+	await savePeerRouter(id, true);
+
+	_keeneticPeerId = id;
+
+	const log = document.getElementById('routerLog');
+	if (!log) return;
+	log.textContent = 'Настройка DNS на роутере...\n';
+	log.scrollTop = log.scrollHeight;
+
+	const closeBtn = document.getElementById('routerCloseBtn');
+	if (closeBtn) closeBtn.style.display = 'none';
+	const dlBtn = document.getElementById('keeneticDownloadBtn');
+	if (dlBtn) dlBtn.style.display = 'none';
+
+	document.getElementById('routerModal').classList.add('show');
+	document.getElementById('routerLog').style.display = '';
+
+	try {
+		log.textContent += '📡 Подключение к ' + routerDomain + '...\n';
+		const res = await xhr('POST', '/peers/keenetic-dns/' + encodeURIComponent(id), {});
+		const data = await res.json();
+		if (data.status === 'ok') {
+			log.textContent += '✅ DNS настроен\n';
+			if (data.messages && data.messages.length) {
+				for (const msg of data.messages) {
+					log.textContent += '   ↳ ' + msg + '\n';
+				}
+			}
+			log.textContent += '\nГотово!\n';
+		} else {
+			log.textContent += '❌ Ошибка: ' + (data.error || 'неизвестно') + '\n';
+		}
+	} catch (e) {
+		log.textContent += '❌ Ошибка настройки DNS: ' + e.message + '\n';
+	}
+
+	if (closeBtn) closeBtn.style.display = '';
+}
+
+ async function fetchServerPrivKey() {
+	const res = await fetch(API + '/keys/generate', {
+		headers: { 'Authorization': 'Bearer ' + getToken(), 'Accept': 'application/json' },
+		method: 'POST'
+	});
+	if (!res.ok) throw new Error('HTTP ' + res.status);
+	const data = await res.json();
+	return data.publicKey || '';
+}
+
+function keeneticDownload() {
+	const id = _keeneticPeerId;
+	if (!id) return;
+	const token = getToken();
+	fetch(API + '/peers/keenetic-dl/' + encodeURIComponent(id), {
+		headers: { 'Authorization': 'Bearer ' + token }
+	}).then(r => {
+		if (!r.ok) throw new Error('HTTP ' + r.status);
+		return r.blob();
+	}).then(blob => {
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		const peerName = getPeerNameById(id) || 'peer';
+		a.download = 'keenetic-' + peerName + '.conf';
+		a.click();
+		URL.revokeObjectURL(url);
+	}).catch(e => {
+		alert('Ошибка скачивания: ' + e.message);
+	});
+}
+
+function getPeerNameById(id) {
+	const peers = document.querySelectorAll('.peer-name-toggle');
+	for (const el of peers) {
+		if (el.getAttribute('onclick') && el.getAttribute('onclick').includes(id)) {
+			return el.textContent;
+		}
+	}
+	return null;
+}
+
+function copyText() {
+	const text = document.getElementById('textOutput').textContent;
+	const btn = event.target;
+	const oldText = btn.textContent;
+	try {
+		navigator.clipboard.writeText(text).then(() => {
+			btn.textContent = 'Скопировано';
+			setTimeout(() => btn.textContent = oldText, 2000);
+		}).catch(() => {
+			const el = document.getElementById('textOutput');
+			const range = document.createRange();
+			range.selectNode(el);
+			window.getSelection().removeAllRanges();
+			window.getSelection().addRange(range);
+			document.execCommand('copy');
+			btn.textContent = 'Скопировано';
+			setTimeout(() => btn.textContent = oldText, 2000);
+		});
+	} catch (e) {
+		if (btn) btn.textContent = oldText;
+	}
+}
+
+function downloadConf(id) {
+	const token = getToken();
+	fetch(API + '/peers/download/?id=' + encodeURIComponent(id), {
+		headers: { 'Authorization': 'Bearer ' + token }
+	}).then(r => {
+		if (!r.ok) throw new Error('HTTP ' + r.status);
+		return r.blob();
+	}).then(blob => {
+		const url = URL.createObjectURL(blob);
+		const a = document.createElement('a');
+		a.href = url;
+		const peerName = getPeerNameById(id) || 'peer';
+		a.download = peerName + '.conf';
+		a.click();
+		URL.revokeObjectURL(url);
+	}).catch(e => {
+		alert('Ошибка скачивания: ' + e.message);
+	});
+}
+
+async function refresh() {
+	try {
+		const peers = await loadPeers();
+		const status = await loadStatus();
+		saveExpandedInputs();
+		renderPeers(peers);
+		restoreExpandedInputs();
+		const badge = document.getElementById('statusBadge');
+		const btn = document.getElementById('btnToggle');
+		if (status.running) {
+			badge.textContent = 'Запущен';
+			badge.className = 'status-badge up';
+			btn.textContent = 'Остановить';
+		} else {
+			badge.textContent = 'Остановлен';
+			badge.className = 'status-badge down';
+			btn.textContent = 'Запустить';
+		}
+	} catch (e) {
+		console.error('refresh error:', e);
+	}
+}
+
+function saveExpandedInputs() {
+	const ae = document.activeElement;
+	if (ae && ae.tagName === 'INPUT') {
+		activeElementId = ae.id;
+		activeElementCursorPos = ae.selectionStart;
+	}
+	document.querySelectorAll('.peer-details').forEach(row => {
+		const id = row.id.replace('details-', '');
+		const rd = document.getElementById('rd-' + id);
+		const rl = document.getElementById('rl-' + id);
+		const rp = document.getElementById('rp-' + id);
+		const rdesc = document.getElementById('rdesc-' + id);
+		if (rd) expandedInputs[id] = { rd: rd.value, rl: rl ? rl.value : '', rp: rp ? rp.value : '', rdesc: rdesc ? rdesc.value : '' };
+	});
+}
+
+function restoreExpandedInputs() {
+	for (const [id, vals] of Object.entries(expandedInputs)) {
+		const rd = document.getElementById('rd-' + id);
+		const rl = document.getElementById('rl-' + id);
+		const rp = document.getElementById('rp-' + id);
+		const rdesc = document.getElementById('rdesc-' + id);
+		if (rd && vals.rd !== undefined) rd.value = vals.rd;
+		if (rl && vals.rl !== undefined) rl.value = vals.rl;
+		if (rp && vals.rp !== undefined) rp.value = vals.rp;
+		if (rdesc && vals.rdesc !== undefined) rdesc.value = vals.rdesc;
+	}
+	if (activeElementId) {
+		const el = document.getElementById(activeElementId);
+		if (el) {
+			el.focus();
+			if (activeElementCursorPos !== null) {
+				el.setSelectionRange(activeElementCursorPos, activeElementCursorPos);
+			}
+		}
+		activeElementId = null;
+		activeElementCursorPos = null;
+	}
+}
+
+function clearExpandedInputs() {
+	expandedInputs = {};
+}
+
+async function saveConfig(e) {
+	e.preventDefault();
+	try {
+		const cfg = {
+			interface: document.getElementById('iInterface').value,
+			port: parseInt(document.getElementById('iPort').value),
+			endpoint: document.getElementById('iEndpoint').value,
+			dns: document.getElementById('iDns').value,
+			subnet: document.getElementById('iSubnet').value,
+		};
+		const res = await xhr('POST', '/config/save', cfg);
+		if (res.ok) alert('Настройки сохранены. Сервер перезапущен.');
+	} catch (e) {
+		alert('Ошибка: ' + e.message);
+	}
+}
+
+async function init() {
+	console.log('>>> INIT START <<<');
+	hideLogin();
+	const cfg = await loadConfig();
+	document.getElementById('iInterface').value = cfg.interface || 'wg0';
+	document.getElementById('iPort').value = cfg.port || 51820;
+	document.getElementById('iEndpoint').value = cfg.endpoint || '';
+	document.getElementById('iDns').value = cfg.dns || '1.1.1.1';
+	document.getElementById('iSubnet').value = cfg.subnet || '10.0.0.0/24';
+	document.getElementById('serverForm').addEventListener('submit', saveConfig);
+	switchTab('peers', document.querySelector('.tab'));
+	startAutoRefresh();
+	refresh();
+}
+
+function startAutoRefresh() {
+	stopAutoRefresh();
+	refreshTimer = setInterval(() => {
+		if (!document.getElementById('qrModal').classList.contains('show') &&
+			!document.getElementById('textModal').classList.contains('show')) {
+			if (currentTab === 'logs') {
+				loadLogs();
+			} else {
+				refresh();
+			}
+		}
+	}, 5000);
+}
+
+function stopAutoRefresh() {
+	if (refreshTimer) {
+		clearInterval(refreshTimer);
+		refreshTimer = null;
+	}
+}
+
+async function loadLogs() {
+	try {
+		const res = await xhr('GET', '/logs');
+		if (res.ok) {
+			document.getElementById('logOutput').textContent = res.text();
+		} else {
+			document.getElementById('logOutput').textContent = 'Ошибка: ' + res.text();
+		}
+	} catch (e) {
+		document.getElementById('logOutput').textContent = 'Ошибка: ' + e.message;
+	}
+}
+
+document.getElementById('loginForm').addEventListener('submit', function(e) {
+	e.preventDefault();
+	login();
+});
+
+window.addEventListener('DOMContentLoaded', async function() {
+	try {
+		const res = await xhr('GET', '/status');
+		if (res.ok) {
+			await init();
+		} else {
+			showLogin();
+		}
+	} catch (e) {
+		showLogin();
+	}
+});

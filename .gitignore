@@ -1,0 +1,6 @@
+data/app.log
+data/.auth
+data/.secret
+data/server_private.key
+data/wg0.conf
+wg-manager
