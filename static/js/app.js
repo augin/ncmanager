@@ -611,10 +611,14 @@ function renderPresetCatalog() {
   const items = activePresetCategory === 'all' ? DNS_PRESETS : DNS_PRESETS.filter(p => p.cat === activePresetCategory);
   grid.innerHTML = items.map(p => {
     const catClass = 'cat-' + (p.cat || 'default');
+    const parts = [];
+    if (p.domains.length) parts.push(`${p.domains.length} доменов`);
+    if (p.subnets && p.subnets.length) parts.push(`${p.subnets.length} CIDR`);
+    const meta = parts.join(', ');
     return `<div class="preset-card" onclick="addPresetRoute('${escapeHtml(p.name)}')">
       <div class="preset-name">${escapeHtml(p.name)}</div>
       <div class="preset-meta">
-        <span class="preset-count">${p.domains.length} доменов</span>
+        ${meta ? `<span class="preset-count">${meta}</span>` : ''}
         <span class="preset-cat ${catClass}">${escapeHtml(p.catLabel || p.cat)}</span>
       </div>
     </div>`;
@@ -630,7 +634,11 @@ async function addPresetRoute(name) {
   const preset = DNS_PRESETS.find(p => p.name === name);
   if (!preset) return;
   try {
-    const res = await xhr('POST', '/dns/routes/create', { name: preset.name, domains: preset.domains });
+    const res = await xhr('POST', '/dns/routes/create', {
+      name: preset.name,
+      domains: preset.domains,
+      subnets: preset.subnets || []
+    });
     if (res.ok) {
       loadDnsRoutes();
     } else {
@@ -663,8 +671,9 @@ function renderDnsRouteList(routes) {
   let html = '';
   for (const route of routes) {
     const domains = route.domains || [];
+    const subnets = route.subnets || [];
     const domainCount = domains.length;
-    const cidrCount = 0;
+    const cidrCount = subnets.length;
     const preview = domains.slice(0, 3).join(', ') + (domainCount > 3 ? ' …' : '');
     const backendLabel = getBackendLabel(route);
     html += `<div class="dns-route-card ${route.enabled ? 'enabled' : 'disabled'}">
@@ -720,12 +729,14 @@ async function showDnsRouteModal(id) {
     const routes = await loadDnsRoutesList();
     route = routes.find(r => r.id === id);
   }
-  if (!route) route = { id: '', name: '', domains: [], enabled: true };
+  if (!route) route = { id: '', name: '', domains: [], subnets: [], enabled: true };
 
   const nameInput = document.getElementById('dnsRouteName');
   const domainsInput = document.getElementById('dnsRouteDomains');
+  const subnetsInput = document.getElementById('dnsRouteSubnets');
   if (nameInput) nameInput.value = route.name || '';
   if (domainsInput) domainsInput.value = (route.domains || []).join('\n');
+  if (subnetsInput) subnetsInput.value = (route.subnets || []).join('\n');
 
   const overlay = document.getElementById('dnsRouteModalOverlay');
   if (overlay) {
@@ -752,15 +763,17 @@ async function saveDnsRouteModal() {
   const editId = overlay ? overlay.dataset.editId : '';
   const nameInput = document.getElementById('dnsRouteName');
   const domainsInput = document.getElementById('dnsRouteDomains');
-  if (!nameInput || !domainsInput) return;
+  const subnetsInput = document.getElementById('dnsRouteSubnets');
+  if (!nameInput || !domainsInput || !subnetsInput) return;
 
   const name = nameInput.value.trim();
   if (!name) return alert('Введите название');
 
   const domains = domainsInput.value.split('\n').map(s => s.trim()).filter(s => s !== '');
-  if (!domains.length) return alert('Добавьте хотя бы один домен');
+  const subnets = subnetsInput.value.split('\n').map(s => s.trim()).filter(s => s !== '');
+  if (!domains.length && !subnets.length) return alert('Добавьте хотя бы один домен или CIDR');
 
-  const payload = { name, domains, enabled: true };
+  const payload = { name, domains, subnets, enabled: true };
   if (editId) payload.id = editId;
 
   try {
@@ -793,10 +806,18 @@ function addPresetDomains() {
   const preset = DNS_PRESETS.find(p => p.name === select.value);
   if (!preset) return;
   const domainsInput = document.getElementById('dnsRouteDomains');
-  if (!domainsInput) return;
-  const existing = domainsInput.value.split('\n').map(s => s.trim()).filter(s => s !== '');
-  const merged = [...new Set([...existing, ...preset.domains])];
-  domainsInput.value = merged.join('\n');
+  const subnetsInput = document.getElementById('dnsRouteSubnets');
+  if (domainsInput) {
+    const existing = domainsInput.value.split('\n').map(s => s.trim()).filter(s => s !== '');
+    const merged = [...new Set([...existing, ...preset.domains])];
+    domainsInput.value = merged.join('\n');
+  }
+  if (subnetsInput && preset.subnets && preset.subnets.length) {
+    const existing = subnetsInput.value.split('\n').map(s => s.trim()).filter(s => s !== '');
+    const merged = [...new Set([...existing, ...preset.subnets])];
+    subnetsInput.value = merged.join('\n');
+  }
+  select.value = '';
 }
 
 async function refresh() {

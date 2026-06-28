@@ -59,6 +59,7 @@ type DnsRoute struct {
 	ID        string   `json:"id"`
 	Name      string   `json:"name"`
 	Domains   []string `json:"domains"`
+	Subnets   []string `json:"subnets,omitempty"`
 	Enabled   bool     `json:"enabled"`
 	Color     string   `json:"color,omitempty"`
 	TunnelID  string   `json:"tunnelId,omitempty"`
@@ -900,6 +901,7 @@ func (s *Server) createDnsRoute(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		Name    string   `json:"name"`
 		Domains []string `json:"domains"`
+		Subnets []string `json:"subnets"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
@@ -910,6 +912,7 @@ func (s *Server) createDnsRoute(w http.ResponseWriter, r *http.Request) {
 		ID:      generateID(),
 		Name:    req.Name,
 		Domains: req.Domains,
+		Subnets: req.Subnets,
 		Enabled: true,
 	}
 	cfg.DnsRoutes = append(cfg.DnsRoutes, route)
@@ -923,6 +926,7 @@ func (s *Server) updateDnsRoute(w http.ResponseWriter, r *http.Request) {
 		ID      string   `json:"id"`
 		Name    string   `json:"name"`
 		Domains []string `json:"domains"`
+		Subnets []string `json:"subnets"`
 		Enabled bool     `json:"enabled"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -934,6 +938,7 @@ func (s *Server) updateDnsRoute(w http.ResponseWriter, r *http.Request) {
 		if cfg.DnsRoutes[i].ID == req.ID {
 			cfg.DnsRoutes[i].Name = req.Name
 			cfg.DnsRoutes[i].Domains = req.Domains
+			cfg.DnsRoutes[i].Subnets = req.Subnets
 			cfg.DnsRoutes[i].Enabled = req.Enabled
 			_ = saveConfig(dataFile, cfg)
 			w.Header().Set("Content-Type", "application/json")
