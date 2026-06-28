@@ -22,7 +22,7 @@ func keeneticSetupSecureDns(httpClient *http.Client, baseURL string) error {
 	for _, srv := range dnsServers {
 		upstream := map[string]any{"address": srv.address}
 		if srv.sni != "" {
-			upstream["domain"] = srv.sni
+			upstream["fqdn"] = srv.sni
 		}
 		upstreams = append(upstreams, upstream)
 	}
