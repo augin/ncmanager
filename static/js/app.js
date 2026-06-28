@@ -703,7 +703,7 @@ async function toggleDnsRoute(id) {
     const routes = await loadDnsRoutesList();
     const route = routes.find(r => r.id === id);
     if (!route) return;
-    await xhr('POST', '/dns/routes/update', { id, enabled: !route.enabled });
+    await xhr('POST', '/dns/routes/update', { id, name: route.name, domains: route.domains || [], subnets: route.subnets || [], enabled: !route.enabled });
     loadDnsRoutes();
   } catch (e) {
     alert('Ошибка: ' + e.message);
