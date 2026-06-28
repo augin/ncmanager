@@ -2465,9 +2465,72 @@ async function loadDnsRoutes() {
     if (res.ok) {
       const routes = await res.json();
       renderDnsRouteList(routes);
+      renderPresetCatalog();
     }
   } catch (e) {
     console.error('loadDnsRoutes error:', e);
+  }
+}
+
+const PRESET_CATEGORIES = ['all','ai','block','cloud','developer','gaming','media','social'];
+const PRESET_CAT_LABELS = {
+  all:'Все', ai:'AI', block:'Блок-листы', cloud:'Облака',
+  developer:'Developer', gaming:'Игры', media:'Медиа', social:'Соцсети'
+};
+let activePresetCategory = 'all';
+
+function renderPresetCatalog() {
+  const filters = document.getElementById('presetFilters');
+  const grid = document.getElementById('presetGrid');
+  if (!filters || !grid) return;
+
+  filters.innerHTML = PRESET_CATEGORIES.map(c =>
+    `<button class="preset-filter ${c === activePresetCategory ? 'active' : ''}" onclick="filterPresets('${c}')">${PRESET_CAT_LABELS[c]}</button>`
+  ).join('');
+
+  const items = activePresetCategory === 'all' ? DNS_PRESETS : DNS_PRESETS.filter(p => p.name.toLowerCase().includes(activePresetCategory === 'ai' ? 'ai' : activePresetCategory === 'block' ? 'заблокирован' : activePresetCategory === 'cloud' ? 'cloud' : activePresetCategory === 'developer' ? 'dev' : activePresetCategory === 'gaming' ? 'steam\|roblox\|xbox\|playstation\|epic\|blizzard\|nintendo\|ubisoft' : activePresetCategory === 'media' ? 'netflix\|youtube\|spotify\|twitch\|hbo\|disney\|hulu\|prime' : activePresetCategory === 'social' ? 'telegram\|instagram\|facebook\|twitter\|discord\|whatsapp\|tiktok\|threads\|reddit\|signal' : p.name));
+
+  grid.innerHTML = items.map(p => {
+    const catClass = guessPresetCatClass(p.name);
+    return `<div class="preset-card" onclick="addPresetRoute('${escapeHtml(p.name)}')">
+      <div class="preset-name">${escapeHtml(p.name)}</div>
+      <div class="preset-meta">
+        <span class="preset-count">${p.domains.length} доменов</span>
+        <span class="preset-cat ${catClass}">${catClass.replace('cat-','')}</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function guessPresetCatClass(name) {
+  const n = name.toLowerCase();
+  if (n.includes('ai') || n.includes('claude') || n.includes('copilot') || n.includes('gemini') || n.includes('grok') || n.includes('openai') || n.includes('perplexity')) return 'cat-ai';
+  if (n.includes('заблокирован') || n.includes('рecлaм') || n.includes('18+') || n.includes('adult')) return 'cat-block';
+  if (n.includes('cloud') || n.includes('aws') || n.includes('akamai') || n.includes('binance') || n.includes('cloudflare') || n.includes('paypal') || n.includes('samsung') || n.includes('nvidia') || n.includes('google play')) return 'cat-cloud';
+  if (n.includes('dev') || n.includes('github') || n.includes('docker') || n.includes('adobe') || n.includes('canva') || n.includes('figma') || n.includes('gitlab') || n.includes('jetbrains') || n.includes('slack') || n.includes('vercel') || n.includes('zoom') || n.includes('atlassian') || n.includes('npm') || n.includes('ip checkers') || n.includes('linkedin') || n.includes('notion') || n.includes('ip checkers')) return 'cat-developer';
+  if (n.includes('steam') || n.includes('roblox') || n.includes('xbox') || n.includes('playstation') || n.includes('epic') || n.includes('blizzard') || n.includes('nintendo') || n.includes('ubisoft') || n.includes('games') || n.includes('gaming') || n.includes('oculus')) return 'cat-gaming';
+  if (n.includes('youtube') || n.includes('netflix') || n.includes('spotify') || n.includes('twitch') || n.includes('hbo') || n.includes('disney') || n.includes('hulu') || n.includes('prime') || n.includes('soundcloud') || n.includes('tidal') || n.includes('vimeo') || n.includes('kinopub') || n.includes('torrent') || n.includes('wikimedia') || n.includes('deezer') || n.includes('tmdb') || n.includes('bbc')) return 'cat-media';
+  if (n.includes('telegram') || n.includes('instagram') || n.includes('facebook') || n.includes('twitter') || n.includes('discord') || n.includes('whatsapp') || n.includes('tiktok') || n.includes('threads') || n.includes('reddit') || n.includes('signal') || n.includes('bluesky') || n.includes('medium') || n.includes('patreon') || n.includes('pinterest') || n.includes('duckduckgo') || n.includes('x.com') || n.includes('x (twitter)')) return 'cat-social';
+  return 'cat-default';
+}
+
+function filterPresets(cat) {
+  activePresetCategory = cat;
+  renderPresetCatalog();
+}
+
+async function addPresetRoute(name) {
+  const preset = DNS_PRESETS.find(p => p.name === name);
+  if (!preset) return;
+  try {
+    const res = await xhr('POST', '/dns/routes/create', { name: preset.name, domains: preset.domains });
+    if (res.ok) {
+      loadDnsRoutes();
+    } else {
+      alert('Ошибка добавления: ' + (await res.text()));
+    }
+  } catch (e) {
+    alert('Ошибка: ' + e.message);
   }
 }
 

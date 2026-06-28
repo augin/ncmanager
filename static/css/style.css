@@ -392,6 +392,39 @@ code {
 .dns-modal .domain-hint { font-size: 0.7rem; color: var(--color-text-muted); margin-top: 4px; }
 .dns-modal .actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; }
 
+.preset-catalog { margin-top: 24px; }
+.preset-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; flex-wrap: wrap; gap: 8px; }
+.preset-header h3 { font-size: 1rem; color: var(--color-text-primary); }
+.preset-filters { display: flex; gap: 6px; flex-wrap: wrap; }
+.preset-filter {
+  background: var(--color-bg-tertiary); border: 1px solid var(--color-border);
+  color: var(--color-text-muted); padding: 4px 10px; border-radius: 20px;
+  cursor: pointer; font-size: 0.75rem;
+}
+.preset-filter:hover { color: var(--color-text-primary); border-color: var(--color-text-muted); }
+.preset-filter.active { background: var(--color-accent); color: white; border-color: var(--color-accent); }
+.preset-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px; }
+.preset-card {
+  background: var(--color-bg-primary); border: 1px solid var(--color-border);
+  border-radius: 8px; padding: 12px; cursor: pointer; transition: all 0.2s;
+}
+.preset-card:hover { border-color: var(--color-accent); transform: translateY(-2px); }
+.preset-card .preset-name { font-size: 0.85rem; font-weight: 600; color: var(--color-text-primary); margin-bottom: 6px; }
+.preset-card .preset-meta { display: flex; justify-content: space-between; align-items: center; }
+.preset-card .preset-count { font-size: 0.7rem; color: var(--color-text-muted); }
+.preset-card .preset-cat {
+  font-size: 0.6rem; font-weight: 700; padding: 2px 6px; border-radius: 3px;
+  text-transform: uppercase;
+}
+.cat-ai { background: rgba(122,162,247,0.15); color: #7aa2f7; }
+.cat-block { background: rgba(245,90,90,0.15); color: #f55a5a; }
+.cat-cloud { background: rgba(80,200,120,0.15); color: #50c878; }
+.cat-developer { background: rgba(200,160,80,0.15); color: #c8a050; }
+.cat-gaming { background: rgba(180,80,220,0.15); color: #b450dc; }
+.cat-media { background: rgba(240,120,80,0.15); color: #f07850; }
+.cat-social { background: rgba(100,180,240,0.15); color: #64b4f0; }
+.cat-default { background: rgba(160,160,160,0.15); color: #a0a0a0; }
+
 .toast-container {
   position: fixed;
   bottom: 1rem;
