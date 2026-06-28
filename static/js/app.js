@@ -91,7 +91,7 @@ function switchTab(name, btn) {
 	const target = document.getElementById('tab-' + name);
 	if (target) target.style.display = '';
 	if (name === 'logs') loadLogs();
-	if (name === 'dns') loadDnsStatus();
+	if (name === 'dns') loadDnsRoutes();
 }
 
 async function loadConfig() {
@@ -577,107 +577,162 @@ function downloadConf(id) {
 	});
 }
 
-const DNS_PRESETS = [
-  { address: '9.9.9.9', sni: 'dns.quad9.net', label: 'Quad9' },
-  { address: '1.1.1.1', sni: 'cloudflare-dns.com', label: 'Cloudflare' },
-  { address: 'common.dot.dns.yandex.net', sni: 'ru', label: 'Yandex .ru' },
-  { address: 'common.dot.dns.yandex.net', sni: 'su', label: 'Yandex .su' },
-  { address: 'common.dot.dns.yandex.net', sni: 'xn--p1ai', label: 'Yandex .рф' },
+const DNS_YOUTUBE_DOMAINS = [
+  'youtube.com','youtu.be','yt.be','ytimg.com','ytimg.l.google.com','yting.com',
+  'ggpht.com','googlevideo.com','jnn-pa.googleapis.com','nhacmp3youtube.com',
+  'returnyoutubedislikeapi.com','wide-youtube.l.google.com',
+  'youtubeembeddedplayer.googleapis.com','youtubei.googleapis.com','youtubekids.com',
+  'youtube-nocookie.com','youtube-ui.l.google.com','yt3.googleusercontent.com',
+  'yt-video-upload.l.google.com'
 ];
 
-let dnsRouterCreds = null;
+const DNS_PRESETS = [
+  { name: 'YouTube', domains: [...DNS_YOUTUBE_DOMAINS] },
+  { name: 'Google', domains: ['google.com','google.ru','google.com.hk','google.co.uk','google.de','google.fr','google.it','google.es','google.ca','google.com.au','gmail.com','drive.google.com','docs.google.com','sheets.google.com','calendar.google.com','play.google.com','news.google.com','translate.google.com','maps.google.com'] },
+  { name: 'Instagram', domains: ['instagram.com','www.instagram.com','cdninstagram.com','scontent.cdninstagram.com','graph.instagram.com','i.instagram.com'] },
+  { name: 'TikTok', domains: ['tiktok.com','www.tiktok.com','tiktokcdn.com','tiktokcdn-us.com','tiktokcdn-eu.com','tiktokv.com','tiktokv-us.com','tiktokv-eu.com','ibytedtos.com','byteoversea.com','musemuse.cn','muscdn.com','bytedance.com'] },
+  { name: 'Netflix', domains: ['netflix.com','www.netflix.com','netflix.net','nflxext.com','nflxso.net','nflxvideo.net','nflxsearch.net','nflximg.net','nflximg.com','nflxlive.net','nflxso.com','nflxext.com'] },
+];
 
-function renderDnsPresetList(upstreams) {
-  const list = document.getElementById('dnsPresetList');
+async function loadDnsRoutes() {
+  try {
+    const res = await xhr('GET', '/dns/routes');
+    if (res.ok) {
+      const routes = await res.json();
+      renderDnsRouteList(routes);
+    }
+  } catch (e) {
+    console.error('loadDnsRoutes error:', e);
+  }
+}
+
+function renderDnsRouteList(routes) {
+  const list = document.getElementById('dnsRouteList');
   if (!list) return;
-  const upstreamMap = {};
-  for (const u of upstreams) {
-    upstreamMap[u.address] = u;
+  if (!routes.length) {
+    list.innerHTML = '<p style="color:#64748b">Нет маршрутов. Нажмите «+ Новый маршрут»</p>';
+    return;
   }
   let html = '';
-  for (const preset of DNS_PRESETS) {
-    const found = upstreamMap[preset.address];
-    const hasSni = found && (found.fqdn === preset.sni || found.domain === preset.sni);
-    html += `<div class="dns-preset-item">
-      <span class="dns-addr">${escapeHtml(preset.address)}</span>
-      ${hasSni ? `<span class="dns-sni">SNI: ${escapeHtml(preset.sni)}</span>` : '<span class="dns-sni">—</span>'}
-      <span class="dns-badge ${hasSni ? 'ok' : 'missing'}">${hasSni ? '✓' : '✗'}</span>
+  for (const route of routes) {
+    const domainCount = (route.domains || []).length;
+    const domainsPreview = (route.domains || []).slice(0, 5).join(', ') + (domainCount > 5 ? ' ...' : '');
+    html += `<div class="dns-route-card ${route.enabled ? 'enabled' : 'disabled'}">
+      <div class="dns-route-info">
+        <div class="dns-route-name">${escapeHtml(route.name)}</div>
+        <div class="dns-route-meta">${domainCount} доменов</div>
+        ${domainsPreview ? `<div class="dns-route-domains">${escapeHtml(domainsPreview)}</div>` : ''}
+      </div>
+      <div class="dns-route-actions">
+        <button class="dns-toggle ${route.enabled ? 'on' : ''}" onclick="toggleDnsRoute('${route.id}')" title="${route.enabled ? 'Выключить' : 'Включить'}"></button>
+        <button class="dns-btn" onclick="editDnsRoute('${route.id}')" title="Изменить">✎</button>
+        <button class="dns-btn danger" onclick="deleteDnsRoute('${route.id}')" title="Удалить">✕</button>
+      </div>
     </div>`;
   }
   list.innerHTML = html;
 }
 
-async function loadDnsStatus() {
+async function toggleDnsRoute(id) {
   try {
-    const creds = await getDnsRouterCreds();
-    if (!creds) return;
-    const res = await xhr('POST', '/dns/status', creds);
+    const routes = await loadDnsRoutesList();
+    const route = routes.find(r => r.id === id);
+    if (!route) return;
+    await xhr('POST', '/dns/routes/update', { id, enabled: !route.enabled });
+    loadDnsRoutes();
+  } catch (e) {
+    alert('Ошибка: ' + e.message);
+  }
+}
+
+async function loadDnsRoutesList() {
+  const res = await xhr('GET', '/dns/routes');
+  return res.json();
+}
+
+function showAddDnsRoute() {
+  showDnsRouteModal(null);
+}
+
+function editDnsRoute(id) {
+  showDnsRouteModal(id);
+}
+
+async function showDnsRouteModal(id) {
+  let route = null;
+  if (id) {
+    const routes = await loadDnsRoutesList();
+    route = routes.find(r => r.id === id);
+  }
+  if (!route) route = { id: '', name: '', domains: [], enabled: true };
+
+  const nameInput = document.getElementById('dnsRouteName');
+  const domainsInput = document.getElementById('dnsRouteDomains');
+  if (nameInput) nameInput.value = route.name || '';
+  if (domainsInput) domainsInput.value = (route.domains || []).join('\n');
+
+  const overlay = document.getElementById('dnsRouteModalOverlay');
+  if (overlay) {
+    overlay.dataset.editId = id || '';
+    overlay.style.display = '';
+  }
+}
+
+function hideDnsRouteModal() {
+  const overlay = document.getElementById('dnsRouteModalOverlay');
+  if (overlay) overlay.style.display = 'none';
+}
+
+async function saveDnsRouteModal() {
+  const overlay = document.getElementById('dnsRouteModalOverlay');
+  const editId = overlay ? overlay.dataset.editId : '';
+  const nameInput = document.getElementById('dnsRouteName');
+  const domainsInput = document.getElementById('dnsRouteDomains');
+  if (!nameInput || !domainsInput) return;
+
+  const name = nameInput.value.trim();
+  if (!name) return alert('Введите название');
+
+  const domains = domainsInput.value.split('\n').map(s => s.trim()).filter(s => s !== '');
+  if (!domains.length) return alert('Добавьте хотя бы один домен');
+
+  const payload = { name, domains, enabled: true };
+  if (editId) payload.id = editId;
+
+  try {
+    const url = editId ? '/dns/routes/update' : '/dns/routes/create';
+    const res = await xhr('POST', url, payload);
     if (res.ok) {
-      const data = await res.json();
-      renderDnsPresetList(data.upstreams || []);
-    }
-  } catch (e) {
-    console.error('loadDnsStatus error:', e);
-  }
-}
-
-async function getDnsRouterCreds() {
-  if (dnsRouterCreds && dnsRouterCreds.routerDomain) return dnsRouterCreds;
-  const peers = await loadPeers();
-  const configured = peers.find(p => p.routerDomain && p.routerLogin && p.routerPassword);
-  if (!configured) {
-    alert('Нет пиров с настройками роутера. Откройте детали пира и заполните домен/логин/пароль.');
-    return null;
-  }
-  dnsRouterCreds = {
-    routerDomain: configured.routerDomain,
-    routerLogin: configured.routerLogin,
-    routerPassword: configured.routerPassword,
-  };
-  return dnsRouterCreds;
-}
-
-async function applyDnsPreset() {
-  try {
-    const creds = await getDnsRouterCreds();
-    if (!creds) return;
-    const statusEl = document.getElementById('dnsStatus');
-    if (statusEl) statusEl.textContent = 'Применение пресета...\n';
-    const res = await xhr('POST', '/dns/preset', creds);
-    const data = await res.json();
-    if (data.status === 'ok') {
-      if (statusEl) {
-        statusEl.innerHTML = '<div class="status-line status-ok">✅ Пресет применён</div>' +
-          (data.messages || []).map(m => `<div class="status-line">${escapeHtml(m)}</div>`).join('');
-      }
-      loadDnsStatus();
+      hideDnsRouteModal();
+      loadDnsRoutes();
     } else {
-      if (statusEl) statusEl.innerHTML = '<div class="status-line status-err">❌ Ошибка: ' + escapeHtml(data.error || 'неизвестно') + '</div>';
+      alert('Ошибка: ' + (await res.text()));
     }
   } catch (e) {
-    const statusEl = document.getElementById('dnsStatus');
-    if (statusEl) statusEl.innerHTML = '<div class="status-line status-err">❌ Ошибка: ' + escapeHtml(e.message) + '</div>';
+    alert('Ошибка: ' + e.message);
   }
 }
 
-async function toggleDnsRoutes() {
+async function deleteDnsRoute(id) {
+  if (!confirm('Удалить маршрут?')) return;
   try {
-    const creds = await getDnsRouterCreds();
-    if (!creds) return;
-    const btn = document.getElementById('btnDnsRoutes');
-    if (btn) btn.textContent = 'Применение...';
-    const res = await xhr('POST', '/dns/routes', {...creds, enabled: true});
-    const data = await res.json();
-    if (data.status === 'ok') {
-      if (btn) btn.textContent = '✓ DNS-маршрутизация включена';
-      if (btn) btn.classList.add('pBtn-success');
-    } else {
-      if (btn) btn.textContent = 'Включить DNS-маршрутизацию';
-    }
+    const res = await xhr('POST', '/dns/routes/delete', { id });
+    if (res.ok) loadDnsRoutes();
   } catch (e) {
-    const btn = document.getElementById('btnDnsRoutes');
-    if (btn) btn.textContent = 'Включить DNS-маршрутизацию';
+    alert('Ошибка: ' + e.message);
   }
+}
+
+function addPresetDomains() {
+  const select = document.getElementById('dnsPresetSelect');
+  if (!select) return;
+  const preset = DNS_PRESETS.find(p => p.name === select.value);
+  if (!preset) return;
+  const domainsInput = document.getElementById('dnsRouteDomains');
+  if (!domainsInput) return;
+  const existing = domainsInput.value.split('\n').map(s => s.trim()).filter(s => s !== '');
+  const merged = [...new Set([...existing, ...preset.domains])];
+  domainsInput.value = merged.join('\n');
 }
 
 async function refresh() {
