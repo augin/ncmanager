@@ -33,9 +33,7 @@ func keeneticSetupSecureDns(httpClient *http.Client, baseURL string) error {
 
 	payload := map[string]any{
 		"dns-proxy": map[string]any{
-			"tls": map[string]any{
-				"upstream": upstreams,
-			},
+			"tls-upstream": upstreams,
 		},
 	}
 	_, status, err := keeneticRciPost(httpClient, baseURL, payload)
