@@ -131,6 +131,9 @@ func main() {
 	api.HandleFunc("/peers/keenetic-dl/", withAuth(server.downloadPeerKeeneticConfig))
 	api.HandleFunc("/peers/keenetic-dns/", withAuth(server.configurePeerDns))
 	api.HandleFunc("/peers/keenetic-dns-routes/", withAuth(server.configurePeerDnsRoutes))
+	api.HandleFunc("/dns/preset", withAuth(server.applyDnsPreset))
+	api.HandleFunc("/dns/status", withAuth(server.getDnsStatus))
+	api.HandleFunc("/dns/routes", withAuth(server.configurePeerDnsRoutes))
 	api.HandleFunc("/server/start", withAuth(server.startServer))
 	api.HandleFunc("/server/stop", withAuth(server.stopServer))
 	api.HandleFunc("/server/restart", withAuth(server.restartServer))
@@ -874,6 +877,123 @@ func (s *Server) configurePeerDnsRoutes(w http.ResponseWriter, r *http.Request) 
 		"wanIface": wanIface,
 		"peer":    peer.Name,
 	})
+}
+
+func (s *Server) applyDnsPreset(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		RouterDomain   string `json:"routerDomain"`
+		RouterLogin    string `json:"routerLogin"`
+		RouterPassword string `json:"routerPassword"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if req.RouterDomain == "" || req.RouterLogin == "" || req.RouterPassword == "" {
+		http.Error(w, "router credentials required", http.StatusBadRequest)
+		return
+	}
+
+	jar, _ := cookiejar.New(nil)
+	httpClient := &http.Client{Jar: jar, Timeout: 30 * time.Second}
+	if err := keeneticAuth(httpClient, "http://"+req.RouterDomain, req.RouterLogin, req.RouterPassword); err != nil {
+		log.Printf("dns preset auth failed for %s: %v", req.RouterDomain, err)
+		http.Error(w, fmt.Sprintf("router auth failed: %v", err), http.StatusBadGateway)
+		return
+	}
+
+	var messages []string
+	if err := keeneticSetupSecureDns(httpClient, "http://"+req.RouterDomain); err != nil {
+		messages = append(messages, "⚠️ DNS: "+err.Error())
+	} else {
+		messages = append(messages, "✅ DNS-серверы добавлены")
+	}
+	if err := keeneticSave(httpClient, "http://"+req.RouterDomain); err != nil {
+		messages = append(messages, "⚠️ сохранение: "+err.Error())
+	} else {
+		messages = append(messages, "✅ конфигурация сохранена")
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"status": "ok", "messages": messages})
+}
+
+func (s *Server) getDnsStatus(w http.ResponseWriter, r *http.Request) {
+	var req struct {
+		RouterDomain   string `json:"routerDomain"`
+		RouterLogin    string `json:"routerLogin"`
+		RouterPassword string `json:"routerPassword"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if req.RouterDomain == "" || req.RouterLogin == "" || req.RouterPassword == "" {
+		http.Error(w, "router credentials required", http.StatusBadRequest)
+		return
+	}
+
+	jar, _ := cookiejar.New(nil)
+	httpClient := &http.Client{Jar: jar, Timeout: 30 * time.Second}
+	if err := keeneticAuth(httpClient, "http://"+req.RouterDomain, req.RouterLogin, req.RouterPassword); err != nil {
+		log.Printf("dns status auth failed for %s: %v", req.RouterDomain, err)
+		http.Error(w, fmt.Sprintf("router auth failed: %v", err), http.StatusBadGateway)
+		return
+	}
+
+	resp, err := httpClient.Get("http://" + req.RouterDomain + "/rci/")
+	if err != nil {
+		http.Error(w, fmt.Sprintf("rci get failed: %v", err), http.StatusBadGateway)
+		return
+	}
+	defer resp.Body.Close()
+	data, _ := io.ReadAll(resp.Body)
+
+	var parsed map[string]any
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		http.Error(w, fmt.Sprintf("parse failed: %v", err), http.StatusBadGateway)
+		return
+	}
+
+	dnsProxy := parsed["dns-proxy"]
+	if dnsProxy == nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"upstreams": []any{}})
+		return
+	}
+
+	dnsProxyMap, ok := dnsProxy.(map[string]any)
+	if !ok {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"upstreams": []any{}})
+		return
+	}
+
+	tls := dnsProxyMap["tls"]
+	if tls == nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"upstreams": []any{}})
+		return
+	}
+
+	tlsMap, ok := tls.(map[string]any)
+	if !ok {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"upstreams": []any{}})
+		return
+	}
+
+	upstreams, _ := tlsMap["upstream"].([]any)
+	if upstreams == nil {
+		upstreams = []any{}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{"upstreams": upstreams})
 }
 
 func generateKeys(w http.ResponseWriter, r *http.Request) {

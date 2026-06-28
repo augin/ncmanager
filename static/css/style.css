@@ -315,6 +315,38 @@ code {
 }
 .modal-close:hover { color: var(--color-text-primary); }
 
+/* DNS routing tab */
+.dns-section { padding: 8px 0; }
+.dns-section h3 { font-size: 0.95rem; color: var(--color-text-secondary); margin-bottom: 12px; }
+.dns-preset-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 16px; }
+.dns-preset-item {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--color-bg-primary); border: 1px solid var(--color-border);
+  padding: 10px 12px; border-radius: var(--radius-sm);
+}
+.dns-preset-item .dns-addr {
+  font-family: var(--font-mono); font-size: 0.9rem; color: var(--color-text-primary); flex: 1;
+}
+.dns-preset-item .dns-sni {
+  font-size: 0.75rem; color: var(--color-text-muted);
+  background: var(--color-bg-tertiary); padding: 2px 8px; border-radius: var(--radius-sm);
+}
+.dns-preset-item .dns-badge {
+  font-size: 0.7rem; padding: 2px 8px; border-radius: var(--radius-sm); font-weight: 600;
+}
+.dns-badge.ok { background: rgba(158,206,106,0.15); color: var(--color-success); }
+.dns-badge.missing { background: rgba(247,118,142,0.15); color: var(--color-error); }
+.dns-actions { display: flex; gap: 8px; margin-bottom: 16px; }
+.dns-status {
+  background: var(--color-bg-primary); border: 1px solid var(--color-border);
+  padding: 12px; border-radius: var(--radius-sm); font-size: 0.85rem;
+  white-space: pre-wrap; word-break: break-all; max-height: 300px; overflow: auto;
+}
+.dns-status .status-line { margin: 2px 0; }
+.dns-status .status-ok { color: var(--color-success); }
+.dns-status .status-err { color: var(--color-error); }
+.dns-status .status-warn { color: var(--color-warning); }
+
 .toast-container {
   position: fixed;
   bottom: 1rem;

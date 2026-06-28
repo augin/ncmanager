@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>WireGuard Manager</title>
-<link rel="stylesheet" href="/static/css/style.css">
+<link rel="stylesheet" href="/static/css/style.css?v=2026062902">
 </head>
 <body>
 <div id="app">
@@ -31,6 +31,7 @@
 
   <nav class="tabs">
     <button class="tab active" onclick="switchTab('peers', this)">Пиры</button>
+    <button class="tab" onclick="switchTab('dns', this)">DNS маршрутизация</button>
     <button class="tab" onclick="switchTab('settings', this)">Настройки</button>
     <button class="tab" onclick="switchTab('logs', this)">Логи</button>
   </nav>
@@ -43,6 +44,21 @@
         <button onclick="addPeer()">Добавить</button>
       </div>
       <div id="peersTable"></div>
+    </section>
+
+    <section class="card" id="tab-dns" style="display:none">
+      <h2>DNS маршрутизация</h2>
+      <div class="dns-section">
+        <h3>Текущий пресет DNS</h3>
+        <div id="dnsPresetList" class="dns-preset-list">
+          <p style="color:#64748b">Загрузка...</p>
+        </div>
+        <div class="dns-actions">
+          <button onclick="applyDnsPreset()" class="btn-qr">Применить пресет DNS</button>
+          <button onclick="toggleDnsRoutes()" class="btn-qr" id="btnDnsRoutes">Включить DNS-маршрутизацию</button>
+        </div>
+        <div id="dnsStatus" class="dns-status"></div>
+      </div>
     </section>
 
     <section class="card" id="tab-settings" style="display:none">
@@ -98,6 +114,6 @@
   </div>
 </div>
 
-<script src="/static/js/app.js?v=2026062907"></script>
+<script src="/static/js/app.js?v=2026062908"></script>
 </body>
 </html>

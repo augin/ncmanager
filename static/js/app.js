@@ -91,6 +91,7 @@ function switchTab(name, btn) {
 	const target = document.getElementById('tab-' + name);
 	if (target) target.style.display = '';
 	if (name === 'logs') loadLogs();
+	if (name === 'dns') loadDnsStatus();
 }
 
 async function loadConfig() {
@@ -574,6 +575,109 @@ function downloadConf(id) {
 	}).catch(e => {
 		alert('Ошибка скачивания: ' + e.message);
 	});
+}
+
+const DNS_PRESETS = [
+  { address: '9.9.9.9', sni: 'dns.quad9.net', label: 'Quad9' },
+  { address: '1.1.1.1', sni: 'cloudflare-dns.com', label: 'Cloudflare' },
+  { address: 'common.dot.dns.yandex.net', sni: 'ru', label: 'Yandex .ru' },
+  { address: 'common.dot.dns.yandex.net', sni: 'su', label: 'Yandex .su' },
+  { address: 'common.dot.dns.yandex.net', sni: 'xn--p1ai', label: 'Yandex .рф' },
+];
+
+let dnsRouterCreds = null;
+
+function renderDnsPresetList(upstreams) {
+  const list = document.getElementById('dnsPresetList');
+  if (!list) return;
+  const upstreamMap = {};
+  for (const u of upstreams) {
+    upstreamMap[u.address] = u;
+  }
+  let html = '';
+  for (const preset of DNS_PRESETS) {
+    const found = upstreamMap[preset.address];
+    const hasSni = found && (found.fqdn === preset.sni || found.domain === preset.sni);
+    html += `<div class="dns-preset-item">
+      <span class="dns-addr">${escapeHtml(preset.address)}</span>
+      ${hasSni ? `<span class="dns-sni">SNI: ${escapeHtml(preset.sni)}</span>` : '<span class="dns-sni">—</span>'}
+      <span class="dns-badge ${hasSni ? 'ok' : 'missing'}">${hasSni ? '✓' : '✗'}</span>
+    </div>`;
+  }
+  list.innerHTML = html;
+}
+
+async function loadDnsStatus() {
+  try {
+    const creds = await getDnsRouterCreds();
+    if (!creds) return;
+    const res = await xhr('POST', '/dns/status', creds);
+    if (res.ok) {
+      const data = await res.json();
+      renderDnsPresetList(data.upstreams || []);
+    }
+  } catch (e) {
+    console.error('loadDnsStatus error:', e);
+  }
+}
+
+async function getDnsRouterCreds() {
+  if (dnsRouterCreds && dnsRouterCreds.routerDomain) return dnsRouterCreds;
+  const peers = await loadPeers();
+  const configured = peers.find(p => p.routerDomain && p.routerLogin && p.routerPassword);
+  if (!configured) {
+    alert('Нет пиров с настройками роутера. Откройте детали пира и заполните домен/логин/пароль.');
+    return null;
+  }
+  dnsRouterCreds = {
+    routerDomain: configured.routerDomain,
+    routerLogin: configured.routerLogin,
+    routerPassword: configured.routerPassword,
+  };
+  return dnsRouterCreds;
+}
+
+async function applyDnsPreset() {
+  try {
+    const creds = await getDnsRouterCreds();
+    if (!creds) return;
+    const statusEl = document.getElementById('dnsStatus');
+    if (statusEl) statusEl.textContent = 'Применение пресета...\n';
+    const res = await xhr('POST', '/dns/preset', creds);
+    const data = await res.json();
+    if (data.status === 'ok') {
+      if (statusEl) {
+        statusEl.innerHTML = '<div class="status-line status-ok">✅ Пресет применён</div>' +
+          (data.messages || []).map(m => `<div class="status-line">${escapeHtml(m)}</div>`).join('');
+      }
+      loadDnsStatus();
+    } else {
+      if (statusEl) statusEl.innerHTML = '<div class="status-line status-err">❌ Ошибка: ' + escapeHtml(data.error || 'неизвестно') + '</div>';
+    }
+  } catch (e) {
+    const statusEl = document.getElementById('dnsStatus');
+    if (statusEl) statusEl.innerHTML = '<div class="status-line status-err">❌ Ошибка: ' + escapeHtml(e.message) + '</div>';
+  }
+}
+
+async function toggleDnsRoutes() {
+  try {
+    const creds = await getDnsRouterCreds();
+    if (!creds) return;
+    const btn = document.getElementById('btnDnsRoutes');
+    if (btn) btn.textContent = 'Применение...';
+    const res = await xhr('POST', '/dns/routes', {...creds, enabled: true});
+    const data = await res.json();
+    if (data.status === 'ok') {
+      if (btn) btn.textContent = '✓ DNS-маршрутизация включена';
+      if (btn) btn.classList.add('pBtn-success');
+    } else {
+      if (btn) btn.textContent = 'Включить DNS-маршрутизацию';
+    }
+  } catch (e) {
+    const btn = document.getElementById('btnDnsRoutes');
+    if (btn) btn.textContent = 'Включить DNS-маршрутизацию';
+  }
 }
 
 async function refresh() {
