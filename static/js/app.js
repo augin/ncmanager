@@ -152,6 +152,7 @@ function renderPeers(peers) {
  					<button onclick="savePeerRouter('${p.id}')" class="btn-dl" style="margin-top:8px">Сохранить настройки роутера</button>
  					<button onclick="configureRouter('${p.id}')" class="btn-qr" style="margin-top:8px;margin-left:8px">Настроить VPN</button>
  					<button onclick="configureDnsRouter('${p.id}')" class="btn-qr" style="margin-top:8px;margin-left:8px">Настроить DNS</button>
+ 					<button onclick="configureDnsRoutes('${p.id}')" class="btn-qr" style="margin-top:8px;margin-left:8px">Настроить DNS-маршрутизацию</button>
 				</div>
 			</td>
 		</tr>`;
@@ -439,6 +440,52 @@ async function configureDnsRouter(id) {
 		}
 	} catch (e) {
 		log.textContent += '❌ Ошибка настройки DNS: ' + e.message + '\n';
+	}
+
+	if (closeBtn) closeBtn.style.display = '';
+}
+
+async function configureDnsRoutes(id) {
+	const routerDomain = document.getElementById('rd-' + id).value.trim();
+	const routerLogin = document.getElementById('rl-' + id).value.trim();
+	const routerPassword = document.getElementById('rp-' + id).value;
+	if (!routerDomain) return alert('Укажите домен/адрес роутера');
+	if (!routerLogin) return alert('Укажите логин');
+	if (!routerPassword) return alert('Укажите пароль');
+
+	await savePeerRouter(id, true);
+	_keeneticPeerId = id;
+
+	const log = document.getElementById('routerLog');
+	if (!log) return;
+	log.textContent = 'Настройка DNS-маршрутизации на роутере...\n';
+	log.scrollTop = log.scrollHeight;
+
+	const closeBtn = document.getElementById('routerCloseBtn');
+	if (closeBtn) closeBtn.style.display = 'none';
+	const dlBtn = document.getElementById('keeneticDownloadBtn');
+	if (dlBtn) dlBtn.style.display = 'none';
+
+	document.getElementById('routerModal').classList.add('show');
+	document.getElementById('routerLog').style.display = '';
+
+	try {
+		log.textContent += '📡 Подключение к ' + routerDomain + '...\n';
+		const res = await xhr('POST', '/peers/keenetic-dns-routes/' + encodeURIComponent(id), { enabled: true });
+		const data = await res.json();
+		if (data.status === 'ok') {
+			log.textContent += '✅ DNS-маршрутизация включена (dns-routes на ' + data.wanIface + ')\n';
+			if (data.messages && data.messages.length) {
+				for (const msg of data.messages) {
+					log.textContent += '   ↳ ' + msg + '\n';
+				}
+			}
+			log.textContent += '\nГотово!\n';
+		} else {
+			log.textContent += '❌ Ошибка: ' + (data.error || 'неизвестно') + '\n';
+		}
+	} catch (e) {
+		log.textContent += '❌ Ошибка настройки DNS-маршрутизации: ' + e.message + '\n';
 	}
 
 	if (closeBtn) closeBtn.style.display = '';

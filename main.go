@@ -130,6 +130,7 @@ func main() {
 	api.HandleFunc("/peers/keenetic/", withAuth(server.importPeerToKeenetic))
 	api.HandleFunc("/peers/keenetic-dl/", withAuth(server.downloadPeerKeeneticConfig))
 	api.HandleFunc("/peers/keenetic-dns/", withAuth(server.configurePeerDns))
+	api.HandleFunc("/peers/keenetic-dns-routes/", withAuth(server.configurePeerDnsRoutes))
 	api.HandleFunc("/server/start", withAuth(server.startServer))
 	api.HandleFunc("/server/stop", withAuth(server.stopServer))
 	api.HandleFunc("/server/restart", withAuth(server.restartServer))
@@ -803,6 +804,75 @@ func (s *Server) configurePeerDns(w http.ResponseWriter, r *http.Request) {
 		"status":   "ok",
 		"messages": messages,
 		"peer":     peer.Name,
+	})
+}
+
+func (s *Server) configurePeerDnsRoutes(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 4 || parts[3] == "" {
+		http.Error(w, "peer id required", http.StatusBadRequest)
+		return
+	}
+	id := parts[3]
+
+	var req struct {
+		Enabled bool `json:"enabled"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+
+	cfg, _ := loadConfig(dataFile)
+	peerIdx := -1
+	for i := range cfg.Peers {
+		if cfg.Peers[i].ID == id {
+			peerIdx = i
+			break
+		}
+	}
+	if peerIdx < 0 {
+		http.Error(w, "peer not found", http.StatusNotFound)
+		return
+	}
+	peer := &cfg.Peers[peerIdx]
+
+	if peer.RouterDomain == "" || peer.RouterLogin == "" || peer.RouterPassword == "" {
+		http.Error(w, "router credentials not configured for this peer", http.StatusBadRequest)
+		return
+	}
+
+	jar, _ := cookiejar.New(nil)
+	httpClient := &http.Client{Jar: jar, Timeout: 30 * time.Second}
+	if err := keeneticAuth(httpClient, "http://"+peer.RouterDomain, peer.RouterLogin, peer.RouterPassword); err != nil {
+		log.Printf("keenetic dns-routes auth failed for %s: %v", peer.Name, err)
+		http.Error(w, fmt.Sprintf("router auth failed: %v", err), http.StatusBadGateway)
+		return
+	}
+
+	wanIface := "FastEthernet0/Vlan1"
+	if err := keeneticSetDnsRoutes(httpClient, "http://"+peer.RouterDomain, wanIface, req.Enabled); err != nil {
+		log.Printf("keenetic set dns-routes failed: %v", err)
+		http.Error(w, fmt.Sprintf("set dns-routes failed: %v", err), http.StatusBadGateway)
+		return
+	}
+
+	if err := keeneticSave(httpClient, "http://"+peer.RouterDomain); err != nil {
+		log.Printf("keenetic save failed: %v", err)
+		http.Error(w, fmt.Sprintf("save failed: %v", err), http.StatusBadGateway)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"status":  "ok",
+		"enabled": req.Enabled,
+		"wanIface": wanIface,
+		"peer":    peer.Name,
 	})
 }
 

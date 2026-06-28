@@ -213,3 +213,33 @@ func parseCIDRToMask(cidr string) (string, string) {
 	}
 	return ip.String(), "255.255.255.255"
 }
+
+func keeneticSetDnsRoutes(httpClient *http.Client, baseURL, wanIface string, enabled bool) error {
+	val := "false"
+	if enabled {
+		val = "true"
+	}
+	payload := map[string]any{
+		"interface": map[string]any{
+			"name": wanIface,
+			"ip": map[string]any{
+				"dhcp": map[string]any{
+					"client": map[string]any{
+						"dns-routes": val,
+					},
+				},
+			},
+		},
+	}
+	body, status, err := keeneticRciPost(httpClient, baseURL, payload)
+	if err != nil {
+		return err
+	}
+	respStr := strings.TrimSpace(string(body))
+	if status != http.StatusOK {
+		return fmt.Errorf("set dns-routes failed (HTTP %d): %s", status, respStr)
+	}
+	log.Printf("RCI setDnsRoutes: iface=%s enabled=%v", wanIface, enabled)
+	time.Sleep(200 * time.Millisecond)
+	return nil
+}
