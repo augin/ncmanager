@@ -18,6 +18,34 @@ func keeneticSetupSecureDns(httpClient *http.Client, baseURL string) error {
 		{"common.dot.dns.yandex.net", "xn--p1ai"},
 	}
 
+	// Collect unique addresses to delete first
+	addressesToDelete := make(map[string]bool)
+	for _, srv := range dnsServers {
+		addressesToDelete[srv.address] = true
+	}
+
+	// Delete existing entries for each address (removes all variants: plain/domain/fqdn)
+	for addr := range addressesToDelete {
+		delPayload := map[string]any{
+			"dns-proxy": map[string]any{
+				"tls": map[string]any{
+					"upstream": []any{map[string]any{"address": addr, "no": true}},
+				},
+			},
+		}
+		var delStatus int
+		var delErr error
+		_, delStatus, delErr = keeneticRciPost(httpClient, baseURL, delPayload)
+		if delErr != nil {
+			return fmt.Errorf("delete dns upstream %s failed: %w", addr, delErr)
+		}
+		if delStatus != http.StatusOK {
+			return fmt.Errorf("delete dns upstream %s failed (HTTP %d)", addr, delStatus)
+		}
+		time.Sleep(150 * time.Millisecond)
+	}
+
+	// Now add fresh upstreams
 	var upstreams []any
 	for _, srv := range dnsServers {
 		upstream := map[string]any{"address": srv.address}
@@ -27,24 +55,6 @@ func keeneticSetupSecureDns(httpClient *http.Client, baseURL string) error {
 		upstreams = append(upstreams, upstream)
 	}
 
-	// First clear existing TLS upstreams to avoid duplicates
-	clearPayload := map[string]any{
-		"dns-proxy": map[string]any{
-			"tls": map[string]any{
-				"upstream": []any{},
-			},
-		},
-	}
-	_, clearStatus, clearErr := keeneticRciPost(httpClient, baseURL, clearPayload)
-	if clearErr != nil {
-		return fmt.Errorf("clear dns tls failed: %w", clearErr)
-	}
-	if clearStatus != http.StatusOK {
-		return fmt.Errorf("clear dns tls failed (HTTP %d)", clearStatus)
-	}
-	time.Sleep(200 * time.Millisecond)
-
-	// Now set the new upstreams
 	payload := map[string]any{
 		"dns-proxy": map[string]any{
 			"tls": map[string]any{
@@ -52,12 +62,12 @@ func keeneticSetupSecureDns(httpClient *http.Client, baseURL string) error {
 			},
 		},
 	}
-	_, setStatus, setErr := keeneticRciPost(httpClient, baseURL, payload)
-	if setErr != nil {
-		return setErr
+	_, status, err := keeneticRciPost(httpClient, baseURL, payload)
+	if err != nil {
+		return err
 	}
-	if setStatus != http.StatusOK {
-		return fmt.Errorf("add dns tls failed (HTTP %d)", setStatus)
+	if status != http.StatusOK {
+		return fmt.Errorf("add dns tls failed (HTTP %d)", status)
 	}
 	time.Sleep(200 * time.Millisecond)
 	return nil
