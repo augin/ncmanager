@@ -150,7 +150,7 @@ function renderPeers(peers) {
 					<div class="grid-form">
 						<label>Домен<input id="rd-${p.id}" value="${escapeHtml(p.routerDomain || '')}" placeholder="router.local"></label>
 						<label>Логин<input id="rl-${p.id}" value="${escapeHtml(p.routerLogin || '')}" placeholder="admin"></label>
-						<label>Пароль<span class="pwd-wrap"><input type='password' id='rp-${p.id}' value='${escapeHtml(p.routerPassword || '')}' placeholder='••••••'><button type='button' class='pwd-toggle' onclick="togglePwd('rp-${p.id}', this)" title="Показать/скрыть">👁</button></span></label><label>Описание<input id='rdesc-${p.id}' value='${escapeHtml(p.description || '')}' placeholder='Комментарий'></label>
+						<label>Пароль<span class="pwd-wrap"><input type='password' id='rp-${p.id}' value='${escapeHtml(p.routerPassword || '')}' placeholder='••••••'><button type='button' class='pwd-toggle' onclick="togglePwd('rp-${p.id}', this)" title="Показать/скрыть">👁</button></span></label><label>Описание<textarea id='rdesc-${p.id}' rows="2" style="width:100%;padding:6px;border-radius:4px;background:var(--color-bg-primary);color:var(--color-text-primary);border:1px solid var(--color-border);font-family:var(--font-sans);font-size:0.85rem;resize:vertical" placeholder='Комментарий'>${escapeHtml(p.description || '')}</textarea></label>
 					</div>
  					<button onclick="savePeerRouter('${p.id}')" class="btn-dl" style="margin-top:8px">Сохранить настройки роутера</button>
  					<button onclick="configureRouter('${p.id}')" class="btn-qr" style="margin-top:8px;margin-left:8px">Настроить VPN</button>
