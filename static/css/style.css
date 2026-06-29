@@ -154,6 +154,9 @@ tr:hover td { background: rgba(122,162,247,0.03); }
 .btn-qr:hover { filter: brightness(1.1); }
 .btn-dl { background: var(--color-warning); color: #1a1b26; }
 .btn-dl:hover { filter: brightness(1.1); }
+.btn-dl.copying { background: #38bdf8; color: #1a1b26; }
+.btn-dl.copied { background: var(--color-success); color: white; }
+.btn-dl.copy-error { background: var(--color-error); color: white; }
 .btn-del { background: var(--color-error); color: white; }
 .btn-del:hover { filter: brightness(1.1); }
 

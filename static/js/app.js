@@ -565,10 +565,17 @@ function copyText(btn) {
 	const oldText = btn ? btn.textContent : 'Скопировать';
 	const target = btn || event.target;
 	target.textContent = 'Копирование...';
+	target.classList.remove('copied', 'copy-error');
+	target.classList.add('copying');
 	try {
 		navigator.clipboard.writeText(text).then(() => {
 			target.textContent = 'Скопировано';
-			setTimeout(() => target.textContent = oldText, 2000);
+			target.classList.remove('copying');
+			target.classList.add('copied');
+			setTimeout(() => {
+				target.textContent = oldText;
+				target.classList.remove('copied', 'copying', 'copy-error');
+			}, 2000);
 		}).catch(() => fallbackCopy(text, target, oldText));
 	} catch (e) {
 		fallbackCopy(text, target, oldText);
@@ -584,16 +591,23 @@ function fallbackCopy(text, target, oldText) {
 	ta.select();
 	try {
 		const ok = document.execCommand('copy');
+		target.classList.remove('copying', 'copy-error');
 		if (ok) {
 			target.textContent = 'Скопировано';
+			target.classList.add('copied');
 		} else {
 			target.textContent = 'Ошибка копирования';
+			target.classList.add('copy-error');
 		}
 	} catch (e) {
 		target.textContent = 'Ошибка копирования';
+		target.classList.add('copy-error');
 	}
 	document.body.removeChild(ta);
-	setTimeout(() => target.textContent = oldText, 2000);
+	setTimeout(() => {
+		target.textContent = oldText;
+		target.classList.remove('copied', 'copying', 'copy-error');
+	}, 2000);
 }
 
 function downloadConf(id) {
