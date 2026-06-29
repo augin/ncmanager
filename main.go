@@ -62,11 +62,12 @@ type Peer struct {
 
 
 type Config struct {
-	Port      int    `json:"port"`
-	Interface string `json:"interface"`
-	Endpoint  string `json:"endpoint"`
-	DNS       string `json:"dns"`
-	Subnet    string `json:"subnet"`
+	Port         int    `json:"port"`
+	Interface    string `json:"interface"`
+	WanInterface string `json:"wanInterface"`
+	Endpoint     string `json:"endpoint"`
+	DNS          string `json:"dns"`
+	Subnet       string `json:"subnet"`
 }
 
 var passwordHash string
@@ -98,6 +99,11 @@ func main() {
 		}
 	}
 	server.endpoint = resolveEndpoint(cfg.Endpoint)
+
+	if cfg.WanInterface == "" {
+		cfg.WanInterface = detectDefaultWan()
+		_ = saveConfig(dataFile, cfg)
+	}
 
 	peersCfg, err := loadPeers()
 	if err != nil {
@@ -131,6 +137,7 @@ func main() {
 	api.HandleFunc("/status", withAuth(server.getStatus))
 	api.HandleFunc("/config", withAuth(server.getConfig))
 	api.HandleFunc("/config/save", withAuth(server.saveConfig))
+	api.HandleFunc("/interfaces", withAuth(server.listInterfaces))
 	api.HandleFunc("/peers", withAuth(server.listPeers))
 	api.HandleFunc("/peers/add", withAuth(server.addPeer))
 	api.HandleFunc("/peers/remove", withAuth(server.removePeer))
@@ -370,6 +377,51 @@ func resolveEndpoint(endpoint string) string {
 	return endpoint
 }
 
+func detectDefaultWan() string {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return "eth0"
+	}
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		if iface.Flags&net.FlagUp == 0 {
+			continue
+		}
+		addrs, _ := iface.Addrs()
+		for _, addr := range addrs {
+			if ip, _, err := net.ParseCIDR(addr.String()); err == nil && ip.To4() != nil {
+				return iface.Name
+			}
+		}
+	}
+	return "eth0"
+}
+
+func (s *Server) listInterfaces(w http.ResponseWriter, r *http.Request) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	var result []string
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagLoopback != 0 {
+			continue
+		}
+		if iface.Flags&net.FlagUp == 0 {
+			continue
+		}
+		result = append(result, iface.Name)
+	}
+	if len(result) == 0 {
+		result = []string{"eth0"}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
 func (s *Server) getConfig(w http.ResponseWriter, r *http.Request) {
 	cfg, err := loadConfig(dataFile)
 	if err != nil {
@@ -379,13 +431,14 @@ func (s *Server) getConfig(w http.ResponseWriter, r *http.Request) {
 	peersCfg, _ := loadPeers()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"port":       cfg.Port,
-		"interface":  cfg.Interface,
-		"endpoint":   cfg.Endpoint,
-		"dns":        cfg.DNS,
-		"subnet":     cfg.Subnet,
-		"peers":      peersCfg.Peers,
-		"dnsRoutes":  peersCfg.DnsRoutes,
+		"port":         cfg.Port,
+		"interface":    cfg.Interface,
+		"wanInterface": cfg.WanInterface,
+		"endpoint":     cfg.Endpoint,
+		"dns":          cfg.DNS,
+		"subnet":       cfg.Subnet,
+		"peers":        peersCfg.Peers,
+		"dnsRoutes":    peersCfg.DnsRoutes,
 	})
 }
 
@@ -407,6 +460,9 @@ func (s *Server) saveConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	if v, ok := req["interface"].(string); ok {
 		cfg.Interface = v
+	}
+	if v, ok := req["wanInterface"].(string); ok {
+		cfg.WanInterface = v
 	}
 	if v, ok := req["dns"].(string); ok {
 		cfg.DNS = v
@@ -704,7 +760,7 @@ func sanitizeFilename(s string) string {
 	return re.ReplaceAllString(s, "_")
 }
 
-func generateKeeneticServerConfig(peer *Peer, serverPub, iface, endpoint string, port int, subnet string) string {
+func generateKeeneticServerConfig(peer *Peer, serverPub, iface, endpoint string, port int, subnet, wanIface string) string {
 	_, ipnet, err := net.ParseCIDR(subnet)
 	if err != nil || ipnet == nil {
 		ipnet = &net.IPNet{IP: net.ParseIP("10.0.0.0").To4(), Mask: net.CIDRMask(24, 32)}
@@ -712,8 +768,7 @@ func generateKeeneticServerConfig(peer *Peer, serverPub, iface, endpoint string,
 	serverIP := ipnet.IP.To4()
 	serverIP[3]++
 	serverAddr := fmt.Sprintf("%s/%d", serverIP.String(), getCIDRPrefix(ipnet))
-	wanIface := "eth0"
-	if iface == "wg0" {
+	if wanIface == "" {
 		wanIface = "eth0"
 	}
 
@@ -1305,13 +1360,18 @@ func generateWgConfig(cfg *Config, peers []Peer) error {
 	serverIP = net.IP{serverIP[0], serverIP[1], serverIP[2], serverIP[3] + 1}
 	serverAddr := fmt.Sprintf("%s/%d", serverIP.String(), getCIDRPrefix(ipnet))
 
+	wanIface := cfg.WanInterface
+	if wanIface == "" {
+		wanIface = "eth0"
+	}
+
 	var b strings.Builder
 	b.WriteString("[Interface]\n")
 	b.WriteString(fmt.Sprintf("Address = %s\n", serverAddr))
 	b.WriteString(fmt.Sprintf("ListenPort = %d\n", cfg.Port))
 	b.WriteString(fmt.Sprintf("PrivateKey = %s\n", serverPriv))
-	b.WriteString(fmt.Sprintf("PostUp = iptables -A FORWARD -i %%i -j ACCEPT; iptables -A FORWARD -o %%i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE\n"))
-	b.WriteString(fmt.Sprintf("PostDown = iptables -D FORWARD -i %%i -j ACCEPT; iptables -D FORWARD -o %%i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE\n"))
+	b.WriteString(fmt.Sprintf("PostUp = iptables -A FORWARD -i %%i -j ACCEPT; iptables -A FORWARD -o %%i -j ACCEPT; iptables -t nat -A POSTROUTING -o %s -j MASQUERADE\n", wanIface))
+	b.WriteString(fmt.Sprintf("PostDown = iptables -D FORWARD -i %%i -j ACCEPT; iptables -D FORWARD -o %%i -j ACCEPT; iptables -t nat -D POSTROUTING -o %s -j MASQUERADE\n", wanIface))
 
 	for _, p := range peers {
 		b.WriteString("\n[Peer]\n")

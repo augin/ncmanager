@@ -32,6 +32,7 @@
   <nav class="tabs">
     <button class="tab active" onclick="switchTab('peers', this)">Пиры</button>
     <button class="tab" onclick="switchTab('dns', this)">DNS маршрутизация</button>
+    <button class="tab" onclick="switchTab('waniface', this)">Интерфейс выхода</button>
     <button class="tab" onclick="switchTab('settings', this)">Настройки</button>
     <button class="tab" onclick="switchTab('logs', this)">Логи</button>
   </nav>
@@ -103,6 +104,19 @@
           <button type="submit">Сохранить</button>
         </div>
       </form>
+    </section>
+
+    <section class="card" id="tab-waniface" style="display:none">
+      <h2>Интерфейс выхода</h2>
+      <p style="color:#64748b;margin-bottom:12px">
+        Выберите сетевой интерфейс, через который происходит выход в интернет (NAT/MASQUERADE).
+      </p>
+      <label>Интерфейс</label>
+      <select id="wanInterface" style="width:auto;padding:8px;border-radius:6px;background:var(--color-bg-primary);color:var(--color-text-primary);border:1px solid var(--color-border)">
+        <option value="">— загрузка —</option>
+      </select>
+      <button onclick="saveWanInterface()" class="btn-dl" style="margin-left:8px">Сохранить</button>
+      <p id="wanStatus" style="margin-top:8px;color:#64748b"></p>
     </section>
 
     <section class="card" id="tab-logs" style="display:none">

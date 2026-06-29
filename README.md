@@ -25,13 +25,13 @@
 
 Linux amd64:
 ```bash
-curl -L -o wg-manager https://github.com/augin/ncmanager/releases/download/v0.1.0/wg-manager-linux-amd64
+curl -L -o wg-manager https://github.com/augin/ncmanager/releases/download/v0.2.0/wg-manager-linux-amd64
 chmod +x wg-manager
 ```
 
 Linux arm64:
 ```bash
-curl -L -o wg-manager https://github.com/augin/ncmanager/releases/download/v0.1.0/wg-manager-linux-arm64
+curl -L -o wg-manager https://github.com/augin/ncmanager/releases/download/v0.2.0/wg-manager-linux-arm64
 chmod +x wg-manager
 ```
 
@@ -53,7 +53,8 @@ sudo ./wg-manager
 - Веб-интерфейс: `8080`
 - WireGuard порт: `51820`
 - Интерфейс: `wg0`
-- Файл данных: `data/config.json`
+- Файл глобальных настроек: `data/config.json`
+- Файл настроек пиров: `data/peers.json`
 - Файл конфигурации: `data/wg0.conf`
 
 ### Открытие порта в firewall
@@ -105,7 +106,8 @@ ncmanager/
 ├── presets/
 │   └── dns-routes.json
 └── data/
-    └── config.json      # Хранилище пиров (создаётся автоматически)
+    ├── config.json      # Глобальные настройки (создаётся автоматически)
+    └── peers.json       # Пиры и DNS-маршруты (создаётся автоматически)
 ```
 
 ## API

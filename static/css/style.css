@@ -475,3 +475,12 @@ code {
 .pwd-toggle:hover {
   background: rgba(255, 255, 255, 0.06);
 }
+
+#tab-waniface label {
+  display: block;
+  margin-bottom: 6px;
+  font-weight: 500;
+}
+#tab-waniface select {
+  min-width: 200px;
+}

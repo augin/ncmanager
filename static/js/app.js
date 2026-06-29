@@ -991,6 +991,7 @@ async function init() {
 	document.getElementById('iDns').value = cfg.dns || '1.1.1.1';
 	document.getElementById('iSubnet').value = cfg.subnet || '10.0.0.0/24';
 	document.getElementById('serverForm').addEventListener('submit', saveConfig);
+	await loadInterfaces();
 	await loadPresets();
 	const saved = localStorage.getItem('ncmanager_tab') || 'peers';
 	const tabBtn = Array.from(document.querySelectorAll('.tab')).find(b => b.getAttribute('onclick').includes("'" + saved + "'")) || document.querySelector('.tab');
@@ -1068,3 +1069,37 @@ window.addEventListener('DOMContentLoaded', async function() {
 		});
 	}
 });
+
+async function loadInterfaces() {
+  try {
+    const res = await xhr('GET', '/interfaces');
+    if (res.ok) {
+      const ifaces = await res.json();
+      const sel = document.getElementById('wanInterface');
+      if (sel) {
+        sel.innerHTML = ifaces.map(i => `<option value="${escapeHtml(i)}">${escapeHtml(i)}</option>`).join('');
+      }
+    }
+  } catch (e) {
+    console.error('loadInterfaces failed:', e);
+  }
+  const cfg = await loadConfig();
+  const sel = document.getElementById('wanInterface');
+  if (sel && cfg.wanInterface) {
+    sel.value = cfg.wanInterface;
+  }
+}
+
+async function saveWanInterface() {
+  const iface = document.getElementById('wanInterface').value;
+  const cfg = await loadConfig();
+  cfg.wanInterface = iface;
+  const res = await xhr('POST', '/config/save', cfg);
+  if (res.ok) {
+    const status = document.getElementById('wanStatus');
+    if (status) {
+      status.textContent = '✅ Сохранено';
+      setTimeout(() => status.textContent = '', 3000);
+    }
+  }
+}
