@@ -154,7 +154,7 @@ function renderPeers(peers) {
 						<label>Логин<input id="rl-${p.id}" value="${escapeHtml(p.routerLogin || '')}" placeholder="admin"></label>
 						<label>Пароль<span class="pwd-wrap"><input type='password' id='rp-${p.id}' value='${escapeHtml(p.routerPassword || '')}' placeholder='••••••'><button type='button' class='pwd-toggle' onclick="togglePwd('rp-${p.id}', this)" title="Показать/скрыть">👁</button></span></label><label style="grid-column:1/-1">Описание<textarea id='rdesc-${p.id}' rows="4" style="width:100%;padding:6px;border-radius:4px;background:var(--color-bg-primary);color:var(--color-text-primary);border:1px solid var(--color-border);font-family:var(--font-sans);font-size:0.85rem;resize:vertical;min-height:100px" placeholder='Комментарий'>${escapeHtml(p.description || '')}</textarea></label>
 					</div>
- 					<button onclick="savePeerRouter('${p.id}')" class="btn-dl" style="margin-top:8px">Сохранить</button>
+ 					<button id="saveRouterBtn-${p.id}" onclick="savePeerRouter('${p.id}')" class="btn-dl" style="margin-top:8px">Сохранить</button>
  					<button onclick="configureRouter('${p.id}')" class="btn-qr" style="margin-top:8px;margin-left:8px">Настроить VPN</button>
  					<button onclick="configureDnsRouter('${p.id}')" class="btn-qr" style="margin-top:8px;margin-left:8px">Настроить DNS</button>
  					<button onclick="configureDnsRoutes('${p.id}')" class="btn-qr" style="margin-top:8px;margin-left:8px">Настроить DNS-маршрутизацию</button>
@@ -226,6 +226,8 @@ async function savePeerRouter(id, silent) {
 	const routerLogin = document.getElementById('rl-' + id).value.trim();
 	const routerPassword = document.getElementById('rp-' + id).value;
 	const description = document.getElementById('rdesc-' + id).value.trim();
+	const btn = document.getElementById('saveRouterBtn-' + id);
+	const oldText = btn ? btn.textContent : 'Сохранить';
 	try {
 		const res = await xhr('POST', '/peers/update', {
 			id: id,
@@ -235,11 +237,27 @@ async function savePeerRouter(id, silent) {
 			description: description,
 		});
 		if (!silent && res.ok) {
-			alert('Настройки роутера сохранены');
+			if (btn) {
+				btn.textContent = 'Сохранено';
+				btn.classList.add('copied');
+				setTimeout(() => {
+					btn.textContent = oldText;
+					btn.classList.remove('copied');
+				}, 2000);
+			}
 		}
 		return res.ok;
 	} catch (e) {
-		if (!silent) alert('Ошибка: ' + e.message);
+		if (!silent) {
+			if (btn) {
+				btn.textContent = 'Ошибка';
+				btn.classList.add('copy-error');
+				setTimeout(() => {
+					btn.textContent = oldText;
+					btn.classList.remove('copy-error');
+				}, 2000);
+			}
+		}
 		return false;
 	}
 }
