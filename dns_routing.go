@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/http/cookiejar"
 	"strings"
 	"time"
 )
@@ -382,9 +381,8 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 			continue
 		}
 
-		jar, _ := cookiejar.New(nil)
-		httpClient := &http.Client{Jar: jar, Timeout: 60 * time.Second}
-		if err := keeneticAuth(httpClient, "http://"+peer.RouterDomain, peer.RouterLogin, peer.RouterPassword); err != nil {
+		httpClient, baseURL, err := keeneticSetupClient(peer.RouterDomain, peer.RouterLogin, peer.RouterPassword)
+		if err != nil {
 			log.Printf("dns-routes apply auth failed for %s: %v", peer.Name, err)
 			results = append(results, applyResult{
 				Peer:   peer.Name,
@@ -414,7 +412,7 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 		}
 
 		if len(applyPayload) > 0 {
-			if err := keeneticApplyDnsRoutes(httpClient, "http://"+peer.RouterDomain, wgIface, applyPayload); err != nil {
+			if err := keeneticApplyDnsRoutes(httpClient, baseURL, wgIface, applyPayload); err != nil {
 				log.Printf("dns-routes apply failed for %s: %v", peer.Name, err)
 				results = append(results, applyResult{
 					Peer:   peer.Name,
@@ -426,7 +424,7 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 			}
 		}
 
-		if err := keeneticSave(httpClient, "http://"+peer.RouterDomain); err != nil {
+		if err := keeneticSave(httpClient, baseURL); err != nil {
 			log.Printf("dns-routes save failed for %s: %v", peer.Name, err)
 			results = append(results, applyResult{
 				Peer:   peer.Name,
@@ -488,22 +486,21 @@ func (s *Server) configurePeerDnsRoutes(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	jar, _ := cookiejar.New(nil)
-	httpClient := &http.Client{Jar: jar, Timeout: 30 * time.Second}
-	if err := keeneticAuth(httpClient, "http://"+peer.RouterDomain, peer.RouterLogin, peer.RouterPassword); err != nil {
+	httpClient, baseURL, err := keeneticSetupClient(peer.RouterDomain, peer.RouterLogin, peer.RouterPassword)
+	if err != nil {
 		log.Printf("keenetic dns-routes auth failed for %s: %v", peer.Name, err)
 		http.Error(w, fmt.Sprintf("router auth failed: %v", err), http.StatusBadGateway)
 		return
 	}
 
 	wanIface := "FastEthernet0/Vlan1"
-	if err := keeneticSetDnsRoutes(httpClient, "http://"+peer.RouterDomain, wanIface, req.Enabled); err != nil {
+	if err := keeneticSetDnsRoutes(httpClient, baseURL, wanIface, req.Enabled); err != nil {
 		log.Printf("keenetic set dns-routes failed: %v", err)
 		http.Error(w, fmt.Sprintf("set dns-routes failed: %v", err), http.StatusBadGateway)
 		return
 	}
 
-	if err := keeneticSave(httpClient, "http://"+peer.RouterDomain); err != nil {
+	if err := keeneticSave(httpClient, baseURL); err != nil {
 		log.Printf("keenetic save failed: %v", err)
 		http.Error(w, fmt.Sprintf("save failed: %v", err), http.StatusBadGateway)
 		return

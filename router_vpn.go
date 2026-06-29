@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"log"
 	"net/http"
-	"net/http/cookiejar"
 	"strings"
 	"time"
 )
@@ -122,15 +121,13 @@ func keeneticRemovePeer(httpClient *http.Client, baseURL, ifaceName, serverPubKe
 }
 
 func importWireGuardConfigToRouter(baseURL, login, password string, confData []byte, filename string, allowedIPs string, endpoint string, port int) (keeneticImportResult, error) {
-	jar, _ := cookiejar.New(nil)
-	httpClient := &http.Client{
-		Jar:     jar,
-		Timeout: 60 * time.Second,
-	}
-
-	if err := keeneticAuth(httpClient, baseURL, login, password); err != nil {
+	domain := strings.TrimPrefix(strings.TrimPrefix(baseURL, "http://"), "https://")
+	client, workingURL, err := keeneticSetupClient(domain, login, password)
+	if err != nil {
 		return keeneticImportResult{}, err
 	}
+	httpClient := client
+	baseURL = workingURL
 
 	peerName := strings.TrimSuffix(filename, ".conf")
 

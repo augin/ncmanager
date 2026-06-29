@@ -12,7 +12,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"net/http/cookiejar"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -693,7 +692,7 @@ func (s *Server) importPeerToKeenetic(w http.ResponseWriter, r *http.Request) {
 	}
 
 	result, err := importWireGuardConfigToRouter(
-		"http://"+peer.RouterDomain,
+		peer.RouterDomain,
 		peer.RouterLogin,
 		peer.RouterPassword,
 		[]byte(confContent),
@@ -785,22 +784,21 @@ func (s *Server) configurePeerDns(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	jar, _ := cookiejar.New(nil)
-	httpClient := &http.Client{Jar: jar, Timeout: 30 * time.Second}
-	if err := keeneticAuth(httpClient, "http://"+peer.RouterDomain, peer.RouterLogin, peer.RouterPassword); err != nil {
+	httpClient, baseURL, err := keeneticSetupClient(peer.RouterDomain, peer.RouterLogin, peer.RouterPassword)
+	if err != nil {
 		log.Printf("keenetic dns auth failed for %s: %v", peer.Name, err)
 		http.Error(w, fmt.Sprintf("router auth failed: %v", err), http.StatusBadGateway)
 		return
 	}
 
 	var messages []string
-	if err := keeneticSetupSecureDns(httpClient, "http://"+peer.RouterDomain); err != nil {
+	if err := keeneticSetupSecureDns(httpClient, baseURL); err != nil {
 		messages = append(messages, "⚠️ DNS: "+err.Error())
 	} else {
 		messages = append(messages, "✅ DNS-серверы добавлены")
 	}
 
-	if err := keeneticSave(httpClient, "http://"+peer.RouterDomain); err != nil {
+	if err := keeneticSave(httpClient, baseURL); err != nil {
 		messages = append(messages, "⚠️ сохранение: "+err.Error())
 	} else {
 		messages = append(messages, "✅ конфигурация сохранена")
@@ -857,15 +855,14 @@ func (s *Server) dumpRouterRCI(w http.ResponseWriter, r *http.Request) {
 	if len(parts) > 3 && parts[3] != "" {
 		ifaceQuery = parts[3]
 	}
-	jar, _ := cookiejar.New(nil)
-	httpClient := &http.Client{Jar: jar, Timeout: 15 * time.Second}
-	if err := keeneticAuth(httpClient, "http://"+peer.RouterDomain, peer.RouterLogin, peer.RouterPassword); err != nil {
+	httpClient, baseURL, err := keeneticSetupClient(peer.RouterDomain, peer.RouterLogin, peer.RouterPassword)
+	if err != nil {
 		http.Error(w, "router auth failed: "+err.Error(), http.StatusUnauthorized)
 		return
 	}
 	if ifaceQuery != "" {
 		postPayload := map[string]any{ifaceQuery: nil}
-		if data, _, err := keeneticRciPost(httpClient, "http://"+peer.RouterDomain, postPayload); err == nil {
+		if data, _, err := keeneticRciPost(httpClient, baseURL, postPayload); err == nil {
 			w.Header().Set("Content-Type", "application/json; charset=utf-8")
 			w.Write(data)
 		} else {
@@ -873,7 +870,7 @@ func (s *Server) dumpRouterRCI(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	resp, err := httpClient.Get("http://" + peer.RouterDomain + "/rci/")
+	resp, err := httpClient.Get(baseURL + "/rci/")
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return

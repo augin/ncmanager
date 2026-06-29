@@ -4,12 +4,14 @@ import (
 	"bytes"
 	"crypto/md5"
 	"crypto/sha256"
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"io"
 	"log"
 	"net"
 	"net/http"
+	"net/http/cookiejar"
 	"os/exec"
 	"strings"
 	"time"
@@ -56,6 +58,46 @@ func keeneticAuth(httpClient *http.Client, baseURL, login, password string) erro
 		return fmt.Errorf("auth failed (HTTP %d)", resp.StatusCode)
 	}
 	return nil
+}
+
+func newKeeneticClient() *http.Client {
+	return &http.Client{
+		Jar:         mustCookieJar(),
+		Timeout:     30 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+}
+
+func mustCookieJar() *cookiejar.Jar {
+	jar, _ := cookiejar.New(nil)
+	return jar
+}
+
+func keeneticSetupClient(domain, login, password string) (*http.Client, string, error) {
+	for _, scheme := range []string{"http", "https"} {
+		baseURL := scheme + "://" + domain
+		var client *http.Client
+		if scheme == "https" {
+			client = &http.Client{
+				Jar:         mustCookieJar(),
+				Timeout:     30 * time.Second,
+				CheckRedirect: func(req *http.Request, via []*http.Request) error {
+					return http.ErrUseLastResponse
+				},
+				Transport: &http.Transport{
+					TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+				},
+			}
+		} else {
+			client = newKeeneticClient()
+		}
+		if err := keeneticAuth(client, baseURL, login, password); err == nil {
+			return client, baseURL, nil
+		}
+	}
+	return nil, "", fmt.Errorf("auth failed for %s", domain)
 }
 
 func keeneticRciPost(httpClient *http.Client, baseURL string, payload any) ([]byte, int, error) {
