@@ -409,6 +409,8 @@ code {
   border-radius: 8px; padding: 12px; cursor: pointer; transition: all 0.2s;
 }
 .preset-card:hover { border-color: var(--color-accent); transform: translateY(-2px); }
+.preset-card.added { opacity: 0.5; cursor: default; pointer-events: none; }
+.preset-card.added:hover { border-color: var(--color-border); transform: none; }
 .preset-card .preset-name { font-size: 0.85rem; font-weight: 600; color: var(--color-text-primary); margin-bottom: 6px; }
 .preset-card .preset-meta { display: flex; justify-content: space-between; align-items: center; }
 .preset-card .preset-count { font-size: 0.7rem; color: var(--color-text-muted); }

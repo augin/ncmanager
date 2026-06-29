@@ -610,6 +610,7 @@ async function loadDnsRoutes() {
     const res = await xhr('GET', '/dns/routes');
     if (res.ok) {
       const routes = await res.json();
+      existingRouteNames = new Set(routes.map(r => r.name));
       renderDnsRouteList(routes);
       renderPresetCatalog();
     }
@@ -620,6 +621,7 @@ async function loadDnsRoutes() {
 
 let DNS_PRESETS = [];
 let presetsLoaded = false;
+let existingRouteNames = new Set();
 
 async function loadPresets() {
   try {
@@ -658,12 +660,13 @@ function renderPresetCatalog() {
   const items = activePresetCategory === 'all' ? DNS_PRESETS : DNS_PRESETS.filter(p => p.cat === activePresetCategory);
   grid.innerHTML = items.map(p => {
     const catClass = 'cat-' + (p.cat || 'default');
+    const isAdded = existingRouteNames.has(p.name);
     const parts = [];
     if (p.domains.length) parts.push(`${p.domains.length} доменов`);
     if (p.subnets && p.subnets.length) parts.push(`${p.subnets.length} CIDR`);
     const meta = parts.join(', ');
-    return `<div class="preset-card" onclick="addPresetRoute('${escapeHtml(p.name)}')">
-      <div class="preset-name">${escapeHtml(p.name)}</div>
+    return `<div class="preset-card ${isAdded ? 'added' : ''}" onclick="${isAdded ? '' : `addPresetRoute('${escapeHtml(p.name)}')`}">
+      <div class="preset-name">${escapeHtml(p.name)} ${isAdded ? '✓' : ''}</div>
       <div class="preset-meta">
         ${meta ? `<span class="preset-count">${meta}</span>` : ''}
         <span class="preset-cat ${catClass}">${escapeHtml(p.catLabel || p.cat)}</span>
@@ -678,6 +681,7 @@ function filterPresets(cat) {
 }
 
 async function addPresetRoute(name) {
+  if (existingRouteNames.has(name)) return;
   const preset = DNS_PRESETS.find(p => p.name === name);
   if (!preset) return;
   try {
@@ -687,7 +691,8 @@ async function addPresetRoute(name) {
       subnets: preset.subnets || []
     });
     if (res.ok) {
-      loadDnsRoutes();
+      existingRouteNames.add(name);
+      renderPresetCatalog();
     } else {
       alert('Ошибка добавления: ' + (await res.text()));
     }
