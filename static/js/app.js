@@ -428,8 +428,10 @@ async function configureDnsRouter(id) {
 	try {
 		log.textContent += '📡 Подключение к ' + routerDomain + '...\n';
 		const res = await xhr('POST', '/peers/keenetic-dns/' + encodeURIComponent(id), {});
-		const data = await res.json();
-		if (data.status === 'ok') {
+		const text = await res.text();
+		let data;
+		try { data = JSON.parse(text); } catch (e) { data = {}; }
+		if (res.ok && data.status === 'ok') {
 			log.textContent += '✅ DNS настроен\n';
 			if (data.messages && data.messages.length) {
 				for (const msg of data.messages) {
@@ -438,7 +440,8 @@ async function configureDnsRouter(id) {
 			}
 			log.textContent += '\nГотово!\n';
 		} else {
-			log.textContent += '❌ Ошибка: ' + (data.error || 'неизвестно') + '\n';
+			const errMsg = data.error || text.slice(0, 200) || 'неизвестно';
+			log.textContent += '❌ Ошибка: ' + errMsg + '\n';
 		}
 	} catch (e) {
 		log.textContent += '❌ Ошибка настройки DNS: ' + e.message + '\n';
