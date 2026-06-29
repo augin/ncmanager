@@ -93,8 +93,8 @@ func keeneticGetInterfaces(httpClient *http.Client, baseURL string) (map[string]
 	if err != nil {
 		return nil, fmt.Errorf("get interfaces failed: %v", err)
 	}
+	defer resp.Body.Close()
 	data, _ := io.ReadAll(resp.Body)
-	resp.Body.Close()
 
 	var parsed map[string]any
 	if err := json.Unmarshal(data, &parsed); err != nil {
@@ -114,6 +114,33 @@ func keeneticGetInterfaces(httpClient *http.Client, baseURL string) (map[string]
 		result[name] = desc
 	}
 	return result, nil
+}
+
+func keeneticGetObjectGroups(httpClient *http.Client, baseURL string) ([]string, error) {
+	resp, err := httpClient.Get(baseURL + "/rci/")
+	if err != nil {
+		return nil, fmt.Errorf("get object-groups failed: %v", err)
+	}
+	defer resp.Body.Close()
+	data, _ := io.ReadAll(resp.Body)
+
+	var parsed map[string]any
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return nil, fmt.Errorf("parse object-groups failed: %v", err)
+	}
+	og, ok := parsed["object-group"].(map[string]any)
+	if !ok {
+		return nil, nil
+	}
+	fqdn, ok := og["fqdn"].(map[string]any)
+	if !ok {
+		return nil, nil
+	}
+	var names []string
+	for name := range fqdn {
+		names = append(names, name)
+	}
+	return names, nil
 }
 
 func keeneticRenameInterface(httpClient *http.Client, baseURL, oldName, newName string) error {

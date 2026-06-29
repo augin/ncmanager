@@ -710,6 +710,37 @@ async function toggleDnsRoute(id) {
   }
 }
 
+async function applyDnsRoutes() {
+  try {
+    const btn = event.target;
+    const oldText = btn.textContent;
+    btn.textContent = 'Применение...';
+    btn.disabled = true;
+    const res = await xhr('POST', '/dns/routes/apply');
+    if (res.ok) {
+      const results = await res.json();
+      const errors = results.filter(r => r.error);
+      if (errors.length === 0) {
+        alert('DNS маршруты применены на ' + results.length + ' роутер(ах)');
+      } else {
+        let msg = 'Ошибки:\n';
+        errors.forEach(e => { msg += e.peer + ' (' + e.router + '): ' + e.error + '\n'; });
+        alert(msg);
+      }
+    } else {
+      alert('Ошибка: ' + (await res.text()));
+    }
+  } catch (e) {
+    alert('Ошибка: ' + e.message);
+  } finally {
+    const btn = event.target;
+    if (btn) {
+      btn.textContent = 'Настроить DNS';
+      btn.disabled = false;
+    }
+  }
+}
+
 async function loadDnsRoutesList() {
   const res = await xhr('GET', '/dns/routes');
   return res.json();

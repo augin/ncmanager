@@ -146,6 +146,7 @@ func main() {
 	api.HandleFunc("/dns/routes/create", withAuth(server.createDnsRoute))
 	api.HandleFunc("/dns/routes/update", withAuth(server.updateDnsRoute))
 	api.HandleFunc("/dns/routes/delete", withAuth(server.deleteDnsRoute))
+	api.HandleFunc("/dns/routes/apply", withAuth(server.applyDnsRoutesToRouter))
 	api.HandleFunc("/server/start", withAuth(server.startServer))
 	api.HandleFunc("/server/stop", withAuth(server.stopServer))
 	api.HandleFunc("/server/restart", withAuth(server.restartServer))
@@ -968,6 +969,101 @@ func (s *Server) deleteDnsRoute(w http.ResponseWriter, r *http.Request) {
 	_ = saveConfig(dataFile, cfg)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	cfg, _ := loadConfig(dataFile)
+	if len(cfg.DnsRoutes) == 0 {
+		http.Error(w, "no dns routes configured", http.StatusBadRequest)
+		return
+	}
+
+	if len(cfg.Peers) == 0 {
+		http.Error(w, "no peers configured", http.StatusBadRequest)
+		return
+	}
+
+	type applyResult struct {
+		Peer   string   `json:"peer"`
+		Router string   `json:"router"`
+		Error  string   `json:"error,omitempty"`
+	}
+	var results []applyResult
+
+	for _, peer := range cfg.Peers {
+		if peer.RouterDomain == "" || peer.RouterLogin == "" || peer.RouterPassword == "" {
+			results = append(results, applyResult{
+				Peer:   peer.Name,
+				Router: peer.RouterDomain,
+				Error:  "router credentials not configured",
+			})
+			continue
+		}
+
+		jar, _ := cookiejar.New(nil)
+		httpClient := &http.Client{Jar: jar, Timeout: 60 * time.Second}
+		if err := keeneticAuth(httpClient, "http://"+peer.RouterDomain, peer.RouterLogin, peer.RouterPassword); err != nil {
+			log.Printf("dns-routes apply auth failed for %s: %v", peer.Name, err)
+			results = append(results, applyResult{
+				Peer:   peer.Name,
+				Router: peer.RouterDomain,
+				Error:  fmt.Sprintf("auth failed: %v", err),
+			})
+			continue
+		}
+
+		wgIface := peer.RouterIfName
+		if wgIface == "" {
+			wgIface = "Wireguard1"
+		}
+
+		var applyPayload []routeApply
+		for _, rt := range cfg.DnsRoutes {
+			if rt.Enabled {
+				applyPayload = append(applyPayload, routeApply{
+					Name:    rt.Name,
+					Domains: rt.Domains,
+					Subnets: rt.Subnets,
+					Enabled: rt.Enabled,
+				})
+			}
+		}
+
+		if len(applyPayload) > 0 {
+			if err := keeneticApplyDnsRoutes(httpClient, "http://"+peer.RouterDomain, wgIface, applyPayload); err != nil {
+				log.Printf("dns-routes apply failed for %s: %v", peer.Name, err)
+				results = append(results, applyResult{
+					Peer:   peer.Name,
+					Router: peer.RouterDomain,
+					Error:  err.Error(),
+				})
+				continue
+			}
+		}
+
+		if err := keeneticSave(httpClient, "http://"+peer.RouterDomain); err != nil {
+			log.Printf("dns-routes save failed for %s: %v", peer.Name, err)
+			results = append(results, applyResult{
+				Peer:   peer.Name,
+				Router: peer.RouterDomain,
+				Error:  fmt.Sprintf("save failed: %v", err),
+			})
+			continue
+		}
+
+		results = append(results, applyResult{
+			Peer:   peer.Name,
+			Router: peer.RouterDomain,
+		})
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(results)
 }
 
 func generateKeys(w http.ResponseWriter, r *http.Request) {
