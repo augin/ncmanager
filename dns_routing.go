@@ -129,6 +129,50 @@ func keeneticApplyDnsRoutes(httpClient *http.Client, baseURL, wgIface string, ro
 		return fmt.Errorf("read existing groups: %w", err)
 	}
 
+	activeSlugs := make(map[string]bool)
+	for _, route := range routes {
+		slug := sanitizeGroupSlug(route.Name)
+		if slug == "" {
+			slug = "route"
+		}
+		activeSlugs[slug] = true
+	}
+
+	for _, g := range existingGroups {
+		slug := g
+		if idx := strings.LastIndex(g, "_p"); idx > 0 {
+			slug = g[:idx]
+		}
+		if !activeSlugs[slug] {
+			log.Printf("cleaning orphaned group: %s (slug=%s)", g, slug)
+			delPayload := map[string]any{
+				"object-group": map[string]any{
+					"fqdn": map[string]any{g: map[string]any{"no": true}},
+				},
+			}
+			_, status, err := keeneticRciPost(httpClient, baseURL, delPayload)
+			if err != nil {
+				log.Printf("delete orphaned group %s: %v", g, err)
+			} else if status != http.StatusOK {
+				log.Printf("delete orphaned group %s: HTTP %d", g, status)
+			}
+			time.Sleep(150 * time.Millisecond)
+
+			delRoutePayload := map[string]any{
+				"dns-proxy": map[string]any{
+					"route": []any{map[string]any{"group": g, "interface": wgIface, "no": true}},
+				},
+			}
+			_, status, err = keeneticRciPost(httpClient, baseURL, delRoutePayload)
+			if err != nil {
+				log.Printf("delete orphaned route for %s: %v", g, err)
+			} else if status != http.StatusOK {
+				log.Printf("delete orphaned route for %s: HTTP %d", g, status)
+			}
+			time.Sleep(100 * time.Millisecond)
+		}
+	}
+
 	for _, route := range routes {
 		slug := sanitizeGroupSlug(route.Name)
 		if slug == "" {
