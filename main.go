@@ -995,6 +995,7 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 		Peer   string   `json:"peer"`
 		Router string   `json:"router"`
 		Error  string   `json:"error,omitempty"`
+		Routes []string `json:"routes,omitempty"`
 	}
 	var results []applyResult
 
@@ -1040,6 +1041,7 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 		}
 
 		var applyPayload []routeApply
+		var routeNames []string
 		for _, rt := range cfg.DnsRoutes {
 			if rt.Enabled {
 				applyPayload = append(applyPayload, routeApply{
@@ -1048,6 +1050,7 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 					Subnets: rt.Subnets,
 					Enabled: rt.Enabled,
 				})
+				routeNames = append(routeNames, rt.Name)
 			}
 		}
 
@@ -1058,6 +1061,7 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 					Peer:   peer.Name,
 					Router: peer.RouterDomain,
 					Error:  err.Error(),
+					Routes: routeNames,
 				})
 				continue
 			}
@@ -1069,6 +1073,7 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 				Peer:   peer.Name,
 				Router: peer.RouterDomain,
 				Error:  fmt.Sprintf("save failed: %v", err),
+				Routes: routeNames,
 			})
 			continue
 		}
@@ -1076,6 +1081,7 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 		results = append(results, applyResult{
 			Peer:   peer.Name,
 			Router: peer.RouterDomain,
+			Routes: routeNames,
 		})
 	}
 

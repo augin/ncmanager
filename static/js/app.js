@@ -476,10 +476,21 @@ async function configureDnsRoutes(id) {
 		const data = await res.json();
 		if (res.ok && data.length && !data[0].error) {
 			log.textContent += '✅ DNS-маршрутизация применена на роутере ' + routerDomain + '\n';
-			log.textContent += '   Обработано правил: ' + data.length + '\n';
+			const names = (data[0].routes || []).filter(Boolean);
+			if (names.length) {
+				log.textContent += '   Применённые списки (' + names.length + '):\n';
+				names.forEach(n => { log.textContent += '     • ' + n + '\n'; });
+			} else {
+				log.textContent += '   (списки не прикреплены к пиру)\n';
+			}
 			log.textContent += '\nГотово!\n';
 		} else if (data.length && data[0].error) {
 			log.textContent += '❌ Ошибка: ' + data[0].error + '\n';
+			const names = (data[0].routes || []).filter(Boolean);
+			if (names.length) {
+				log.textContent += '   Списки, которые пытались применить:\n';
+				names.forEach(n => { log.textContent += '     • ' + n + '\n'; });
+			}
 		} else {
 			log.textContent += '❌ Ошибка: ' + (data.error || 'неизвестно') + '\n';
 		}
