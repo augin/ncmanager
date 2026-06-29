@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 )
@@ -27,6 +28,8 @@ var cyrTranslitSlug = map[rune]string{
 	'ф': "f", 'х': "kh", 'ц': "ts", 'ч': "ch", 'ш': "sh", 'щ': "sch",
 	'ъ': "", 'ы': "y", 'ь': "", 'э': "e", 'ю': "yu", 'я': "ya",
 }
+
+var dnsGroupRe = regexp.MustCompile(`^.+_p\d+$`)
 
 func sanitizeGroupSlug(name string) string {
 	var b strings.Builder
@@ -139,6 +142,9 @@ func keeneticApplyDnsRoutes(httpClient *http.Client, baseURL, wgIface string, ro
 	}
 
 	for _, g := range existingGroups {
+		if !dnsGroupRe.MatchString(g) {
+			continue
+		}
 		slug := g
 		if idx := strings.LastIndex(g, "_p"); idx > 0 {
 			slug = g[:idx]
@@ -181,7 +187,7 @@ func keeneticApplyDnsRoutes(httpClient *http.Client, baseURL, wgIface string, ro
 
 		oldNames := make([]string, 0)
 		for _, g := range existingGroups {
-			if strings.HasPrefix(g, slug+"_p") {
+			if dnsGroupRe.MatchString(g) && strings.HasPrefix(g, slug+"_p") {
 				oldNames = append(oldNames, g)
 			}
 		}
