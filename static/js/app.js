@@ -1,11 +1,13 @@
 const API = '/api';
 const TOKEN_KEY = 'wg_token';
 let currentTab = 'peers';
+let previousPeerIds = new Set();
 let refreshTimer = null;
 let expandedPeers = new Set();
 let expandedInputs = {};
 let activeElementId = null;
-let activeElementCursorPos = null;
+let activeElementCursorStart = null;
+let activeElementCursorEnd = null;
 let _keeneticPeerId = null;
 
 function getToken() {
@@ -126,13 +128,13 @@ function renderPeers(peers) {
 		const rowClass = status.class === 'offline' ? 'peer-row-offline' : '';
 		const isExpanded = expandedPeers.has(p.id);
 		const arrow = isExpanded ? '▼' : '▶';
-		html += `<tr class="${rowClass}">
+		html += `<tr class="${rowClass}" data-peer-id="${p.id}">
 			<td><span class="peer-name-toggle" onclick="togglePeerDetails('${p.id}', event)" style="cursor:pointer;color:#38bdf8">${escapeHtml(p.name)}</span></td>
 			<td><code>${escapeHtml(p.allowedIPs)}</code></td>
 			<td>${created}</td>
-			<td><span class="peer-age ${status.class}" title="${p.lastHandshake && new Date(p.lastHandshake).getTime() >= MIN_REASONABLE_DATE ? new Date(p.lastHandshake).toLocaleString('ru-RU') : 'никогда'}">${status.text} · ${hs}</span></td>
+			<td><span class="peer-age ${status.class}" data-field="handshake" title="${p.lastHandshake && new Date(p.lastHandshake).getTime() >= MIN_REASONABLE_DATE ? new Date(p.lastHandshake).toLocaleString('ru-RU') : 'никогда'}">${status.text} · ${hs}</span></td>
 			<td><code>${escapeHtml(endpoint)}</code></td>
-			<td><span title="↑ ${tx}">↑ ${tx}</span> / <span title="↓ ${rx}">↓ ${rx}</span></td>
+			<td data-field="traffic"><span title="↑ ${tx}">↑ ${tx}</span> / <span title="↓ ${rx}">↓ ${rx}</span></td>
 			<td class="peer-actions">
 				<button class="btn-qr" onclick="showQR('${p.id}','${escapeHtml(p.name)}')">QR</button>
 				<button class="btn-qr" onclick="showText('${p.id}','${escapeHtml(p.name)}')" title="Конфиг пира" style="font-size:0.75rem;font-weight:700;padding:4px 6px;min-width:38px">TXT</button>
@@ -162,6 +164,31 @@ function renderPeers(peers) {
 	}
 	html += '</tbody></table>';
 	tbody.innerHTML = html;
+}
+
+function updatePeerStats(peers) {
+	const tbody = document.getElementById('peersTable');
+	if (!tbody) return;
+	for (const p of peers) {
+		const row = tbody.querySelector('tr[data-peer-id="' + p.id + '"]');
+		if (!row) continue;
+		const age = getPeerAge(p.lastHandshake);
+		const status = getPeerStatus(age);
+		const rx = formatBytes(p.transferRx || 0);
+		const tx = formatBytes(p.transferTx || 0);
+		const hs = humanTimeAgo(p.lastHandshake);
+		row.className = status.class === 'offline' ? 'peer-row-offline' : '';
+		const handshakeEl = row.querySelector('[data-field="handshake"]');
+		if (handshakeEl) {
+			handshakeEl.className = 'peer-age ' + status.class;
+			handshakeEl.title = p.lastHandshake && new Date(p.lastHandshake).getTime() >= MIN_REASONABLE_DATE ? new Date(p.lastHandshake).toLocaleString('ru-RU') : 'никогда';
+			handshakeEl.innerHTML = status.text + ' · ' + hs;
+		}
+		const trafficEl = row.querySelector('[data-field="traffic"]');
+		if (trafficEl) {
+			trafficEl.innerHTML = '<span title="↑ ' + tx + '">↑ ' + tx + '</span> / <span title="↓ ' + rx + '">↓ ' + rx + '</span>';
+		}
+	}
 }
 
 function togglePwd(inputId, btn) {
@@ -267,6 +294,7 @@ function escapeHtml(s) {
 
 async function addPeer() {
 	const name = document.getElementById('peerName').value.trim();
+	previousPeerIds.clear();
 	if (!name) return alert('Введите имя пира');
 	try {
 		const res = await xhr('POST', '/peers/add', { name });
@@ -283,6 +311,7 @@ async function addPeer() {
 
 async function removePeer(id) {
 	if (!confirm('Удалить пира?')) return;
+	previousPeerIds.clear();
 	try {
 		const res = await xhr('POST', '/peers/remove', { id });
 		if (res.ok) refresh();
@@ -934,9 +963,16 @@ async function refresh() {
 	try {
 		const peers = await loadPeers();
 		const status = await loadStatus();
-		saveExpandedInputs();
-		renderPeers(peers);
-		restoreExpandedInputs();
+		const currentIds = new Set(peers.map(p => p.id));
+		let peersChanged = currentIds.size !== previousPeerIds.size || [...currentIds].some(id => !previousPeerIds.has(id));
+		if (peersChanged) {
+			saveExpandedInputs();
+			renderPeers(peers);
+			restoreExpandedInputs();
+			previousPeerIds = currentIds;
+		} else {
+			updatePeerStats(peers);
+		}
 		const badge = document.getElementById('statusBadge');
 		const btn = document.getElementById('btnToggle');
 		if (status.running) {
