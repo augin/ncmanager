@@ -337,9 +337,11 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 	var req struct {
 		PeerID string `json:"peerId"`
 	}
-	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid json", http.StatusBadRequest)
-		return
+	if r.ContentLength > 0 {
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "invalid json", http.StatusBadRequest)
+			return
+		}
 	}
 
 	cfg, _ := loadConfig(dataFile)
