@@ -1788,6 +1788,7 @@ func (s *Server) getAmneziaInterfaces(w http.ResponseWriter, r *http.Request) {
 			"publicKey": pubKey,
 			"address":   address,
 			"handshake": handshake,
+			"ping":      getAmneziaPing(name),
 			"rx":        rx,
 			"tx":        tx,
 		})
@@ -1905,6 +1906,23 @@ func getAmneziaAddress(name string) string {
 		}
 	}
 	return ""
+}
+
+func getAmneziaPing(name string) string {
+	out, err := exec.Command("ping", "-c", "1", "-W", "1", "-I", name, "1.1.1.1").CombinedOutput()
+	if err != nil {
+		return "timeout"
+	}
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.Contains(line, "time=") {
+			parts := strings.Split(line, "time=")
+			if len(parts) > 1 {
+				return strings.TrimSpace(strings.Split(parts[1], " ")[0])
+			}
+		}
+	}
+	return "timeout"
 }
 
 func (s *Server) manageAmneziaInterface(w http.ResponseWriter, r *http.Request) {

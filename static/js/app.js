@@ -1185,7 +1185,7 @@ function renderAmneziaInterfaces(ifaces) {
     list.innerHTML = '<p style="color:#64748b">Нет импортированных интерфейсов</p>';
     return;
   }
-  let html = '<table><thead><tr><th>Имя</th><th>Статус</th><th>Адрес</th><th>PublicKey</th><th>Handshake</th><th>Трафик</th><th>Действия</th></tr></thead><tbody>';
+  let html = '<table><thead><tr><th>Имя</th><th>Статус</th><th>Адрес</th><th>PublicKey</th><th>Handshake / Ping</th><th>Трафик</th><th>Действия</th></tr></thead><tbody>';
   for (const iface of ifaces) {
     const running = iface.running === 'true';
     const statusText = running ? '🟢 Запущен' : '🔴 Остановлен';
@@ -1193,6 +1193,7 @@ function renderAmneziaInterfaces(ifaces) {
     const pubKey = iface.publicKey ? iface.publicKey.substring(0, 16) + '...' : '—';
     const addr = iface.address || '—';
     const hs = iface.handshake || '—';
+    const ping = iface.ping || '—';
     const rx = iface.rx || '0 B';
     const tx = iface.tx || '0 B';
     html += `<tr>
@@ -1200,7 +1201,7 @@ function renderAmneziaInterfaces(ifaces) {
       <td><span class="led ${statusClass}"></span> ${statusText}</td>
       <td><code>${escapeHtml(addr)}</code></td>
       <td><code title="${escapeHtml(iface.publicKey || '')}">${escapeHtml(pubKey)}</code></td>
-      <td>${escapeHtml(hs)}</td>
+      <td>${escapeHtml(hs)}<br><span style="color:#38bdf8;font-size:0.85rem">ping: ${escapeHtml(ping)}</span></td>
       <td><span title="↓ ${escapeHtml(rx)}">↓ ${escapeHtml(rx)}</span> / <span title="↑ ${escapeHtml(tx)}">↑ ${escapeHtml(tx)}</span></td>
       <td style="display:flex;gap:4px">
         ${!running ? `<button class="btn-qr" onclick="manageAmneziaInterface('${escapeHtml(iface.name)}','up')" title="Запустить">▶</button>` : ''}
