@@ -401,15 +401,13 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 		var applyPayload []routeApply
 		var routeNames []string
 		for _, rt := range peersCfg.DnsRoutes {
-			if rt.Enabled {
-				applyPayload = append(applyPayload, routeApply{
-					Name:    rt.Name,
-					Domains: rt.Domains,
-					Subnets: rt.Subnets,
-					Enabled: rt.Enabled,
-				})
-				routeNames = append(routeNames, rt.Name)
-			}
+			applyPayload = append(applyPayload, routeApply{
+				Name:    rt.Name,
+				Domains: rt.Domains,
+				Subnets: rt.Subnets,
+				Enabled: rt.Enabled,
+			})
+			routeNames = append(routeNames, rt.Name)
 		}
 
 		if len(applyPayload) > 0 {
