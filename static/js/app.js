@@ -1050,7 +1050,18 @@ async function saveConfig(e) {
 		postDown: document.getElementById('iPostDown').value,
 	};
 	const res = await xhr('POST', '/config/save', cfg);
-	if (res.ok) alert('Настройки сохранены. Сервер перезапущен.');
+	if (res.ok) {
+		const btn = document.getElementById('saveConfigBtn');
+		if (btn) {
+			const oldText = btn.textContent;
+			btn.textContent = 'Сохранено';
+			btn.classList.add('copied');
+			setTimeout(() => {
+				btn.textContent = oldText;
+				btn.classList.remove('copied');
+			}, 2000);
+		}
+	}
 } catch (e) {
 	alert('Ошибка: ' + e.message);
 }
