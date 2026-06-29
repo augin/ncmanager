@@ -692,7 +692,7 @@ async function addPresetRoute(name) {
     });
     if (res.ok) {
       existingRouteNames.add(name);
-      renderPresetCatalog();
+      loadDnsRoutes();
     } else {
       alert('Ошибка добавления: ' + (await res.text()));
     }
