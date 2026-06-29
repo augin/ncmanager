@@ -955,7 +955,9 @@ async function init() {
 	document.getElementById('iDns').value = cfg.dns || '1.1.1.1';
 	document.getElementById('iSubnet').value = cfg.subnet || '10.0.0.0/24';
 	document.getElementById('serverForm').addEventListener('submit', saveConfig);
-	switchTab(localStorage.getItem('ncmanager_tab') || 'peers', document.querySelector('.tab'));
+	const saved = localStorage.getItem('ncmanager_tab') || 'peers';
+	const tabBtn = Array.from(document.querySelectorAll('.tab')).find(b => b.getAttribute('onclick').includes("'" + saved + "'")) || document.querySelector('.tab');
+	switchTab(saved, tabBtn);
 	startAutoRefresh();
 	refresh();
 }
