@@ -135,10 +135,10 @@ function renderPeers(peers) {
 			<td><span title="↑ ${tx}">↑ ${tx}</span> / <span title="↓ ${rx}">↓ ${rx}</span></td>
 			<td class="peer-actions">
 				<button class="btn-qr" onclick="showQR('${p.id}','${escapeHtml(p.name)}')">QR</button>
-				<button class="btn-dl" onclick="showText('${p.id}','${escapeHtml(p.name)}')">📋</button>
+				<button class="btn-qr" onclick="showText('${p.id}','${escapeHtml(p.name)}')" title="Конфиг пира" style="font-size:0.75rem;font-weight:700;padding:4px 6px;min-width:38px">TXT</button>
 				<button class="btn-dl" onclick="downloadConf('${p.id}')">⬇</button>
- 			<button class="btn-dl" onclick="configureRouter('${p.id}')" title="Настроить VPN на роутере Keenetic">⚙</button>
- 			<button class="btn-dl" onclick="configureDnsRouter('${p.id}')" title="Настроить DNS на роутере Keenetic">🌐</button>
+ 			<button class="btn-qr" onclick="configureRouter('${p.id}')" title="Настроить VPN на роутере Keenetic" style="font-size:0.75rem;font-weight:700;padding:4px 6px;min-width:38px">VPN</button>
+ 			<button class="btn-qr" onclick="configureDnsRouter('${p.id}')" title="Настроить DNS на роутере Keenetic" style="font-size:0.75rem;font-weight:700;padding:4px 6px;min-width:38px">DNS</button>
 				<button class="btn-del" onclick="removePeer('${p.id}')">✕</button>
 			</td>
 			<td style="text-align:right;width:30px"><span class="peer-arrow" onclick="togglePeerDetails('${p.id}', event)" style="cursor:pointer;color:#64748b">${arrow}</span></td>
@@ -560,9 +560,8 @@ function getPeerNameById(id) {
 	return null;
 }
 
-function copyText() {
+function copyText(btn) {
 	const text = document.getElementById('textOutput').textContent;
-	const btn = event.target;
 	const oldText = btn.textContent;
 	try {
 		navigator.clipboard.writeText(text).then(() => {
