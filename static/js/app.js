@@ -1008,11 +1008,22 @@ function stopAutoRefresh() {
 	}
 }
 
+let logFollowing = true;
+
 async function loadLogs() {
 	try {
+		const log = document.getElementById('logOutput');
+		if (log) {
+			const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 60;
+			logFollowing = atBottom;
+		}
 		const res = await xhr('GET', '/logs');
 		if (res.ok) {
 			document.getElementById('logOutput').textContent = res.text();
+			if (logFollowing) {
+				const log = document.getElementById('logOutput');
+				log.scrollTop = log.scrollHeight;
+			}
 		} else {
 			document.getElementById('logOutput').textContent = 'Ошибка: ' + res.text();
 		}
@@ -1036,5 +1047,12 @@ window.addEventListener('DOMContentLoaded', async function() {
 		}
 	} catch (e) {
 		showLogin();
+	}
+
+	const log = document.getElementById('logOutput');
+	if (log) {
+		log.addEventListener('scroll', () => {
+			logFollowing = log.scrollHeight - log.scrollTop - log.clientHeight < 60;
+		});
 	}
 });
