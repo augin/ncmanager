@@ -569,20 +569,31 @@ function copyText(btn) {
 		navigator.clipboard.writeText(text).then(() => {
 			target.textContent = 'Скопировано';
 			setTimeout(() => target.textContent = oldText, 2000);
-		}).catch(() => {
-			const el = document.getElementById('textOutput');
-			const range = document.createRange();
-			range.selectNode(el);
-			window.getSelection().removeAllRanges();
-			window.getSelection().addRange(range);
-			document.execCommand('copy');
-			target.textContent = 'Скопировано';
-			setTimeout(() => target.textContent = oldText, 2000);
-		});
+		}).catch(() => fallbackCopy(text, target, oldText));
 	} catch (e) {
-		target.textContent = 'Ошибка';
-		setTimeout(() => target.textContent = oldText, 2000);
+		fallbackCopy(text, target, oldText);
 	}
+}
+
+function fallbackCopy(text, target, oldText) {
+	const ta = document.createElement('textarea');
+	ta.value = text;
+	ta.style.position = 'fixed';
+	ta.style.opacity = '0';
+	document.body.appendChild(ta);
+	ta.select();
+	try {
+		const ok = document.execCommand('copy');
+		if (ok) {
+			target.textContent = 'Скопировано';
+		} else {
+			target.textContent = 'Ошибка копирования';
+		}
+	} catch (e) {
+		target.textContent = 'Ошибка копирования';
+	}
+	document.body.removeChild(ta);
+	setTimeout(() => target.textContent = oldText, 2000);
 }
 
 function downloadConf(id) {
