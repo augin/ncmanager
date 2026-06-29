@@ -977,14 +977,17 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	cfg, _ := loadConfig(dataFile)
-	if len(cfg.DnsRoutes) == 0 {
-		http.Error(w, "no dns routes configured", http.StatusBadRequest)
+	var req struct {
+		PeerID string `json:"peerId"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
 
-	if len(cfg.Peers) == 0 {
-		http.Error(w, "no peers configured", http.StatusBadRequest)
+	cfg, _ := loadConfig(dataFile)
+	if len(cfg.DnsRoutes) == 0 {
+		http.Error(w, "no dns routes configured", http.StatusBadRequest)
 		return
 	}
 
@@ -995,7 +998,21 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 	}
 	var results []applyResult
 
-	for _, peer := range cfg.Peers {
+	peers := cfg.Peers
+	if req.PeerID != "" {
+		for _, p := range cfg.Peers {
+			if p.ID == req.PeerID {
+				peers = []Peer{p}
+				break
+			}
+		}
+		if len(peers) == 0 {
+			http.Error(w, "peer not found", http.StatusNotFound)
+			return
+		}
+	}
+
+	for _, peer := range peers {
 		if peer.RouterDomain == "" || peer.RouterLogin == "" || peer.RouterPassword == "" {
 			results = append(results, applyResult{
 				Peer:   peer.Name,

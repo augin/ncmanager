@@ -472,16 +472,14 @@ async function configureDnsRoutes(id) {
 
 	try {
 		log.textContent += '📡 Подключение к ' + routerDomain + '...\n';
-		const res = await xhr('POST', '/peers/keenetic-dns-routes/' + encodeURIComponent(id), { enabled: true });
+		const res = await xhr('POST', '/dns/routes/apply', { peerId: id });
 		const data = await res.json();
-		if (data.status === 'ok') {
-			log.textContent += '✅ DNS-маршрутизация включена (dns-routes на ' + data.wanIface + ')\n';
-			if (data.messages && data.messages.length) {
-				for (const msg of data.messages) {
-					log.textContent += '   ↳ ' + msg + '\n';
-				}
-			}
+		if (res.ok && data.length && !data[0].error) {
+			log.textContent += '✅ DNS-маршрутизация применена на роутере ' + routerDomain + '\n';
+			log.textContent += '   Обработано правил: ' + data.length + '\n';
 			log.textContent += '\nГотово!\n';
+		} else if (data.length && data[0].error) {
+			log.textContent += '❌ Ошибка: ' + data[0].error + '\n';
 		} else {
 			log.textContent += '❌ Ошибка: ' + (data.error || 'неизвестно') + '\n';
 		}
