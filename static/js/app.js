@@ -92,6 +92,7 @@ function switchTab(name, btn) {
 	if (target) target.style.display = '';
 	if (name === 'logs') loadLogs();
 	if (name === 'dns') loadDnsRoutes();
+	try { localStorage.setItem('ncmanager_tab', name); } catch (e) {}
 }
 
 async function loadConfig() {
@@ -954,7 +955,7 @@ async function init() {
 	document.getElementById('iDns').value = cfg.dns || '1.1.1.1';
 	document.getElementById('iSubnet').value = cfg.subnet || '10.0.0.0/24';
 	document.getElementById('serverForm').addEventListener('submit', saveConfig);
-	switchTab('peers', document.querySelector('.tab'));
+	switchTab(localStorage.getItem('ncmanager_tab') || 'peers', document.querySelector('.tab'));
 	startAutoRefresh();
 	refresh();
 }
