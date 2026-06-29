@@ -25,7 +25,13 @@ import (
 )
 
 const dataFile = "data/config.json"
+const peersFile = "data/peers.json"
 const wgConfigFile = "data/wg0.conf"
+
+type PeersConfig struct {
+	Peers     []Peer     `json:"peers"`
+	DnsRoutes []DnsRoute `json:"dnsRoutes,omitempty"`
+}
 
 type Server struct {
 	mu         sync.Mutex
@@ -56,13 +62,11 @@ type Peer struct {
 
 
 type Config struct {
-	Port        int        `json:"port"`
-	Interface   string     `json:"interface"`
-	Endpoint    string     `json:"endpoint"`
-	DNS         string     `json:"dns"`
-	Subnet      string     `json:"subnet"`
-	Peers       []Peer     `json:"peers"`
-	DnsRoutes   []DnsRoute `json:"dnsRoutes,omitempty"`
+	Port      int    `json:"port"`
+	Interface string `json:"interface"`
+	Endpoint  string `json:"endpoint"`
+	DNS       string `json:"dns"`
+	Subnet    string `json:"subnet"`
 }
 
 var passwordHash string
@@ -95,7 +99,13 @@ func main() {
 	}
 	server.endpoint = resolveEndpoint(cfg.Endpoint)
 
-	if err := generateWgConfig(cfg); err != nil {
+	peersCfg, err := loadPeers()
+	if err != nil {
+		log.Printf("No peers config found, using empty: %v", err)
+		peersCfg = &PeersConfig{Peers: []Peer{}}
+	}
+
+	if err := generateWgConfig(cfg, peersCfg.Peers); err != nil {
 		log.Printf("Warning: could not generate wg config on startup: %v", err)
 	}
 
@@ -286,7 +296,6 @@ func createDefaultConfig() (*Config, error) {
 		Endpoint:  getPublicIP(),
 		DNS:       "1.1.1.1",
 		Subnet:    "10.0.0.0/24",
-		Peers:     []Peer{},
 	}
 	if err := savePrivateKey("data/server_private.key", priv); err != nil {
 		return nil, fmt.Errorf("failed to save server private key: %w", err)
@@ -316,6 +325,31 @@ func saveConfig(path string, cfg *Config) error {
 	return json.NewEncoder(f).Encode(cfg)
 }
 
+func loadPeers() (*PeersConfig, error) {
+	f, err := os.Open(peersFile)
+	if err != nil {
+		return &PeersConfig{Peers: []Peer{}}, nil
+	}
+	defer f.Close()
+	var pc PeersConfig
+	if err := json.NewDecoder(f).Decode(&pc); err != nil {
+		return &PeersConfig{Peers: []Peer{}}, nil
+	}
+	if pc.Peers == nil {
+		pc.Peers = []Peer{}
+	}
+	return &pc, nil
+}
+
+func savePeers(pc *PeersConfig) error {
+	f, err := os.Create(peersFile)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	return json.NewEncoder(f).Encode(pc)
+}
+
 func getPublicIP() string {
 	resp, err := http.Get("https://api.ipify.org?format=text")
 	if err != nil {
@@ -342,12 +376,21 @@ func (s *Server) getConfig(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "failed to load config", http.StatusInternalServerError)
 		return
 	}
+	peersCfg, _ := loadPeers()
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(cfg)
+	json.NewEncoder(w).Encode(map[string]any{
+		"port":       cfg.Port,
+		"interface":  cfg.Interface,
+		"endpoint":   cfg.Endpoint,
+		"dns":        cfg.DNS,
+		"subnet":     cfg.Subnet,
+		"peers":      peersCfg.Peers,
+		"dnsRoutes":  peersCfg.DnsRoutes,
+	})
 }
 
 func (s *Server) saveConfig(w http.ResponseWriter, r *http.Request) {
-	var req Config
+	var req map[string]any
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
@@ -359,13 +402,20 @@ func (s *Server) saveConfig(w http.ResponseWriter, r *http.Request) {
 	if cfg == nil {
 		cfg = &Config{}
 	}
-	cfg.Port = req.Port
-	cfg.Interface = req.Interface
-	cfg.DNS = req.DNS
-	cfg.Subnet = req.Subnet
-	cfg.Endpoint = resolveEndpoint(req.Endpoint)
-	if len(req.Peers) > 0 {
-		cfg.Peers = req.Peers
+	if v, ok := req["port"].(float64); ok {
+		cfg.Port = int(v)
+	}
+	if v, ok := req["interface"].(string); ok {
+		cfg.Interface = v
+	}
+	if v, ok := req["dns"].(string); ok {
+		cfg.DNS = v
+	}
+	if v, ok := req["subnet"].(string); ok {
+		cfg.Subnet = v
+	}
+	if v, ok := req["endpoint"].(string); ok {
+		cfg.Endpoint = resolveEndpoint(v)
 	}
 
 	if err := saveConfig(dataFile, cfg); err != nil {
@@ -378,7 +428,20 @@ func (s *Server) saveConfig(w http.ResponseWriter, r *http.Request) {
 	s.endpoint = cfg.Endpoint
 	s.mu.Unlock()
 
-	if err := generateWgConfig(cfg); err != nil {
+	peersCfg, _ := loadPeers()
+	if peers, ok := req["peers"].([]any); ok {
+		peersCfg.Peers = nil
+		for _, p := range peers {
+			pb, _ := json.Marshal(p)
+			var peer Peer
+			if err := json.Unmarshal(pb, &peer); err == nil {
+				peersCfg.Peers = append(peersCfg.Peers, peer)
+			}
+		}
+	}
+	_ = savePeers(peersCfg)
+
+	if err := generateWgConfig(cfg, peersCfg.Peers); err != nil {
 		http.Error(w, fmt.Sprintf("failed to generate wg config: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -393,14 +456,15 @@ func (s *Server) saveConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) listPeers(w http.ResponseWriter, r *http.Request) {
-	cfg, err := loadConfig(dataFile)
+	peersCfg, err := loadPeers()
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	_ = syncPeersWithWireGuard(cfg)
+	cfg, _ := loadConfig(dataFile)
+	_ = syncPeersWithWireGuard(cfg, peersCfg.Peers)
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(cfg.Peers)
+	json.NewEncoder(w).Encode(peersCfg.Peers)
 }
 
 func (s *Server) addPeer(w http.ResponseWriter, r *http.Request) {
@@ -416,8 +480,13 @@ func (s *Server) addPeer(w http.ResponseWriter, r *http.Request) {
 		req.Name = "Peer-" + time.Now().Format("20060102-150405")
 	}
 
+	peersCfg, err := loadPeers()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	cfg, _ := loadConfig(dataFile)
-	allowedIP, err := nextAvailableIP(cfg.Peers, cfg.Subnet)
+	allowedIP, err := nextAvailableIP(peersCfg.Peers, cfg.Subnet)
 	if err != nil {
 		http.Error(w, "no available IPs in subnet", http.StatusConflict)
 		return
@@ -437,15 +506,15 @@ func (s *Server) addPeer(w http.ResponseWriter, r *http.Request) {
 		CreatedAt:  time.Now(),
 		AllowedIPs: allowedIP,
 	}
-	cfg.Peers = append(cfg.Peers, peer)
+	peersCfg.Peers = append(peersCfg.Peers, peer)
 
-	if err := saveConfig(dataFile, cfg); err != nil {
+	if err := savePeers(peersCfg); err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
 
 	_ = addPeerWireGuard(peer)
-	_ = generateWgConfig(cfg)
+	_ = generateWgConfig(cfg, peersCfg.Peers)
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -461,11 +530,15 @@ func (s *Server) removePeer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cfg, _ := loadConfig(dataFile)
+	peersCfg, err := loadPeers()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	var peerToRemove *Peer
-	for i := range cfg.Peers {
-		if cfg.Peers[i].ID == req.ID {
-			peerToRemove = &cfg.Peers[i]
+	for i := range peersCfg.Peers {
+		if peersCfg.Peers[i].ID == req.ID {
+			peerToRemove = &peersCfg.Peers[i]
 			break
 		}
 	}
@@ -474,19 +547,20 @@ func (s *Server) removePeer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	filtered := cfg.Peers[:0]
-	for _, p := range cfg.Peers {
+	filtered := peersCfg.Peers[:0]
+	for _, p := range peersCfg.Peers {
 		if p.ID != req.ID {
 			filtered = append(filtered, p)
 		}
 	}
-	cfg.Peers = filtered
+	peersCfg.Peers = filtered
 
-	_ = saveConfig(dataFile, cfg)
+	_ = savePeers(peersCfg)
 	if err := removePeerWireGuard(peerToRemove.PublicKey); err != nil {
 		log.Printf("removePeer wg set failed: %v", err)
 	}
-	_ = generateWgConfig(cfg)
+	cfg, _ := loadConfig(dataFile)
+	_ = generateWgConfig(cfg, peersCfg.Peers)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
@@ -509,16 +583,20 @@ func (s *Server) updatePeer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cfg, _ := loadConfig(dataFile)
+	peersCfg, err := loadPeers()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	found := false
-	for i := range cfg.Peers {
-		if cfg.Peers[i].ID == req.ID {
-			cfg.Peers[i].RouterDomain = req.RouterDomain
-			cfg.Peers[i].RouterLogin = req.RouterLogin
+	for i := range peersCfg.Peers {
+		if peersCfg.Peers[i].ID == req.ID {
+			peersCfg.Peers[i].RouterDomain = req.RouterDomain
+			peersCfg.Peers[i].RouterLogin = req.RouterLogin
 			if req.RouterPassword != "" {
-				cfg.Peers[i].RouterPassword = req.RouterPassword
+				peersCfg.Peers[i].RouterPassword = req.RouterPassword
 			}
-			cfg.Peers[i].Description = req.Description
+			peersCfg.Peers[i].Description = req.Description
 			found = true
 			break
 		}
@@ -528,7 +606,7 @@ func (s *Server) updatePeer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = saveConfig(dataFile, cfg)
+	_ = savePeers(peersCfg)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
@@ -541,16 +619,17 @@ func (s *Server) getPeerQR(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("QR: path=%s query_id=%s", r.URL.Path, id)
-	cfg, _ := loadConfig(dataFile)
-	for i := range cfg.Peers {
-		if cfg.Peers[i].ID == id {
-			peer := &cfg.Peers[i]
+	peersCfg, _ := loadPeers()
+	globalCfg, _ := loadConfig(dataFile)
+	for i := range peersCfg.Peers {
+		if peersCfg.Peers[i].ID == id {
+			peer := &peersCfg.Peers[i]
 			serverPub := getActualServerPublicKey()
 			if serverPub == "" {
 				serverPrivBytes, _ := loadPrivateKey("data/server_private.key")
 				serverPub, _ = getPublicKeyFromPrivate(serverPrivBytes)
 			}
-			peerConf := generatePeerConfig(peer, serverPub, s.iface, s.endpoint, s.port, cfg.DNS)
+			peerConf := generatePeerConfig(peer, serverPub, s.iface, s.endpoint, s.port, globalCfg.DNS)
 			qr, err := qrcode.Encode(peerConf, qrcode.Medium, 256)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -561,7 +640,7 @@ func (s *Server) getPeerQR(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 	}
-	log.Printf("QR peer not found id=%s total=%d", id, len(cfg.Peers))
+	log.Printf("QR peer not found id=%s total=%d", id, len(peersCfg.Peers))
 	http.Error(w, "peer not found", http.StatusNotFound)
 }
 
@@ -572,16 +651,17 @@ func (s *Server) getPeerConfigText(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "peer id required", http.StatusBadRequest)
 		return
 	}
-	cfg, _ := loadConfig(dataFile)
-	for i := range cfg.Peers {
-		if cfg.Peers[i].ID == id {
-			peer := &cfg.Peers[i]
+	peersCfg, _ := loadPeers()
+	globalCfg, _ := loadConfig(dataFile)
+	for i := range peersCfg.Peers {
+		if peersCfg.Peers[i].ID == id {
+			peer := &peersCfg.Peers[i]
 			serverPub := getActualServerPublicKey()
 			if serverPub == "" {
 				serverPrivBytes, _ := loadPrivateKey("data/server_private.key")
 				serverPub, _ = getPublicKeyFromPrivate(serverPrivBytes)
 			}
-			peerConf := generatePeerConfig(peer, serverPub, s.iface, s.endpoint, s.port, cfg.DNS)
+			peerConf := generatePeerConfig(peer, serverPub, s.iface, s.endpoint, s.port, globalCfg.DNS)
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			w.Write([]byte(peerConf))
 			return
@@ -598,16 +678,17 @@ func (s *Server) downloadPeerConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	log.Printf("Download request id=%s", id)
-	cfg, _ := loadConfig(dataFile)
-	for i := range cfg.Peers {
-		if cfg.Peers[i].ID == id {
-			peer := &cfg.Peers[i]
+	peersCfg, _ := loadPeers()
+	globalCfg, _ := loadConfig(dataFile)
+	for i := range peersCfg.Peers {
+		if peersCfg.Peers[i].ID == id {
+			peer := &peersCfg.Peers[i]
 			serverPub := getActualServerPublicKey()
 			if serverPub == "" {
 				serverPrivBytes, _ := loadPrivateKey("data/server_private.key")
 				serverPub, _ = getPublicKeyFromPrivate(serverPrivBytes)
 			}
-			peerConf := generatePeerConfig(peer, serverPub, s.iface, s.endpoint, s.port, cfg.DNS)
+			peerConf := generatePeerConfig(peer, serverPub, s.iface, s.endpoint, s.port, globalCfg.DNS)
 			w.Header().Set("Content-Type", "application/octet-stream")
 			w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.conf\"", sanitizeFilename(peer.Name)))
 			w.Write([]byte(peerConf))
@@ -666,10 +747,15 @@ func (s *Server) importPeerToKeenetic(w http.ResponseWriter, r *http.Request) {
 	}
 	id := parts[3]
 
-	cfg, _ := loadConfig(dataFile)
+	peersCfg, err := loadPeers()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	globalCfg, _ := loadConfig(dataFile)
 	peerIdx := -1
-	for i := range cfg.Peers {
-		if cfg.Peers[i].ID == id {
+	for i := range peersCfg.Peers {
+		if peersCfg.Peers[i].ID == id {
 			peerIdx = i
 			break
 		}
@@ -678,14 +764,14 @@ func (s *Server) importPeerToKeenetic(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "peer not found", http.StatusNotFound)
 		return
 	}
-	peer := &cfg.Peers[peerIdx]
+	peer := &peersCfg.Peers[peerIdx]
 
 	serverPub := getActualServerPublicKey()
 	if serverPub == "" {
 		serverPrivBytes, _ := loadPrivateKey("data/server_private.key")
 		serverPub, _ = getPublicKeyFromPrivate(serverPrivBytes)
 	}
-	confContent := generatePeerConfig(peer, serverPub, s.iface, s.endpoint, s.port, cfg.DNS)
+	confContent := generatePeerConfig(peer, serverPub, s.iface, s.endpoint, s.port, globalCfg.DNS)
 
 	if peer.RouterDomain == "" || peer.RouterLogin == "" || peer.RouterPassword == "" {
 		http.Error(w, "router credentials not configured for this peer", http.StatusBadRequest)
@@ -708,14 +794,13 @@ func (s *Server) importPeerToKeenetic(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Store the created interface name for next time
 	ifName := result.Created
 	if ifName == "" {
 		ifName = result.Intersects
 	}
 	if ifName != "" && ifName != peer.RouterIfName {
-		cfg.Peers[peerIdx].RouterIfName = ifName
-		_ = saveConfig(dataFile, cfg)
+		peersCfg.Peers[peerIdx].RouterIfName = ifName
+		_ = savePeers(peersCfg)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -735,16 +820,17 @@ func (s *Server) downloadPeerKeeneticConfig(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	id := parts[3]
-	cfg, _ := loadConfig(dataFile)
-	for i := range cfg.Peers {
-		if cfg.Peers[i].ID == id {
-			peer := &cfg.Peers[i]
+	peersCfg, _ := loadPeers()
+	globalCfg, _ := loadConfig(dataFile)
+	for i := range peersCfg.Peers {
+		if peersCfg.Peers[i].ID == id {
+			peer := &peersCfg.Peers[i]
 			serverPub := getActualServerPublicKey()
 			if serverPub == "" {
 				serverPrivBytes, _ := loadPrivateKey("data/server_private.key")
 				serverPub, _ = getPublicKeyFromPrivate(serverPrivBytes)
 			}
-			peerConf := generatePeerConfig(peer, serverPub, s.iface, s.endpoint, s.port, cfg.DNS)
+			peerConf := generatePeerConfig(peer, serverPub, s.iface, s.endpoint, s.port, globalCfg.DNS)
 			w.Header().Set("Content-Type", "application/octet-stream")
 			w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.conf\"", sanitizeFilename(peer.Name)))
 			w.Write([]byte(peerConf))
@@ -766,10 +852,14 @@ func (s *Server) configurePeerDns(w http.ResponseWriter, r *http.Request) {
 	}
 	id := parts[3]
 
-	cfg, _ := loadConfig(dataFile)
+	peersCfg, err := loadPeers()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 	peerIdx := -1
-	for i := range cfg.Peers {
-		if cfg.Peers[i].ID == id {
+	for i := range peersCfg.Peers {
+		if peersCfg.Peers[i].ID == id {
 			peerIdx = i
 			break
 		}
@@ -778,7 +868,7 @@ func (s *Server) configurePeerDns(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "peer not found", http.StatusNotFound)
 		return
 	}
-	peer := &cfg.Peers[peerIdx]
+	peer := &peersCfg.Peers[peerIdx]
 
 	if peer.RouterDomain == "" || peer.RouterLogin == "" || peer.RouterPassword == "" {
 		http.Error(w, "router credentials not configured for this peer", http.StatusBadRequest)
@@ -841,12 +931,12 @@ func (s *Server) getLogs(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) dumpRouterRCI(w http.ResponseWriter, r *http.Request) {
-	cfg, _ := loadConfig(dataFile)
-	if len(cfg.Peers) == 0 {
+	peersCfg, _ := loadPeers()
+	if len(peersCfg.Peers) == 0 {
 		http.Error(w, "no peers configured", http.StatusBadRequest)
 		return
 	}
-	peer := &cfg.Peers[0]
+	peer := &peersCfg.Peers[0]
 	if peer.RouterDomain == "" || peer.RouterLogin == "" || peer.RouterPassword == "" {
 		http.Error(w, "router credentials not configured", http.StatusBadRequest)
 		return
@@ -1163,7 +1253,7 @@ func removePeerWireGuard(pubKey string) error {
 	return nil
 }
 
-func syncPeersWithWireGuard(cfg *Config) error {
+func syncPeersWithWireGuard(cfg *Config, peers []Peer) error {
 	if cfg == nil {
 		return nil
 	}
@@ -1175,18 +1265,18 @@ func syncPeersWithWireGuard(cfg *Config) error {
 	for _, p := range info.Peers {
 		peerMap[p.PublicKey] = p
 	}
-	for i := range cfg.Peers {
-		if p, ok := peerMap[cfg.Peers[i].PublicKey]; ok {
-			cfg.Peers[i].LastHandshake = p.LastHandshake
-			cfg.Peers[i].TransferRx = p.TransferRx
-			cfg.Peers[i].TransferTx = p.TransferTx
-			cfg.Peers[i].Endpoint = p.Endpoint
+	for i := range peers {
+		if p, ok := peerMap[peers[i].PublicKey]; ok {
+			peers[i].LastHandshake = p.LastHandshake
+			peers[i].TransferRx = p.TransferRx
+			peers[i].TransferTx = p.TransferTx
+			peers[i].Endpoint = p.Endpoint
 		}
 	}
 	return nil
 }
 
-func generateWgConfig(cfg *Config) error {
+func generateWgConfig(cfg *Config, peers []Peer) error {
 	if cfg == nil {
 		return fmt.Errorf("config is nil")
 	}
@@ -1223,7 +1313,7 @@ func generateWgConfig(cfg *Config) error {
 	b.WriteString(fmt.Sprintf("PostUp = iptables -A FORWARD -i %%i -j ACCEPT; iptables -A FORWARD -o %%i -j ACCEPT; iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE\n"))
 	b.WriteString(fmt.Sprintf("PostDown = iptables -D FORWARD -i %%i -j ACCEPT; iptables -D FORWARD -o %%i -j ACCEPT; iptables -t nat -D POSTROUTING -o eth0 -j MASQUERADE\n"))
 
-	for _, p := range cfg.Peers {
+	for _, p := range peers {
 		b.WriteString("\n[Peer]\n")
 		b.WriteString(fmt.Sprintf("# %s\n", p.Name))
 		b.WriteString(fmt.Sprintf("PublicKey = %s\n", p.PublicKey))

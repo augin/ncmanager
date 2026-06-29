@@ -5,3 +5,6 @@ data/server_private.key
 data/wg0.conf
 wg-manager
 data/config.json
+peers.json
+data/peers.json
+data/peers.json

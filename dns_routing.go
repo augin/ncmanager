@@ -250,9 +250,9 @@ func keeneticApplyDnsRoutes(httpClient *http.Client, baseURL, wgIface string, ro
 }
 
 func (s *Server) listDnsRoutes(w http.ResponseWriter, r *http.Request) {
-	cfg, _ := loadConfig(dataFile)
+	peersCfg, _ := loadPeers()
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(cfg.DnsRoutes)
+	json.NewEncoder(w).Encode(peersCfg.DnsRoutes)
 }
 
 func (s *Server) createDnsRoute(w http.ResponseWriter, r *http.Request) {
@@ -265,7 +265,7 @@ func (s *Server) createDnsRoute(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
-	cfg, _ := loadConfig(dataFile)
+	peersCfg, _ := loadPeers()
 	route := DnsRoute{
 		ID:      generateID(),
 		Name:    req.Name,
@@ -273,8 +273,8 @@ func (s *Server) createDnsRoute(w http.ResponseWriter, r *http.Request) {
 		Subnets: req.Subnets,
 		Enabled: true,
 	}
-	cfg.DnsRoutes = append(cfg.DnsRoutes, route)
-	_ = saveConfig(dataFile, cfg)
+	peersCfg.DnsRoutes = append(peersCfg.DnsRoutes, route)
+	_ = savePeers(peersCfg)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(route)
 }
@@ -291,16 +291,16 @@ func (s *Server) updateDnsRoute(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
-	cfg, _ := loadConfig(dataFile)
-	for i := range cfg.DnsRoutes {
-		if cfg.DnsRoutes[i].ID == req.ID {
-			cfg.DnsRoutes[i].Name = req.Name
-			cfg.DnsRoutes[i].Domains = req.Domains
-			cfg.DnsRoutes[i].Subnets = req.Subnets
-			cfg.DnsRoutes[i].Enabled = req.Enabled
-			_ = saveConfig(dataFile, cfg)
+	peersCfg, _ := loadPeers()
+	for i := range peersCfg.DnsRoutes {
+		if peersCfg.DnsRoutes[i].ID == req.ID {
+			peersCfg.DnsRoutes[i].Name = req.Name
+			peersCfg.DnsRoutes[i].Domains = req.Domains
+			peersCfg.DnsRoutes[i].Subnets = req.Subnets
+			peersCfg.DnsRoutes[i].Enabled = req.Enabled
+			_ = savePeers(peersCfg)
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(cfg.DnsRoutes[i])
+			json.NewEncoder(w).Encode(peersCfg.DnsRoutes[i])
 			return
 		}
 	}
@@ -315,15 +315,15 @@ func (s *Server) deleteDnsRoute(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
-	cfg, _ := loadConfig(dataFile)
-	filtered := cfg.DnsRoutes[:0]
-	for _, r := range cfg.DnsRoutes {
+	peersCfg, _ := loadPeers()
+	filtered := peersCfg.DnsRoutes[:0]
+	for _, r := range peersCfg.DnsRoutes {
 		if r.ID != req.ID {
 			filtered = append(filtered, r)
 		}
 	}
-	cfg.DnsRoutes = filtered
-	_ = saveConfig(dataFile, cfg)
+	peersCfg.DnsRoutes = filtered
+	_ = savePeers(peersCfg)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
@@ -344,8 +344,8 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	cfg, _ := loadConfig(dataFile)
-	if len(cfg.DnsRoutes) == 0 {
+	peersCfg, _ := loadPeers()
+	if len(peersCfg.DnsRoutes) == 0 {
 		http.Error(w, "no dns routes configured", http.StatusBadRequest)
 		return
 	}
@@ -358,9 +358,9 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 	}
 	var results []applyResult
 
-	peers := cfg.Peers
+	peers := peersCfg.Peers
 	if req.PeerID != "" {
-		for _, p := range cfg.Peers {
+		for _, p := range peersCfg.Peers {
 			if p.ID == req.PeerID {
 				peers = []Peer{p}
 				break
@@ -400,7 +400,7 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 
 		var applyPayload []routeApply
 		var routeNames []string
-		for _, rt := range cfg.DnsRoutes {
+		for _, rt := range peersCfg.DnsRoutes {
 			if rt.Enabled {
 				applyPayload = append(applyPayload, routeApply{
 					Name:    rt.Name,
@@ -468,10 +468,10 @@ func (s *Server) configurePeerDnsRoutes(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	cfg, _ := loadConfig(dataFile)
+	peersCfg, _ := loadPeers()
 	peerIdx := -1
-	for i := range cfg.Peers {
-		if cfg.Peers[i].ID == id {
+	for i := range peersCfg.Peers {
+		if peersCfg.Peers[i].ID == id {
 			peerIdx = i
 			break
 		}
@@ -480,7 +480,7 @@ func (s *Server) configurePeerDnsRoutes(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "peer not found", http.StatusNotFound)
 		return
 	}
-	peer := &cfg.Peers[peerIdx]
+	peer := &peersCfg.Peers[peerIdx]
 
 	if peer.RouterDomain == "" || peer.RouterLogin == "" || peer.RouterPassword == "" {
 		http.Error(w, "router credentials not configured for this peer", http.StatusBadRequest)
