@@ -18,6 +18,7 @@
       </form>
       <p class="hint">По умолчанию: admin</p>
     </div>
+  </div>
 
   <header class="topbar">
     <h1>WireGuard Manager</h1>
@@ -64,6 +65,8 @@
           </div>
           <div class="preset-grid" id="presetGrid"></div>
         </div>
+      </div>
+
   <div class="dns-modal-overlay" id="dnsRouteModalOverlay" style="display:none">
     <div class="dns-modal">
       <div class="form-group">
@@ -78,6 +81,87 @@
         <label>CIDR / IP подсети (по одной на строку)</label>
         <textarea id="dnsRouteSubnets" placeholder="173.245.48.0/20&#10;103.21.244.0/22&#10;..."></textarea>
         <div class="domain-hint">Опционально: IP-диапазоны для маршрутизации</div>
+      </div>
+      <div class="actions">
+        <button class="btn-dl" onclick="hideDnsRouteModal()">Отмена</button>
+        <button class="btn-qr" onclick="saveDnsRouteModal()">Сохранить</button>
+      </div>
+    </div>
+  </div>
+</div>
+    </section>
+
+    <section class="card" id="tab-settings" style="display:none">
+      <h2>Настройки сервера</h2>
+      <form id="serverForm" class="grid-form">
+        <label>Интерфейс<input id="iInterface" value="wg0"></label>
+        <label>Порт<input id="iPort" type="number" value="51820"></label>
+        <label>Endpoint<input id="iEndpoint" placeholder="AUTO"></label>
+        <label>DNS<input id="iDns" value="1.1.1.1"></label>
+        <label>Подсеть<input id="iSubnet" value="10.0.0.0/24" placeholder="10.0.0.0/24"></label>
+        <div class="actions">
+          <button type="submit">Сохранить</button>
+        </div>
+      </form>
+    </section>
+
+    <section class="card" id="tab-logs" style="display:none">
+      <h2>Логи</h2>
+      <button onclick="loadLogs()" class="btn-dl" style="margin-bottom:12px">Обновить</button>
+      <pre id="logOutput" style="background:#0f172a;padding:12px;border-radius:4px;overflow:auto;max-height:500px;font-size:0.8rem;white-space:pre-wrap;word-break:break-all;">Загрузка...</pre>
+    </section>
+  </main>
+
+  <div class="modal" id="qrModal">
+    <div class="modal-content">
+      <button class="modal-close" onclick="closeQR()">✕</button>
+      <h3>QR-код пира</h3>
+      <p id="qrPeerName" style="margin-bottom:12px;color:#64748b"></p>
+      <img id="qrImage" src="" alt="QR Code">
+    </div>
+  </div>
+
+  <div class="modal" id="textModal">
+    <div class="modal-content" style="max-width:600px;text-align:left">
+      <button class="modal-close" onclick="closeText()">✕</button>
+      <h3>Конфиг пира</h3>
+      <p id="textPeerName" style="margin-bottom:12px;color:#64748b"></p>
+      <pre id="textOutput" style="background:#0f172a;color:#e2e8f0;padding:12px;border-radius:4px;overflow:auto;max-height:60vh;font-size:0.85rem"></pre>
+      <button onclick="copyText()" class="btn-dl" style="margin-top:12px">Скопировать</button>
+    </div>
+  </div>
+
+  <div class="modal" id="routerModal">
+    <div class="modal-content" style="max-width:520px">
+      <button class="modal-close" onclick="closeRouterModal()">✕</button>
+      <h3>Импорт в Keenetic</h3>
+      <div id="routerLog" style="background:var(--color-bg-tertiary);color:var(--color-text-primary);padding:12px;border-radius:4px;overflow:auto;max-height:60vh;font-size:0.8rem;white-space:pre-wrap;word-break:break-all;margin-bottom:12px;"></div>
+      <div style="display:flex;gap:8px;justify-content:flex-end">
+        <button id="keeneticDownloadBtn" onclick="keeneticDownload()" class="btn-dl" style="display:none">⬇ Скачать конфиг (ручной импорт)</button>
+        <button id="routerCloseBtn" onclick="closeRouterModal()" class="btn-dl" style="display:none">Закрыть</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="dns-modal-overlay" id="dnsRouteModalOverlay" style="display:none">
+    <div class="dns-modal">
+      <h3 id="dnsRouteModalTitle">Новый маршрут</h3>
+      <div class="form-group">
+        <label>Название</label>
+        <input type="text" id="dnsRouteName" placeholder="Например: YouTube">
+      </div>
+      <div class="form-group">
+        <label>Домены (по одному на строку)</label>
+        <textarea id="dnsRouteDomains" placeholder="youtube.com&#10;googlevideo.com&#10;..."></textarea>
+        <div class="domain-hint">Можно добавить из пресета:</div>
+        <select id="dnsPresetSelect" onchange="addPresetDomains()" style="margin-top:4px;background:var(--color-bg-primary);color:var(--color-text-primary);border:1px solid var(--color-border);padding:4px;border-radius:var(--radius-sm)">
+          <option value="">— выберите пресет —</option>
+          <option value="YouTube">YouTube (19 доменов)</option>
+          <option value="Google">Google (31 домен)</option>
+          <option value="Instagram">Instagram (6 доменов)</option>
+          <option value="TikTok">TikTok (14 доменов)</option>
+          <option value="Netflix">Netflix (12 доменов)</option>
+        </select>
       </div>
       <div class="actions">
         <button class="btn-dl" onclick="hideDnsRouteModal()">Отмена</button>
