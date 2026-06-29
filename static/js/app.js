@@ -562,11 +562,13 @@ function getPeerNameById(id) {
 
 function copyText(btn) {
 	const text = document.getElementById('textOutput').textContent;
-	const oldText = btn.textContent;
+	const oldText = btn ? btn.textContent : 'Скопировать';
+	const target = btn || event.target;
+	target.textContent = 'Копирование...';
 	try {
 		navigator.clipboard.writeText(text).then(() => {
-			btn.textContent = 'Скопировано';
-			setTimeout(() => btn.textContent = oldText, 2000);
+			target.textContent = 'Скопировано';
+			setTimeout(() => target.textContent = oldText, 2000);
 		}).catch(() => {
 			const el = document.getElementById('textOutput');
 			const range = document.createRange();
@@ -574,11 +576,12 @@ function copyText(btn) {
 			window.getSelection().removeAllRanges();
 			window.getSelection().addRange(range);
 			document.execCommand('copy');
-			btn.textContent = 'Скопировано';
-			setTimeout(() => btn.textContent = oldText, 2000);
+			target.textContent = 'Скопировано';
+			setTimeout(() => target.textContent = oldText, 2000);
 		});
 	} catch (e) {
-		if (btn) btn.textContent = oldText;
+		target.textContent = 'Ошибка';
+		setTimeout(() => target.textContent = oldText, 2000);
 	}
 }
 
