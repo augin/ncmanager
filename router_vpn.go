@@ -120,7 +120,7 @@ func keeneticRemovePeer(httpClient *http.Client, baseURL, ifaceName, serverPubKe
 	return nil
 }
 
-func importWireGuardConfigToRouter(baseURL, login, password string, confData []byte, filename string, allowedIPs string, endpoint string, port int) (keeneticImportResult, error) {
+func importWireGuardConfigToRouter(baseURL, login, password string, confData []byte, filename string, interfaceIP string, peerAllowedIPs string, endpoint string, port int) (keeneticImportResult, error) {
 	domain := strings.TrimPrefix(strings.TrimPrefix(baseURL, "http://"), "https://")
 	client, workingURL, err := keeneticSetupClient(domain, login, password)
 	if err != nil {
@@ -228,12 +228,12 @@ func importWireGuardConfigToRouter(baseURL, login, password string, confData []b
 	}
 
 	// Set the interface IP address
-	if ifaceName != "" && allowedIPs != "" {
-		if err := keeneticSetInterfaceIP(httpClient, baseURL, ifaceName, allowedIPs); err != nil {
-			log.Printf("keenetic set ip %s -> %s failed: %v", ifaceName, allowedIPs, err)
+	if ifaceName != "" && interfaceIP != "" {
+		if err := keeneticSetInterfaceIP(httpClient, baseURL, ifaceName, interfaceIP); err != nil {
+			log.Printf("keenetic set ip %s -> %s failed: %v", ifaceName, interfaceIP, err)
 			result.Messages = append(result.Messages, "⚠️ установка IP: "+err.Error())
 		} else {
-			result.Messages = append(result.Messages, "✅ IP адрес установлен: "+allowedIPs)
+			result.Messages = append(result.Messages, "✅ IP адрес установлен: "+interfaceIP)
 		}
 	}
 
@@ -254,10 +254,10 @@ func importWireGuardConfigToRouter(baseURL, login, password string, confData []b
 			} else {
 				result.Messages = append(result.Messages, "🧹 старый peer удалён")
 			}
-			if err := keeneticSetPeer(httpClient, baseURL, ifaceName, serverPub, peerEndpoint, allowedIPs, peerName, 25); err != nil {
+			if err := keeneticSetPeer(httpClient, baseURL, ifaceName, serverPub, peerEndpoint, peerAllowedIPs, peerName, 25); err != nil {
 				result.Messages = append(result.Messages, "⚠️ Peer: "+err.Error())
 			} else {
-				result.Messages = append(result.Messages, "✅ Peer: endpoint="+peerEndpoint+" allow-ips="+allowedIPs+" keepalive=25")
+				result.Messages = append(result.Messages, "✅ Peer: endpoint="+peerEndpoint+" allow-ips="+peerAllowedIPs+" keepalive=25")
 			}
 		}
 	}

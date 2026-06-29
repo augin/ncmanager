@@ -92,6 +92,7 @@ function switchTab(name, btn) {
 	if (target) target.style.display = '';
 	if (name === 'logs') loadLogs();
 	if (name === 'dns') loadDnsRoutes();
+	if (name === 'waniface') loadAmneziaInterfaces();
 	try { localStorage.setItem('ncmanager_tab', name); } catch (e) {}
 }
 
@@ -918,6 +919,9 @@ async function refresh() {
 	} catch (e) {
 		console.error('refresh error:', e);
 	}
+	if (currentTab === 'waniface') {
+		loadAmneziaInterfaces();
+	}
 }
 
 function saveExpandedInputs() {
@@ -967,18 +971,21 @@ function clearExpandedInputs() {
 async function saveConfig(e) {
 	e.preventDefault();
 	try {
-		const cfg = {
-			interface: document.getElementById('iInterface').value,
-			port: parseInt(document.getElementById('iPort').value),
-			endpoint: document.getElementById('iEndpoint').value,
-			dns: document.getElementById('iDns').value,
-			subnet: document.getElementById('iSubnet').value,
-		};
-		const res = await xhr('POST', '/config/save', cfg);
-		if (res.ok) alert('Настройки сохранены. Сервер перезапущен.');
-	} catch (e) {
-		alert('Ошибка: ' + e.message);
-	}
+	const cfg = {
+		interface: document.getElementById('iInterface').value,
+		port: parseInt(document.getElementById('iPort').value),
+		endpoint: document.getElementById('iEndpoint').value,
+		dns: document.getElementById('iDns').value,
+		subnet: document.getElementById('iSubnet').value,
+		wanInterface: document.getElementById('wanInterface').value,
+		postUp: document.getElementById('iPostUp').value,
+		postDown: document.getElementById('iPostDown').value,
+	};
+	const res = await xhr('POST', '/config/save', cfg);
+	if (res.ok) alert('Настройки сохранены. Сервер перезапущен.');
+} catch (e) {
+	alert('Ошибка: ' + e.message);
+}
 }
 
 async function init() {
@@ -990,8 +997,12 @@ async function init() {
 	document.getElementById('iEndpoint').value = cfg.endpoint || '';
 	document.getElementById('iDns').value = cfg.dns || '1.1.1.1';
 	document.getElementById('iSubnet').value = cfg.subnet || '10.0.0.0/24';
+	document.getElementById('iPostUp').value = cfg.postUp || '';
+	document.getElementById('iPostDown').value = cfg.postDown || '';
+	document.getElementById('wanInterface').value = cfg.wanInterface || '';
 	document.getElementById('serverForm').addEventListener('submit', saveConfig);
 	await loadInterfaces();
+	await loadAmneziaStatus();
 	await loadPresets();
 	const saved = localStorage.getItem('ncmanager_tab') || 'peers';
 	const tabBtn = Array.from(document.querySelectorAll('.tab')).find(b => b.getAttribute('onclick').includes("'" + saved + "'")) || document.querySelector('.tab');
@@ -1101,5 +1112,194 @@ async function saveWanInterface() {
       status.textContent = '✅ Сохранено';
       setTimeout(() => status.textContent = '', 3000);
     }
+  }
+}
+
+async function loadAmneziaStatus() {
+  try {
+    const res = await xhr('GET', '/amnezia/status');
+    if (res.ok) {
+      const data = await res.json();
+      const statusEl = document.getElementById('amneziaStatus');
+      const btn = document.getElementById('amneziaInstallBtn');
+      if (data.installed) {
+        if (statusEl) statusEl.textContent = '✅ Amnezia WG установлен' + (data.version ? ' (' + data.version + ')' : '');
+        if (btn) btn.style.display = 'none';
+      } else {
+        if (statusEl) statusEl.textContent = '❌ Amnezia WG не установлен';
+        if (btn) btn.style.display = 'inline-block';
+      }
+      if (data.installStatus === 'running') {
+        showAmneziaModal();
+      }
+      const logEl = document.getElementById('amneziaInstallLog');
+      const installStatusEl = document.getElementById('amneziaInstallStatus');
+      if (logEl && data.installLogTail) {
+        logEl.value = data.installLogTail;
+        logEl.scrollTop = logEl.scrollHeight;
+      }
+      if (installStatusEl) {
+        const map = {running:'⏳ Установка...', completed:'✅ Установка завершена', failed:'❌ Ошибка установки', idle:''};
+        installStatusEl.textContent = map[(data.installStatus || '').trim()] || '';
+      }
+      if (data.installStatus === 'completed' || data.installStatus === 'failed') {
+        if (window._amneziaPoll) clearInterval(window._amneziaPoll);
+        window._amneziaPoll = null;
+      }
+      if (data.installStatus === 'completed') {
+        setTimeout(closeAmneziaModal, 8000);
+      }
+      setTimeout(loadAmneziaStatus, 4000);
+    }
+  } catch (e) {
+    console.error('loadAmneziaStatus failed:', e);
+  }
+}
+
+function showAmneziaModal() {
+  const m = document.getElementById('amneziaInstallModal');
+  if (m) m.classList.add('show');
+}
+
+function closeAmneziaModal() {
+  const m = document.getElementById('amneziaInstallModal');
+  if (m) m.classList.remove('show');
+}
+
+async function loadAmneziaInterfaces() {
+  try {
+    const res = await xhr('GET', '/amnezia/interfaces');
+    if (res.ok) {
+      const ifaces = await res.json();
+      renderAmneziaInterfaces(ifaces);
+    }
+  } catch (e) {
+    console.error('loadAmneziaInterfaces failed:', e);
+  }
+}
+
+function renderAmneziaInterfaces(ifaces) {
+  const list = document.getElementById('amneziaInterfaceList');
+  if (!list) return;
+  if (!ifaces || !ifaces.length) {
+    list.innerHTML = '<p style="color:#64748b">Нет импортированных интерфейсов</p>';
+    return;
+  }
+  let html = '<table><thead><tr><th>Имя</th><th>Статус</th><th>Адрес</th><th>PublicKey</th><th>Handshake</th><th>Трафик</th><th>Действия</th></tr></thead><tbody>';
+  for (const iface of ifaces) {
+    const running = iface.running === 'true';
+    const statusText = running ? '🟢 Запущен' : '🔴 Остановлен';
+    const statusClass = running ? 'led-green' : 'led-gray';
+    const pubKey = iface.publicKey ? iface.publicKey.substring(0, 16) + '...' : '—';
+    const addr = iface.address || '—';
+    const hs = iface.handshake || '—';
+    const rx = iface.rx || '0 B';
+    const tx = iface.tx || '0 B';
+    html += `<tr>
+      <td><code>${escapeHtml(iface.name)}</code></td>
+      <td><span class="led ${statusClass}"></span> ${statusText}</td>
+      <td><code>${escapeHtml(addr)}</code></td>
+      <td><code title="${escapeHtml(iface.publicKey || '')}">${escapeHtml(pubKey)}</code></td>
+      <td>${escapeHtml(hs)}</td>
+      <td><span title="↓ ${escapeHtml(rx)}">↓ ${escapeHtml(rx)}</span> / <span title="↑ ${escapeHtml(tx)}">↑ ${escapeHtml(tx)}</span></td>
+      <td style="display:flex;gap:4px">
+        ${!running ? `<button class="btn-qr" onclick="manageAmneziaInterface('${escapeHtml(iface.name)}','up')" title="Запустить">▶</button>` : ''}
+        ${running ? `<button class="btn-dl" onclick="manageAmneziaInterface('${escapeHtml(iface.name)}','down')" title="Остановить">⏸</button>` : ''}
+        <button class="btn-del" onclick="manageAmneziaInterface('${escapeHtml(iface.name)}','delete')" title="Удалить">✕</button>
+      </td>
+    </tr>`;
+  }
+  html += '</tbody></table>';
+  list.innerHTML = html;
+}
+
+async function manageAmneziaInterface(name, action) {
+  try {
+    const res = await xhr('POST', '/amnezia/interface/' + encodeURIComponent(name) + '/' + action, {});
+    if (res.ok) {
+      loadAmneziaInterfaces();
+    } else {
+      alert('Ошибка: ' + (await res.text()));
+    }
+  } catch (e) {
+    alert('Ошибка: ' + e.message);
+  }
+}
+
+async function installAmnezia() {
+  const btn = document.getElementById('amneziaInstallBtn');
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Установка...';
+  }
+  showAmneziaModal();
+  const logEl = document.getElementById('amneziaInstallLog');
+  const statusEl = document.getElementById('amneziaInstallStatus');
+  if (logEl) logEl.value = '';
+  if (statusEl) statusEl.textContent = '⏳ Установка...';
+  try {
+    const res = await xhr('POST', '/amnezia/install');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.status === 'started') {
+        if (window._amneziaPoll) clearInterval(window._amneziaPoll);
+        const poll = setInterval(async () => {
+          await loadAmneziaStatus();
+        }, 1500);
+        window._amneziaPoll = poll;
+      }
+    }
+  } catch (e) {
+    alert('Ошибка установки: ' + e.message);
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = 'Установить Amnezia WG';
+    }
+    if (statusEl) statusEl.textContent = '❌ Ошибка: ' + e.message;
+  }
+}
+
+function showImportModal() {
+  const m = document.getElementById('amneziaImportModal');
+  if (m) m.classList.add('show');
+  const nameEl = document.getElementById('amneziaInterfaceName');
+  if (nameEl) nameEl.value = '';
+  const textEl = document.getElementById('amneziaConfigText');
+  if (textEl) textEl.value = '';
+}
+
+function closeImportModal() {
+  const m = document.getElementById('amneziaImportModal');
+  if (m) m.classList.remove('show');
+}
+
+async function importAmneziaConfig() {
+  const interfaceName = document.getElementById('amneziaInterfaceName');
+  const name = interfaceName ? interfaceName.value.trim() : '';
+  if (!name) {
+    alert('Введите имя интерфейса');
+    return;
+  }
+  const textarea = document.getElementById('amneziaConfigText');
+  const configText = textarea ? textarea.value.trim() : '';
+  if (!configText) {
+    alert('Введите конфигурацию');
+    return;
+  }
+  try {
+    const res = await xhr('POST', '/amnezia/import', { name, configText });
+    if (res.ok) {
+      const data = await res.json();
+      const status = document.getElementById('importStatus');
+      if (status) {
+        status.textContent = 'Импортирован: ' + data.name + ' (' + data.publicKey + ')';
+        setTimeout(() => status.textContent = '', 5000);
+      }
+       closeImportModal();
+    } else {
+      alert('Ошибка импорта: ' + (await res.text()));
+    }
+  } catch (e) {
+    alert('Ошибка: ' + e.message);
   }
 }

@@ -3,14 +3,14 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>WireGuard Manager</title>
+<title>NC Manager</title>
 <link rel="stylesheet" href="/static/css/style.css?v=2026062913">
 </head>
 <body>
 <div id="app">
   <div class="login-overlay" id="loginOverlay">
     <div class="login-box">
-      <h1>WireGuard Manager</h1>
+    <h1>NC Manager</h1>
       <p>Введите пароль</p>
       <form id="loginForm">
         <input type="password" id="password" placeholder="Пароль" autofocus>
@@ -21,7 +21,7 @@
   </div>
 
   <header class="topbar">
-    <h1>WireGuard Manager</h1>
+    <h1>NC Manager</h1>
     <div>
       <span class="status-badge" id="statusBadge">Проверка...</span>
       <button onclick="toggleServer()" id="btnToggle">Запустить</button>
@@ -100,6 +100,14 @@
         <label>Endpoint<input id="iEndpoint" placeholder="AUTO"></label>
         <label>DNS<input id="iDns" value="1.1.1.1"></label>
         <label>Подсеть<input id="iSubnet" value="10.0.0.0/24" placeholder="10.0.0.0/24"></label>
+        <div class="form-group" style="margin-top:12px;grid-column:1/-1">
+          <label>PostUp (оставьте пустым для автогенерации)</label>
+          <textarea id="iPostUp" rows="2" style="width:100%;padding:6px;border-radius:4px;background:var(--color-bg-primary);color:var(--color-text-primary);border:1px solid var(--color-border);font-family:monospace;font-size:0.8rem;resize:vertical" placeholder="iptables ..."></textarea>
+        </div>
+        <div class="form-group" style="margin-top:12px;grid-column:1/-1">
+          <label>PostDown (оставьте пустым для автогенерации)</label>
+          <textarea id="iPostDown" rows="2" style="width:100%;padding:6px;border-radius:4px;background:var(--color-bg-primary);color:var(--color-text-primary);border:1px solid var(--color-border);font-family:monospace;font-size:0.8rem;resize:vertical" placeholder="iptables ..."></textarea>
+        </div>
         <div class="actions">
           <button type="submit">Сохранить</button>
         </div>
@@ -117,6 +125,59 @@
       </select>
       <button onclick="saveWanInterface()" class="btn-dl" style="margin-left:8px">Сохранить</button>
       <p id="wanStatus" style="margin-top:8px;color:#64748b"></p>
+
+      <hr style="margin:20px 0;border-color:var(--color-border, #4a5568)">
+
+      <h3>Amnezia WireGuard</h3>
+      <p id="amneziaStatus" style="color:#64748b;margin-bottom:8px">Проверка...</p>
+      <button id="amneziaInstallBtn" onclick="installAmnezia()" class="btn-qr" style="display:none">Установить Amnezia WG</button>
+
+      <div class="modal" id="amneziaInstallModal">
+        <div class="modal-content" style="max-width:640px;text-align:left">
+          <button class="modal-close" onclick="closeAmneziaModal()">✕</button>
+          <h3>Установка Amnezia WG</h3>
+          <textarea id="amneziaInstallLog" readonly style="width:100%;height:300px;padding:8px;border-radius:6px;background:#1e293b;color:#e2e8f0;border:1px solid #334155;font-family:monospace;font-size:0.8rem;white-space:pre-wrap;word-break:break-all"></textarea>
+          <p id="amneziaInstallStatus" style="margin-top:8px;color:#64748b"></p>
+        </div>
+      </div>
+
+      <div style="margin-top:20px">
+        <button onclick="showImportModal()" class="btn-dl">Импортировать конфиг</button>
+        <p id="importStatus" style="margin-top:8px;color:#64748b"></p>
+      </div>
+
+      <div class="modal" id="amneziaImportModal">
+        <div class="modal-content" style="max-width:640px;text-align:left">
+          <button class="modal-close" onclick="closeImportModal()">✕</button>
+          <h3>Импорт конфигурации Amnezia WG</h3>
+          <div class="form-group">
+            <label>Имя интерфейса</label>
+            <input type="text" id="amneziaInterfaceName" placeholder="Например: awg0" style="width:100%;padding:8px;border-radius:6px;background:var(--color-bg-primary);color:var(--color-text-primary);border:1px solid var(--color-border);font-family:monospace;font-size:0.85rem">
+          </div>
+          <div class="form-group" style="margin-top:12px">
+            <label>Конфигурация</label>
+            <textarea id="amneziaConfigText" rows="8" style="width:100%;padding:8px;border-radius:6px;background:var(--color-bg-primary);color:var(--color-text-primary);border:1px solid var(--color-border);font-family:monospace;font-size:0.85rem" placeholder="[Interface]
+PrivateKey = ...
+Address = ...
+...
+[Peer]
+PublicKey = ...
+Endpoint = ...
+AllowedIPs = ..."></textarea>
+          </div>
+          <div class="actions" style="margin-top:16px">
+            <button onclick="importAmneziaConfig()" class="btn-dl">Импортировать</button>
+          </div>
+        </div>
+      </div>
+
+      <hr style="margin:24px 0;border-color:var(--color-border, #4a5568)">
+      <h3>Импортированные AWG интерфейсы</h3>
+      <button onclick="loadAmneziaInterfaces()" class="btn-dl" style="margin-bottom:12px">Обновить</button>
+      <div id="amneziaInterfaceList">
+        <p style="color:#64748b">Загрузка...</p>
+      </div>
+
     </section>
 
     <section class="card" id="tab-logs" style="display:none">
@@ -185,6 +246,6 @@
   </div>
 </div>
 
-<script src="/static/js/app.js?v=2026062909"></script>
+<script src="/static/js/app.js?v=2026063014"></script>
 </body>
 </html>

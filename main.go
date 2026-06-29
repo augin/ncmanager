@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/hmac"
 	"crypto/rand"
@@ -10,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math"
 	"net"
 	"net/http"
 	"os"
@@ -26,7 +28,7 @@ import (
 
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
-const wgConfigFile = "data/wg0.conf"
+const wgConfigFile = "/etc/wireguard/wg0.conf"
 
 type PeersConfig struct {
 	Peers     []Peer     `json:"peers"`
@@ -68,6 +70,8 @@ type Config struct {
 	Endpoint     string `json:"endpoint"`
 	DNS          string `json:"dns"`
 	Subnet       string `json:"subnet"`
+	PostUp       string `json:"postUp,omitempty"`
+	PostDown     string `json:"postDown,omitempty"`
 }
 
 var passwordHash string
@@ -103,6 +107,24 @@ func main() {
 	if cfg.WanInterface == "" {
 		cfg.WanInterface = detectDefaultWan()
 		_ = saveConfig(dataFile, cfg)
+	}
+
+	if cfg.PostUp == "" || cfg.PostDown == "" {
+		if data, err := os.ReadFile(wgConfigFile); err == nil {
+			lines := strings.Split(string(data), "\n")
+			for _, line := range lines {
+				line = strings.TrimSpace(line)
+				if strings.HasPrefix(line, "PostUp = ") && cfg.PostUp == "" {
+					cfg.PostUp = strings.TrimSpace(strings.TrimPrefix(line, "PostUp = "))
+				}
+				if strings.HasPrefix(line, "PostDown = ") && cfg.PostDown == "" {
+					cfg.PostDown = strings.TrimSpace(strings.TrimPrefix(line, "PostDown = "))
+				}
+			}
+			if cfg.PostUp != "" || cfg.PostDown != "" {
+				_ = saveConfig(dataFile, cfg)
+			}
+		}
 	}
 
 	peersCfg, err := loadPeers()
@@ -163,6 +185,11 @@ func main() {
 	api.HandleFunc("/logout", withAuth(logoutHandler))
 	api.HandleFunc("/logs", withAuth(server.getLogs))
 	api.HandleFunc("/router/dump/", withAuth(server.dumpRouterRCI))
+	api.HandleFunc("/amnezia/status", withAuth(server.getAmneziaStatus))
+	api.HandleFunc("/amnezia/install", withAuth(server.installAmnezia))
+	api.HandleFunc("/amnezia/import", withAuth(server.importAmneziaConfig))
+	api.HandleFunc("/amnezia/interfaces", withAuth(server.getAmneziaInterfaces))
+	api.HandleFunc("/amnezia/interface/", withAuth(server.manageAmneziaInterface))
 	http.Handle("/api/", http.StripPrefix("/api", api))
 
 	log.Printf("WireGuard Manager starting on :8080")
@@ -437,6 +464,8 @@ func (s *Server) getConfig(w http.ResponseWriter, r *http.Request) {
 		"endpoint":     cfg.Endpoint,
 		"dns":          cfg.DNS,
 		"subnet":       cfg.Subnet,
+		"postUp":       cfg.PostUp,
+		"postDown":     cfg.PostDown,
 		"peers":        peersCfg.Peers,
 		"dnsRoutes":    peersCfg.DnsRoutes,
 	})
@@ -461,7 +490,7 @@ func (s *Server) saveConfig(w http.ResponseWriter, r *http.Request) {
 	if v, ok := req["interface"].(string); ok {
 		cfg.Interface = v
 	}
-	if v, ok := req["wanInterface"].(string); ok {
+	if v, ok := req["wanInterface"].(string); ok && v != "" {
 		cfg.WanInterface = v
 	}
 	if v, ok := req["dns"].(string); ok {
@@ -469,6 +498,12 @@ func (s *Server) saveConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	if v, ok := req["subnet"].(string); ok {
 		cfg.Subnet = v
+	}
+	if v, ok := req["postUp"].(string); ok {
+		cfg.PostUp = v
+	}
+	if v, ok := req["postDown"].(string); ok {
+		cfg.PostDown = v
 	}
 	if v, ok := req["endpoint"].(string); ok {
 		cfg.Endpoint = resolveEndpoint(v)
@@ -777,8 +812,8 @@ func generateKeeneticServerConfig(peer *Peer, serverPub, iface, endpoint string,
 	b.WriteString(fmt.Sprintf("Address = %s\n", serverAddr))
 	b.WriteString(fmt.Sprintf("ListenPort = %d\n", port))
 	b.WriteString(fmt.Sprintf("PrivateKey = %s\n", strings.TrimSpace(serverPub)))
-	b.WriteString(fmt.Sprintf("PostUp = iptables -A FORWARD -i %%i -j ACCEPT; iptables -A FORWARD -o %%i -j ACCEPT; iptables -t nat -A POSTROUTING -o %s -j MASQUERADE\n", wanIface))
-	b.WriteString(fmt.Sprintf("PostDown = iptables -D FORWARD -i %%i -j ACCEPT; iptables -D FORWARD -o %%i -j ACCEPT; iptables -t nat -D POSTROUTING -o %s -j MASQUERADE\n", wanIface))
+	b.WriteString(fmt.Sprintf("PostUp = iptables -A INPUT -p udp --dport %d -j ACCEPT || true; iptables -A FORWARD -i %s -o %%i -j ACCEPT || true; iptables -A FORWARD -i %%i -j ACCEPT || true; iptables -t nat -A POSTROUTING -o %s -j MASQUERADE || true; ip route add default dev %s table 110 || true; ip rule add iif %%i table 110 || true;\n", port, wanIface, wanIface, wanIface))
+	b.WriteString(fmt.Sprintf("PostDown = iptables -D INPUT -p udp --dport %d -j ACCEPT || true; iptables -D FORWARD -i %s -o %%i -j ACCEPT || true; iptables -D FORWARD -i %%i -j ACCEPT || true; iptables -t nat -D POSTROUTING -o %s -j MASQUERADE || true; ip route del default dev %s table 110 || true; ip rule del iif %%i table 110 || true;\n", port,wanIface,wanIface,wanIface))
 	b.WriteString(fmt.Sprintf("SaveConfig = true\n"))
 
 	b.WriteString("\n[Peer]\n")
@@ -840,6 +875,7 @@ func (s *Server) importPeerToKeenetic(w http.ResponseWriter, r *http.Request) {
 		[]byte(confContent),
 		sanitizeFilename(peer.Name)+".conf",
 		peer.AllowedIPs,
+		"0.0.0.0/0",
 		s.endpoint,
 		s.port,
 	)
@@ -1370,8 +1406,17 @@ func generateWgConfig(cfg *Config, peers []Peer) error {
 	b.WriteString(fmt.Sprintf("Address = %s\n", serverAddr))
 	b.WriteString(fmt.Sprintf("ListenPort = %d\n", cfg.Port))
 	b.WriteString(fmt.Sprintf("PrivateKey = %s\n", serverPriv))
-	b.WriteString(fmt.Sprintf("PostUp = iptables -A FORWARD -i %%i -j ACCEPT; iptables -A FORWARD -o %%i -j ACCEPT; iptables -t nat -A POSTROUTING -o %s -j MASQUERADE\n", wanIface))
-	b.WriteString(fmt.Sprintf("PostDown = iptables -D FORWARD -i %%i -j ACCEPT; iptables -D FORWARD -o %%i -j ACCEPT; iptables -t nat -D POSTROUTING -o %s -j MASQUERADE\n", wanIface))
+	if cfg.PostUp != "" {
+		b.WriteString(fmt.Sprintf("PostUp = %s\n", cfg.PostUp))
+	} else {
+		b.WriteString(fmt.Sprintf("PostUp = iptables -A INPUT -p udp --dport %d -j ACCEPT || true; iptables -A FORWARD -i %s -o %%i -j ACCEPT || true; iptables -A FORWARD -i %%i -j ACCEPT || true; iptables -t nat -A POSTROUTING -o %s -j MASQUERADE || true; ip route add default dev %s table 110 || true; ip rule add iif %%i table 110 || true;\n", cfg.Port, wanIface, wanIface, wanIface))
+	}
+	if cfg.PostDown != "" {
+		b.WriteString(fmt.Sprintf("PostDown = %s\n", cfg.PostDown))
+	} else {
+		b.WriteString(fmt.Sprintf("PostDown = iptables -D INPUT -p udp --dport %d -j ACCEPT || true; iptables -D FORWARD -i %s -o %%i -j ACCEPT || true; iptables -D FORWARD -i %%i -j ACCEPT || true; iptables -t nat -D POSTROUTING -o %s -j MASQUERADE || true; ip route del default dev %s table 110 || true; ip rule del iif %%i table 110 || true;\n", cfg.Port,wanIface,wanIface,wanIface))
+	}
+	b.WriteString("SaveConfig = true\n")
 
 	for _, p := range peers {
 		b.WriteString("\n[Peer]\n")
@@ -1501,4 +1546,403 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 func logoutHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+func (s *Server) getAmneziaStatus(w http.ResponseWriter, r *http.Request) {
+	_, err := exec.LookPath("awg")
+	installed := err == nil
+	version := ""
+	if installed {
+		out, _ := exec.Command("awg", "-v").CombinedOutput()
+		v := strings.TrimSpace(string(out))
+		if v != "" {
+			version = v
+			installed = true
+		} else {
+			installed = false
+		}
+	}
+
+	status := "idle"
+	logBytes, _ := os.ReadFile("/tmp/amnezia-install.log")
+	logText := string(logBytes)
+
+	stBytes, _ := os.ReadFile("/tmp/amnezia-install.status")
+	status = strings.TrimSpace(string(stBytes))
+	if status == "" && installed {
+		status = "completed"
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"installed":      installed,
+		"installStatus":  status,
+		"installLogTail": logText,
+		"version":        version,
+	})
+}
+
+func (s *Server) installAmnezia(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	os.WriteFile("/tmp/amnezia-install.status", []byte("running"), 0644)
+	os.WriteFile("/tmp/amnezia-install.log", []byte(""), 0644)
+	go func() {
+		script := `set -euo pipefail
+export DEBIAN_FRONTEND=noninteractive
+
+echo "Updating apt..."
+apt-get update -q 2>&1 || true
+apt-get upgrade -y -q \
+  -o Dpkg::Options::="--force-confdef" \
+  -o Dpkg::Options::="--force-confold" 2>&1 || true
+
+echo "Installing dependencies..."
+apt-get install -y -q \
+  python3 net-tools curl ufw iptables qrencode bc ca-certificates gnupg \
+  build-essential git libmnl-dev pkg-config dkms 2>&1 || true
+
+echo "Installing kernel headers..."
+running_kernel="$(uname -r)"
+if [[ ! -d "/lib/modules/${running_kernel}/build" ]]; then
+  apt-get install -y -q "linux-headers-${running_kernel}" 2>&1 || true
+fi
+if [[ ! -d "/lib/modules/${running_kernel}/build" ]]; then
+  apt-get install -y -q linux-headers-amd64 2>/dev/null || \
+  apt-get install -y -q linux-headers-generic 2>/dev/null || true
+fi
+
+echo "Building amneziawg kernel module..."
+tmp_mod="/tmp/amneziawg-linux-kernel-module"
+rm -rf "$tmp_mod"
+git clone --depth 1 https://github.com/amnezia-vpn/amneziawg-linux-kernel-module.git "$tmp_mod" 2>&1 || {
+  echo "Failed to clone kernel module"; exit 1
+}
+(
+  cd "$tmp_mod/src" || exit 1
+  make dkms-install 2>&1 || exit 1
+  mod_ver=$(grep -oP 'version\s*"\K[^"]+' dkms.conf 2>/dev/null || echo "1.0.0")
+  dkms add -m amneziawg -v "$mod_ver" 2>/dev/null || true
+  dkms build -m amneziawg -v "$mod_ver" 2>&1 || exit 1
+  dkms install -m amneziawg -v "$mod_ver" 2>&1 || exit 1
+) || {
+  echo "Failed to build kernel module"; exit 1
+}
+rm -rf "$tmp_mod"
+
+echo "Building amneziawg-tools..."
+tmp_tools="/tmp/amneziawg-tools"
+rm -rf "$tmp_tools"
+git clone --depth 1 https://github.com/amnezia-vpn/amneziawg-tools.git "$tmp_tools" 2>&1 || {
+  echo "Failed to clone tools"; exit 1
+}
+(
+  cd "$tmp_tools/src" || exit 1
+  make 2>&1 && make install 2>&1
+) || {
+  echo "Failed to build tools"; exit 1
+}
+rm -rf "$tmp_tools"
+
+echo "Loading module..."
+modprobe amneziawg 2>/dev/null || true
+
+echo "Enabling IP forwarding..."
+sysctl -w net.ipv4.ip_forward=1 -q 2>&1 || true
+grep -q "^net.ipv4.ip_forward=1" /etc/sysctl.conf || \
+  echo "net.ipv4.ip_forward=1" >> /etc/sysctl.conf
+
+echo "Done"
+`
+		cmd := exec.Command("bash", "-c", script+" 2>&1")
+		stdout, err := cmd.StdoutPipe()
+		if err != nil {
+			log.Printf("amnezia install: stdout pipe error: %v", err)
+			os.WriteFile("/tmp/amnezia-install.status", []byte("failed"), 0644)
+			return
+		}
+		if err := cmd.Start(); err != nil {
+			log.Printf("amnezia install: start error: %v", err)
+			os.WriteFile("/tmp/amnezia-install.status", []byte("failed"), 0644)
+			return
+		}
+		var logBuf bytes.Buffer
+		scanner := bufio.NewScanner(stdout)
+		for scanner.Scan() {
+			line := scanner.Text() + "\n"
+			logBuf.WriteString(line)
+			os.WriteFile("/tmp/amnezia-install.log", []byte(logBuf.String()), 0644)
+		}
+		if err := cmd.Wait(); err != nil {
+			logBuf.WriteString("\n[ERROR] " + err.Error() + "\n")
+			os.WriteFile("/tmp/amnezia-install.log", []byte(logBuf.String()), 0644)
+			os.WriteFile("/tmp/amnezia-install.status", []byte("failed"), 0644)
+		} else {
+			os.WriteFile("/tmp/amnezia-install.status", []byte("completed"), 0644)
+		}
+	}()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "started"})
+}
+
+func (s *Server) importAmneziaConfig(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		ConfigText string `json:"configText"`
+		Name       string `json:"name"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if req.ConfigText == "" {
+		http.Error(w, "config text required", http.StatusBadRequest)
+		return
+	}
+	if req.Name == "" {
+		http.Error(w, "interface name required", http.StatusBadRequest)
+		return
+	}
+	name := strings.TrimSpace(req.Name)
+
+	configText := req.ConfigText
+	configText = strings.Replace(configText, "[Interface]", "[Interface]\nTable = off", 1)
+	var lines []string
+	for _, line := range strings.Split(configText, "\n") {
+		if !strings.HasPrefix(strings.TrimSpace(line), "DNS = ") {
+			lines = append(lines, line)
+		}
+	}
+	configText = strings.Join(lines, "\n")
+	if !strings.Contains(configText, "PersistentKeepalive = ") {
+		configText = strings.Replace(configText, "[Peer]", "[Peer]\nPersistentKeepalive = 27", 1)
+	}
+
+	os.MkdirAll("/etc/amnezia/amneziawg", 0700)
+	confPath := fmt.Sprintf("/etc/amnezia/amneziawg/%s.conf", name)
+	if err := os.WriteFile(confPath, []byte(configText), 0600); err != nil {
+		http.Error(w, "failed to write config: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	exec.Command("modprobe", "amneziawg").CombinedOutput()
+
+	out, upErr := exec.Command("awg-quick", "up", name).CombinedOutput()
+	if upErr != nil {
+		os.Remove(confPath)
+		http.Error(w, "awg-quick up failed: "+string(out), http.StatusInternalServerError)
+		return
+	}
+
+	var publicKey string
+	for _, line := range strings.Split(req.ConfigText, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "PublicKey = ") {
+			publicKey = strings.TrimSpace(strings.TrimPrefix(line, "PublicKey = "))
+			break
+		}
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{
+		"status":    "ok",
+		"name":      name,
+		"publicKey": publicKey,
+	})
+}
+
+func (s *Server) getAmneziaInterfaces(w http.ResponseWriter, r *http.Request) {
+	dir := "/etc/amnezia/amneziawg"
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode([]map[string]string{})
+		return
+	}
+	var result []map[string]string
+	for _, entry := range entries {
+		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".conf") {
+			continue
+		}
+		name := strings.TrimSuffix(entry.Name(), ".conf")
+		running := isAmneziaRunning(name)
+		pubKey := ""
+		address := ""
+		handshake := ""
+		rx := ""
+		tx := ""
+		if running {
+			pubKey = getAmneziaPublicKey(name)
+			address = getAmneziaAddress(name)
+			handshake = getAmneziaHandshake(name)
+			rx, tx = getAmneziaTransfer(name)
+		}
+		result = append(result, map[string]string{
+			"name":      name,
+			"running":   fmt.Sprintf("%v", running),
+			"publicKey": pubKey,
+			"address":   address,
+			"handshake": handshake,
+			"rx":        rx,
+			"tx":        tx,
+		})
+	}
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(result)
+}
+
+func isAmneziaRunning(name string) bool {
+	_, err := exec.Command("awg", "show", name).CombinedOutput()
+	return err == nil
+}
+
+func getAmneziaPublicKey(name string) string {
+	out, _ := exec.Command("awg", "show", name).CombinedOutput()
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "public key: ") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "public key: "))
+		}
+	}
+	return ""
+}
+
+func getAmneziaHandshake(name string) string {
+	out, _ := exec.Command("awg", "show", name).CombinedOutput()
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "latest handshake: ") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "latest handshake: "))
+		}
+	}
+	return "никогда"
+}
+
+func getAmneziaTransfer(name string) (string, string) {
+	out, _ := exec.Command("awg", "show", name).CombinedOutput()
+	for _, line := range strings.Split(string(out), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "transfer: ") {
+			rest := strings.TrimPrefix(line, "transfer: ")
+			parts := strings.Split(rest, ", ")
+			var rx, tx string
+			for _, p := range parts {
+				p = strings.TrimSpace(p)
+				if strings.HasSuffix(p, "received") {
+					rx = strings.TrimSuffix(p, " received")
+				} else if strings.HasSuffix(p, "sent") {
+					tx = strings.TrimSuffix(p, " sent")
+				}
+			}
+			return rx, tx
+		}
+	}
+	return "0 B", "0 B"
+}
+
+func parseBytes(s string) int64 {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0
+	}
+	parts := strings.Fields(s)
+	if len(parts) == 0 {
+		return 0
+	}
+	valStr := parts[0]
+	unit := ""
+	if len(parts) > 1 {
+		unit = parts[1]
+	}
+	var val float64
+	var parseErr error
+	if val, parseErr = strconv.ParseFloat(valStr, 64); parseErr != nil {
+		return 0
+	}
+	switch strings.ToLower(unit) {
+	case "kib", "kb", "k":
+		return int64(val * 1024)
+	case "mib", "mb", "m":
+		return int64(val * 1024 * 1024)
+	case "gib", "gb", "g":
+		return int64(val * 1024 * 1024 * 1024)
+	case "tib", "tb", "t":
+		return int64(val * 1024 * 1024 * 1024 * 1024)
+	default:
+		return int64(val)
+	}
+}
+
+func formatBytesAWG(b int64) string {
+	if b < 1024 {
+		return fmt.Sprintf("%d B", b)
+	}
+	u := 1024
+	e := int(math.Log(float64(b)) / math.Log(float64(u)))
+	div := int64(math.Pow(float64(u), float64(e)))
+	val := float64(b) / float64(div)
+	if val == math.Floor(val) {
+		return fmt.Sprintf("%.0f %ciB", val, "KMGTPE"[e-1])
+	}
+	return fmt.Sprintf("%.1f %ciB", val, "KMGTPE"[e-1])
+}
+
+func getAmneziaAddress(name string) string {
+	confPath := fmt.Sprintf("/etc/amnezia/amneziawg/%s.conf", name)
+	data, err := os.ReadFile(confPath)
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "Address = ") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "Address = "))
+		}
+	}
+	return ""
+}
+
+func (s *Server) manageAmneziaInterface(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/amnezia/interface/")
+	parts := strings.Split(path, "/")
+	if len(parts) < 1 || parts[0] == "" {
+		http.Error(w, "interface name required", http.StatusBadRequest)
+		return
+	}
+	name := parts[0]
+	var action string
+	if len(parts) >= 2 {
+		action = parts[1]
+	}
+
+	switch action {
+	case "down":
+		out, err := exec.Command("awg-quick", "down", name).CombinedOutput()
+		if err != nil {
+			http.Error(w, "awg-quick down failed: "+string(out), http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "name": name})
+	case "up":
+		_, err := exec.Command("awg-quick", "up", name).CombinedOutput()
+		if err != nil {
+			http.Error(w, "awg-quick up failed", http.StatusInternalServerError)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "name": name})
+	case "delete":
+		exec.Command("awg-quick", "down", name).CombinedOutput()
+		os.Remove(fmt.Sprintf("/etc/amnezia/amneziawg/%s.conf", name))
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "name": name})
+	default:
+		http.Error(w, "unknown action", http.StatusBadRequest)
+	}
 }
