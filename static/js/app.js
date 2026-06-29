@@ -605,6 +605,22 @@ async function loadDnsRoutes() {
   }
 }
 
+let DNS_PRESETS = [];
+let presetsLoaded = false;
+
+async function loadPresets() {
+  try {
+    const res = await xhr('GET', '/presets/dns-routes');
+    if (res.ok) {
+      DNS_PRESETS = await res.json();
+      presetsLoaded = true;
+      renderPresetCatalog();
+    }
+  } catch (e) {
+    console.error('loadPresets error:', e);
+  }
+}
+
 const PRESET_CATEGORIES = ['all','ai','block','cloud','developer','gaming','media','social'];
 const PRESET_CAT_LABELS = {
   all:'Все', ai:'AI', block:'Блок-листы', cloud:'Облака',
@@ -616,6 +632,11 @@ function renderPresetCatalog() {
   const filters = document.getElementById('presetFilters');
   const grid = document.getElementById('presetGrid');
   if (!filters || !grid) return;
+
+  if (!presetsLoaded) {
+    grid.innerHTML = '<p style="color:#64748b">Загрузка пресетов...</p>';
+    return;
+  }
 
   filters.innerHTML = PRESET_CATEGORIES.map(c =>
     `<button class="preset-filter ${c === activePresetCategory ? 'active' : ''}" onclick="filterPresets('${c}')">${PRESET_CAT_LABELS[c]}</button>`
@@ -958,6 +979,7 @@ async function init() {
 	document.getElementById('iDns').value = cfg.dns || '1.1.1.1';
 	document.getElementById('iSubnet').value = cfg.subnet || '10.0.0.0/24';
 	document.getElementById('serverForm').addEventListener('submit', saveConfig);
+	await loadPresets();
 	const saved = localStorage.getItem('ncmanager_tab') || 'peers';
 	const tabBtn = Array.from(document.querySelectorAll('.tab')).find(b => b.getAttribute('onclick').includes("'" + saved + "'")) || document.querySelector('.tab');
 	switchTab(saved, tabBtn);

@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"time"
 )
@@ -513,5 +514,15 @@ func (s *Server) configurePeerDnsRoutes(w http.ResponseWriter, r *http.Request) 
 		"wanIface": wanIface,
 		"peer":    peer.Name,
 	})
+}
+
+func (s *Server) getDnsRoutePresets(w http.ResponseWriter, r *http.Request) {
+	data, err := os.ReadFile("presets/dns-routes.json")
+	if err != nil {
+		http.Error(w, "presets not found", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Write(data)
 }
 

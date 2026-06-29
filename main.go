@@ -137,6 +137,7 @@ func main() {
 	api.HandleFunc("/dns/routes/update", withAuth(server.updateDnsRoute))
 	api.HandleFunc("/dns/routes/delete", withAuth(server.deleteDnsRoute))
 	api.HandleFunc("/dns/routes/apply", withAuth(server.applyDnsRoutesToRouter))
+	api.HandleFunc("/presets/dns-routes", withAuth(server.getDnsRoutePresets))
 	api.HandleFunc("/server/start", withAuth(server.startServer))
 	api.HandleFunc("/server/stop", withAuth(server.stopServer))
 	api.HandleFunc("/server/restart", withAuth(server.restartServer))
