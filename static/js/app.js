@@ -958,7 +958,7 @@ async function refresh() {
 
 function saveExpandedInputs() {
 	const ae = document.activeElement;
-	if (ae && ae.tagName === 'INPUT') {
+	if (ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA')) {
 		activeElementId = ae.id;
 		activeElementCursorPos = ae.selectionStart;
 	}
