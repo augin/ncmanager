@@ -811,7 +811,6 @@ function renderDnsRouteList(routes) {
         ${domainCount > 0 ? `<span class="card-stat">${domainCount} доменов</span>` : ''}
         ${cidrCount > 0 ? `<span class="card-stat">${cidrCount} CIDR</span>` : ''}
         ${preview ? `<div class="dns-route-domains">${escapeHtml(preview)}</div>` : ''}
-        <div class="card-route"><span class="backend-badge badge-ndms">${backendLabel}</span></div>
       </div>
       <div class="dns-route-actions">
         <button class="dns-toggle ${route.enabled ? 'on' : ''}" onclick="toggleDnsRoute('${route.id}')" title="${route.enabled ? 'Выключить' : 'Включить'}"></button>
@@ -842,28 +841,47 @@ async function applyDnsRoutes() {
     const oldText = btn.textContent;
     btn.textContent = 'Применение...';
     btn.disabled = true;
+    const log = document.getElementById('routerLog');
+    const closeBtn = document.getElementById('routerCloseBtn');
+    const dlBtn = document.getElementById('keeneticDownloadBtn');
+    if (log) {
+      log.textContent = 'Применение DNS маршрутов...\n';
+      log.scrollTop = log.scrollHeight;
+    }
+    if (closeBtn) closeBtn.style.display = 'none';
+    if (dlBtn) dlBtn.style.display = 'none';
+    document.getElementById('routerModal').classList.add('show');
+    if (log) log.style.display = '';
     const res = await xhr('POST', '/dns/routes/apply');
     if (res.ok) {
       const results = await res.json();
       const errors = results.filter(r => r.error);
-      if (errors.length === 0) {
-        alert('DNS маршруты применены на ' + results.length + ' роутер(ах)');
-      } else {
-        let msg = 'Ошибки:\n';
-        errors.forEach(e => { msg += e.peer + ' (' + e.router + '): ' + e.error + '\n'; });
-        alert(msg);
+      if (log) {
+        if (errors.length === 0) {
+          log.textContent += '✅ DNS маршруты применены на ' + results.length + ' роутер(ах)\n';
+          log.textContent += 'Готово!\n';
+        } else {
+          log.textContent += '⚠️ Применено с ошибками:\n';
+          errors.forEach(e => { log.textContent += '   ❌ ' + e.peer + ' (' + e.router + '): ' + e.error + '\n'; });
+          const okResults = results.filter(r => !r.error);
+          if (okResults.length > 0) {
+            log.textContent += 'Успешно: ' + okResults.length + ' из ' + results.length + '\n';
+          }
+        }
       }
     } else {
-      alert('Ошибка: ' + (await res.text()));
+      if (log) log.textContent += '❌ Ошибка: ' + (await res.text()) + '\n';
     }
   } catch (e) {
-    alert('Ошибка: ' + e.message);
+    if (log) log.textContent += '❌ Ошибка: ' + e.message + '\n';
   } finally {
     const btn = event.target;
     if (btn) {
       btn.textContent = 'Настроить DNS';
       btn.disabled = false;
     }
+    const closeBtn2 = document.getElementById('routerCloseBtn');
+    if (closeBtn2) closeBtn2.style.display = '';
   }
 }
 
