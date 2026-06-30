@@ -15,48 +15,40 @@
 
 ## Требования
 
-- Сервер с Go 1.21+ (для сборки) или Linux amd64/arm64 (для бинарника)
-- Инструменты `wg` и `wg-quick` на сервере
-- Права root (для управления WireGuard интерфейсом)
+- Linux amd64 или arm64 (Debian/Ubuntu/KeeneticOS)
+- Права root (устанавливаются через deb)
 - Роутер Keenetic с RCI (KeeneticOS 3.x+, поддержка DNS-over-TLS и WireGuard)
 
 ## Установка
 
-### Вариант 1: Скачать готовый бинарник
+### Deb-пакет (рекомендуется)
 
-Linux amd64:
-```bash
-curl -L -o wg-manager https://github.com/augin/ncmanager/releases/download/v1.0.0/wg-manager-linux-amd64
-chmod +x wg-manager
-```
-
-Linux arm64:
-```bash
-curl -L -o wg-manager https://github.com/augin/ncmanager/releases/download/v1.0.0/wg-manager-linux-arm64
-chmod +x wg-manager
-```
-
-### Вариант 2: Собрать из исходников
+Скачайте последний `.deb` файл из [Releases](https://github.com/augin/ncmanager/releases) и установите:
 
 ```bash
-git clone https://github.com/augin/ncmanager.git
-cd ncmanager
-go build -o wg-manager .
+sudo dpkg -i ncmanager_<version>.deb
+sudo apt-get install -f
 ```
+
+IP forwarding включится автоматически, сервис `ncmanager` запустится сам.
 
 ## Запуск
 
+Сервис уже запущен после установки `.deb`.  
+Для ручного управления:
+
 ```bash
-sudo ./wg-manager
+sudo systemctl restart ncmanager
 ```
 
 По умолчанию:
 - Веб-интерфейс: `8080`
 - WireGuard порт: `51820`
 - Интерфейс: `wg0`
-- Файл глобальных настроек: `data/config.json`
-- Файл настроек пиров: `data/peers.json`
-- Файл конфигурации: `/etc/wireguard/wg0.conf`
+- Рабочая директория: `/var/lib/ncmanager`
+- Глобальные настройки: `/var/lib/ncmanager/data/config.json`
+- Пиры и DNS-маршруты: `/var/lib/ncmanager/data/peers.json`
+- Конфигурация WG: `/etc/wireguard/wg0.conf`
 
 ### Открытие порта в firewall
 
@@ -128,20 +120,18 @@ sudo wg-quick down wg0
 ## Структура проекта
 
 ```
-ncmanager/
-├── main.go                # Точка входа, обработчики API
-├── router.go              # RCI-клиент (авторизация, POST, парсинг компонентов)
-├── router_components.go   # Установка компонентов роутера (wireguard, dns-tls)
-├── router_dns.go          # Настройка DoT-серверов
-├── router_vpn.go          # Настройка VPN (импорт, peer, интерфейс)
-├── dns_routing.go         # DNS-маршрутизация, пресеты, CRUD маршрутов
-├── static/js/app.js       # Веб-интерфейс
-├── templates/index.html   # HTML-шаблон
+/var/lib/ncmanager/
+├── data/
+│   ├── config.json        # Глобальные настройки (создаётся автоматически)
+│   └── peers.json         # Пиры и DNS-маршруты (создаётся автоматически)
 ├── presets/
 │   └── dns-routes.json    # Пресеты DNS-маршрутов
-└── data/
-    ├── config.json        # Глобальные настройки (создаётся автоматически)
-    └── peers.json         # Пиры и DNS-маршруты (создаётся автоматически)
+├── static/                # Веб-интерфейс
+├── templates/             # HTML-шаблоны
+└── ncmanager.service      # systemd unit
+
+/usr/local/bin/ncmanager   # Бинарник
+/etc/wireguard/wg0.conf    # Конфигурация WireGuard
 ```
 
 ## API
