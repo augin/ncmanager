@@ -331,7 +331,6 @@ func validateToken(token string) bool {
 		log.Printf("TOKEN VALIDATE: expired at %v", time.Unix(expiry, 0))
 		return false
 	}
-	log.Printf("TOKEN VALIDATE: OK prefix=%s", token[:8])
 	return true
 }
 
