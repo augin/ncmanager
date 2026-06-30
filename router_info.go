@@ -53,22 +53,24 @@ func (s *Server) getPeerRouterInfo(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) getRouterInfo(httpClient *http.Client, baseURL string) (model, version string, err error) {
 	type infoResp struct {
-		System struct {
-			Model   string `json:"model"`
-			Version string `json:"version"`
-		} `json:"system"`
+		Version string `json:"version"`
+		Model   string `json:"model"`
 	}
-	payload := map[string]any{"show": map[string]any{"system": true}}
+	payload := map[string]any{"show": map[string]any{"version": true}}
 	data, status, err := keeneticRciPost(httpClient, baseURL, payload)
 	if err != nil {
 		return "", "", err
 	}
 	if status != http.StatusOK {
-		return "", "", err
+		payload = map[string]any{"show": map[string]any{"platform": true}}
+		data, status, err = keeneticRciPost(httpClient, baseURL, payload)
+		if err != nil || status != http.StatusOK {
+			return "", "", err
+		}
 	}
 	var resp infoResp
 	if err := json.Unmarshal(data, &resp); err != nil {
 		return "", "", err
 	}
-	return resp.System.Model, resp.System.Version, nil
+	return resp.Model, resp.Version, nil
 }
