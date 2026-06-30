@@ -56,7 +56,7 @@ sudo ./wg-manager
 - Интерфейс: `wg0`
 - Файл глобальных настроек: `data/config.json`
 - Файл настроек пиров: `data/peers.json`
-- Файл конфигурации: `data/wg0.conf`
+- Файл конфигурации: `/etc/wireguard/wg0.conf`
 
 ### Открытие порта в firewall
 
