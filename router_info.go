@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"log"
 	"net/http"
 	"strings"
 )
@@ -54,40 +53,21 @@ func (s *Server) getPeerRouterInfo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getRouterInfo(httpClient *http.Client, baseURL string) (model, version string, err error) {
-	// Try version first
 	payload := map[string]any{"show": map[string]any{"version": true}}
 	data, status, err := keeneticRciPost(httpClient, baseURL, payload)
-	if err == nil && status == http.StatusOK {
-		log.Printf("RCI version: %s", string(data))
-		var resp struct{ Show struct{ Version string } }
-		if jsonErr := json.Unmarshal(data, &resp); jsonErr == nil && resp.Show.Version != "" {
-			return "", resp.Show.Version, nil
-		}
+	if err != nil || status != http.StatusOK {
+		return "", "", fmt.Errorf("RCI failed: %v", err)
 	}
-	// Try platform for model
-	payload = map[string]any{"show": map[string]any{"platform": true}}
-	data, status, err = keeneticRciPost(httpClient, baseURL, payload)
-	if err == nil && status == http.StatusOK {
-		log.Printf("RCI platform: %s", string(data))
-		var resp struct{ Show struct{ Platform string `json:"platform"` } }
-		if jsonErr := json.Unmarshal(data, &resp); jsonErr == nil && resp.Show.Platform != "" {
-			return resp.Show.Platform, "", nil
-		}
+	var resp struct {
+		Show struct {
+			Version struct {
+				Model  string `json:"model"`
+				Title  string `json:"title"`
+			} `json:"version"`
+		} `json:"show"`
 	}
-	// Try hardware info
-	payload = map[string]any{"show": map[string]any{"hardware": true}}
-	data, status, err = keeneticRciPost(httpClient, baseURL, payload)
-	if err == nil && status == http.StatusOK {
-		log.Printf("RCI hardware: %s", string(data))
-		var resp struct {
-			Show struct {
-				Model string `json:"model"`
-				Ver   string `json:"version"`
-			} `json:"hardware"`
-		}
-		if jsonErr := json.Unmarshal(data, &resp); jsonErr == nil {
-			return resp.Show.Model, resp.Show.Ver, nil
-		}
+	if err := json.Unmarshal(data, &resp); err != nil {
+		return "", "", err
 	}
-	return "", "", fmt.Errorf("all RCI queries failed")
+	return resp.Show.Version.Model, resp.Show.Version.Title, nil
 }
