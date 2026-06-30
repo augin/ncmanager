@@ -223,7 +223,7 @@ func main() {
 
 	log.Printf("WireGuard Manager starting on :8080")
 	log.Printf("Endpoint: %s", server.endpoint)
-	log.Printf("Version: 1.2.3")
+	log.Printf("Version: 1.2.4")
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 

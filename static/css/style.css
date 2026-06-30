@@ -494,3 +494,16 @@ code {
 #tab-waniface select {
   min-width: 200px;
 }
+.tls-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.tls-checkbox input {
+  margin: 0;
+}
+.tls-checkbox label {
+  margin: 0;
+  display: inline;
+}

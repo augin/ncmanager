@@ -1,0 +1,95 @@
+name: Build DEB on Release
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  build-deb:
+    runs-on: ubuntu-latest
+    env:
+      PACKAGE_NAME: ncmanager
+      ARCH: amd64
+      GO_VERSION: "1.21"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Set maintainer from git config
+        run: |
+          NAME=$(git config user.name || echo "Unknown")
+          EMAIL=$(git config user.email || echo "unknown@example.com")
+          echo "MAINTAINER=${NAME} <${EMAIL}>" >> $GITHUB_ENV
+
+      - name: Build binary
+        run: make build
+
+      - name: Prepare package structure
+        run: |
+          mkdir -p pkg/usr/local/bin
+          mkdir -p pkg/var/lib/ncmanager
+          mkdir -p pkg/lib/systemd/system
+          cp ncmanager pkg/usr/local/bin/ncmanager
+          cp -r templates static presets pkg/var/lib/ncmanager/
+          mkdir -p pkg/var/lib/ncmanager/data
+          chmod 0700 pkg/var/lib/ncmanager/data
+          cp ncmanager.service pkg/lib/systemd/system/ncmanager.service
+
+      - name: Extract version from tag
+        id: version
+        run: |
+          RAW="${GITHUB_REF_NAME}"
+          CLEAN="${RAW#v}"
+          echo "raw=${RAW}" >> $GITHUB_OUTPUT
+          echo "clean=${CLEAN}" >> $GITHUB_OUTPUT
+
+      - name: Create DEBIAN/control
+        run: |
+          mkdir -p pkg/DEBIAN
+          cat > pkg/DEBIAN/control <<EOF
+          Package: ${{ env.PACKAGE_NAME }}
+          Version: ${{ steps.version.outputs.clean }}
+          Section: net
+          Priority: optional
+          Architecture: ${{ env.ARCH }}
+          Maintainer: ${{ env.MAINTAINER }}
+          Description: NC Manager - Web UI for managing WireGuard VPN on Keenetic routers
+          Depends: wireguard, wireguard-tools, iptables
+          EOF
+
+      - name: Create postinst script
+        run: |
+          cat > pkg/DEBIAN/postinst <<'EF'
+          #!/bin/bash
+          set -e
+          if [ -d /var/lib/ncmanager ]; then
+            chown -R root:root /var/lib/ncmanager || true
+          fi
+          systemctl daemon-reload
+          systemctl enable ncmanager.service >/dev/null 2>&1 || true
+          systemctl restart ncmanager.service >/dev/null 2>&1 || true
+          exit 0
+          EF
+          chmod 0755 pkg/DEBIAN/postinst
+
+      - name: Build .deb package
+        run: |
+          dpkg-deb --build pkg ${{ env.PACKAGE_NAME }}_${{ steps.version.outputs.clean }}_${{ env.ARCH }}.deb
+
+      - name: Upload .deb to release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: ${{ env.PACKAGE_NAME }}_${{ steps.version.outputs.clean }}_${{ env.ARCH }}.deb
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Cleanup
+        if: always()
+        run: rm -rf pkg

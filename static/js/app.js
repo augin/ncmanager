@@ -351,9 +351,38 @@ function formatBytes(b) {
 	return (b / Math.pow(u, e)).toFixed(1) + ' ' + 'KMGTPE'[e-1] + 'iB';
 }
 
+function isValidCIDR(cidr) {
+  if (!cidr || typeof cidr !== 'string') return false;
+  const ipv4 = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9])\/([0-9]|[12][0-9]|3[0-2])$/;
+  const ipv6 = /^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\/([0-9]|[1-9][0-9]|1[0-2][0-9])$/;
+  return ipv4.test(cidr) || ipv6.test(cidr);
+}
+
+function isValidDomain(domain) {
+  if (!domain || typeof domain !== 'string') return false;
+  const d = domain.trim().toLowerCase();
+  if (d.length === 0 || d.length > 253) return false;
+  const domainRegex = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)*[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+  const parts = d.split('.');
+  if (parts.length < 1) return false;
+  return parts.every(p => p.length <= 63 && domainRegex.test(p));
+}
+
+function validateDnsRouteInput(domains, subnets) {
+  const invalidDomains = domains.filter(d => !isValidDomain(d)).slice(0, 3);
+  const invalidSubnets = subnets.filter(s => !isValidCIDR(s)).slice(0, 3);
+  if (invalidDomains.length) {
+    return 'Неверные домены: ' + invalidDomains.join(', ');
+  }
+  if (invalidSubnets.length) {
+    return 'Неверные CIDR: ' + invalidSubnets.join(', ');
+  }
+  return '';
+}
+
 function escapeHtml(s) {
-	if (s == null) return '';
-	return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  if (s == null) return '';
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 }
 
 async function addPeer() {
@@ -1070,6 +1099,8 @@ async function showDnsRouteModal(id) {
   if (nameInput) nameInput.value = route.name || '';
   if (domainsInput) domainsInput.value = (route.domains || []).join('\n');
   if (subnetsInput) subnetsInput.value = (route.subnets || []).join('\n');
+  
+  populatePresetSelect();
 
   const overlay = document.getElementById('dnsRouteModalOverlay');
   if (overlay) {
@@ -1085,7 +1116,13 @@ function hideDnsRouteModal() {
 
 async function refreshDnsRoute(id) {
   try {
-    await xhr('GET', '/dns/routes');
+    const routes = await loadDnsRoutesList();
+    const route = routes.find(r => r.id === id);
+    if (!route) return;
+    const res = await xhr('POST', '/dns/routes/apply', { peerId: route.tunnelId });
+    if (res.ok) {
+      loadDnsRoutes();
+    }
   } catch (e) {
     console.error('refreshDnsRoute error:', e);
   }
@@ -1104,6 +1141,10 @@ async function saveDnsRouteModal() {
 
   const domains = domainsInput.value.split('\n').map(s => s.trim()).filter(s => s !== '');
   const subnets = subnetsInput.value.split('\n').map(s => s.trim()).filter(s => s !== '');
+  
+  const validationError = validateDnsRouteInput(domains, subnets);
+  if (validationError) return alert('Ошибка валидации: ' + validationError);
+  
   if (!domains.length && !subnets.length) return alert('Добавьте хотя бы один домен или CIDR');
 
   const payload = { name, domains, subnets, enabled: true };
@@ -1131,6 +1172,13 @@ async function deleteDnsRoute(id) {
   } catch (e) {
     alert('Ошибка: ' + e.message);
   }
+}
+
+function populatePresetSelect() {
+  const select = document.getElementById('dnsPresetSelect');
+  if (!select) return;
+  const options = DNS_PRESETS.map(p => `<option value="${escapeHtml(p.name)}">${escapeHtml(p.name)} (${(p.domains?.length || 0) + (p.subnets?.length || 0)} записей)</option>`).join('');
+  select.innerHTML = `<option value="">— выберите пресет —</option>${options}`;
 }
 
 function addPresetDomains() {
