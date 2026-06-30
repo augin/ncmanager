@@ -1,8 +1,12 @@
 name: Build DEB on Release
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
 
 jobs:
   build-deb:
@@ -10,7 +14,7 @@ jobs:
     env:
       PACKAGE_NAME: ncmanager
       ARCH: amd64
-      GO_VERSION: "1.21"
+      GO_VERSION: "1.25"
 
     steps:
       - name: Checkout repository
@@ -68,24 +72,34 @@ jobs:
           cat > pkg/DEBIAN/postinst <<'EF'
           #!/bin/bash
           set -e
-          if [ -d /var/lib/ncmanager ]; then
-            chown -R root:root /var/lib/ncmanager || true
-          fi
-          systemctl daemon-reload
-          systemctl enable ncmanager.service >/dev/null 2>&1 || true
-          systemctl restart ncmanager.service >/dev/null 2>&1 || true
+          echo 'net.ipv4.ip_forward=1' > /etc/sysctl.d/99-ncmanager.conf
+          sysctl -p /etc/sysctl.d/99-ncmanager.conf || true
+          chown -R root:root /var/lib/ncmanager
+          systemctl daemon-reload || true
+          systemctl enable --now ncmanager || true
           exit 0
           EF
           chmod 0755 pkg/DEBIAN/postinst
+
+      - name: Create prerm script
+        run: |
+          cat > pkg/DEBIAN/prerm <<'EF'
+          #!/bin/bash
+          set -e
+          systemctl stop ncmanager.service >/dev/null 2>&1 || true
+          exit 0
+          EF
+          chmod 0755 pkg/DEBIAN/prerm
 
       - name: Build .deb package
         run: |
           dpkg-deb --build pkg ${{ env.PACKAGE_NAME }}_${{ steps.version.outputs.clean }}_${{ env.ARCH }}.deb
 
-      - name: Upload .deb to release
+      - name: Create Draft Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.release.tag_name }}
+          draft: true
+          prerelease: false
           files: ${{ env.PACKAGE_NAME }}_${{ steps.version.outputs.clean }}_${{ env.ARCH }}.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
