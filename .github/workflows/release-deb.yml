@@ -1,8 +1,12 @@
 name: Build DEB on Release
 
 on:
-  release:
-    types: [published]
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
 
 jobs:
   build-deb:
@@ -10,7 +14,7 @@ jobs:
     env:
       PACKAGE_NAME: ncmanager
       ARCH: amd64
-      GO_VERSION: "1.21"
+      GO_VERSION: "1.25"
 
     steps:
       - name: Checkout repository
@@ -82,10 +86,11 @@ jobs:
         run: |
           dpkg-deb --build pkg ${{ env.PACKAGE_NAME }}_${{ steps.version.outputs.clean }}_${{ env.ARCH }}.deb
 
-      - name: Upload .deb to release
+      - name: Create Draft Release
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ github.event.release.tag_name }}
+          draft: true
+          prerelease: false
           files: ${{ env.PACKAGE_NAME }}_${{ steps.version.outputs.clean }}_${{ env.ARCH }}.deb
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
