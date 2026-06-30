@@ -171,11 +171,15 @@ func main() {
 	api.HandleFunc("/peers/keenetic-dl/", withAuth(server.downloadPeerKeeneticConfig))
 	api.HandleFunc("/peers/keenetic-dns/", withAuth(server.configurePeerDns))
 	api.HandleFunc("/peers/keenetic-dns-routes/", withAuth(server.configurePeerDnsRoutes))
+	api.HandleFunc("/peers/keenetic-components/", withAuth(server.configurePeerComponents))
+	api.HandleFunc("/components/apply", withAuth(server.configurePeerComponents))
+	api.HandleFunc("/components/apply/status", withAuth(server.getComponentsApplyStatus))
 	api.HandleFunc("/dns/routes", withAuth(server.listDnsRoutes))
 	api.HandleFunc("/dns/routes/create", withAuth(server.createDnsRoute))
 	api.HandleFunc("/dns/routes/update", withAuth(server.updateDnsRoute))
 	api.HandleFunc("/dns/routes/delete", withAuth(server.deleteDnsRoute))
 	api.HandleFunc("/dns/routes/apply", withAuth(server.applyDnsRoutesToRouter))
+	api.HandleFunc("/dns/apply/status", withAuth(server.getDnsApplyStatus))
 	api.HandleFunc("/presets/dns-routes", withAuth(server.getDnsRoutePresets))
 	api.HandleFunc("/server/start", withAuth(server.startServer))
 	api.HandleFunc("/server/stop", withAuth(server.stopServer))
@@ -931,26 +935,42 @@ func (s *Server) downloadPeerKeeneticConfig(w http.ResponseWriter, r *http.Reque
 	http.Error(w, "peer not found", http.StatusNotFound)
 }
 
-func (s *Server) configurePeerDns(w http.ResponseWriter, r *http.Request) {
+func (s *Server) configurePeerComponents(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	parts := strings.Split(r.URL.Path, "/")
-	if len(parts) < 4 || parts[3] == "" {
+
+	peerID := ""
+
+	var req struct {
+		PeerID string `json:"peerId"`
+	}
+	if r.ContentLength > 0 {
+		if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
+			peerID = req.PeerID
+		}
+	}
+
+	if peerID == "" {
+		parts := strings.Split(r.URL.Path, "/")
+		for i := len(parts) - 1; i >= 0; i-- {
+			if parts[i] != "" {
+				peerID = parts[i]
+				break
+			}
+		}
+	}
+
+	if peerID == "" {
 		http.Error(w, "peer id required", http.StatusBadRequest)
 		return
 	}
-	id := parts[3]
 
-	peersCfg, err := loadPeers()
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
-	}
+	peersCfg, _ := loadPeers()
 	peerIdx := -1
 	for i := range peersCfg.Peers {
-		if peersCfg.Peers[i].ID == id {
+		if peersCfg.Peers[i].ID == peerID {
 			peerIdx = i
 			break
 		}
@@ -959,38 +979,59 @@ func (s *Server) configurePeerDns(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "peer not found", http.StatusNotFound)
 		return
 	}
-	peer := &peersCfg.Peers[peerIdx]
+	peer := peersCfg.Peers[peerIdx]
 
 	if peer.RouterDomain == "" || peer.RouterLogin == "" || peer.RouterPassword == "" {
 		http.Error(w, "router credentials not configured for this peer", http.StatusBadRequest)
 		return
 	}
 
-	httpClient, baseURL, err := keeneticSetupClient(peer.RouterDomain, peer.RouterLogin, peer.RouterPassword)
-	if err != nil {
-		log.Printf("keenetic dns auth failed for %s: %v", peer.Name, err)
-		http.Error(w, fmt.Sprintf("router auth failed: %v", err), http.StatusBadGateway)
-		return
-	}
+	globalCfg, _ := loadConfig(dataFile)
 
-	var messages []string
-	if err := keeneticSetupSecureDns(httpClient, baseURL); err != nil {
-		messages = append(messages, "⚠️ DNS: "+err.Error())
-	} else {
-		messages = append(messages, "✅ DNS-серверы добавлены")
-	}
+	os.WriteFile("/tmp/components-apply.status", []byte("running"), 0644)
+	os.WriteFile("/tmp/components-apply.log", []byte("Запуск настройки компонентов...\n"), 0644)
 
-	if err := keeneticSave(httpClient, baseURL); err != nil {
-		messages = append(messages, "⚠️ сохранение: "+err.Error())
-	} else {
-		messages = append(messages, "✅ конфигурация сохранена")
-	}
+	go func() {
+		httpClient, baseURL, err := keeneticSetupClient(peer.RouterDomain, peer.RouterLogin, peer.RouterPassword)
+		if err != nil {
+			componentsAppendLog(fmt.Sprintf("❌ Ошибка подключения к %s: %v\n", peer.RouterDomain, err))
+			os.WriteFile("/tmp/components-apply.status", []byte("failed"), 0644)
+			return
+		}
+
+		serverPub := getActualServerPublicKey()
+		if serverPub == "" {
+			serverPrivBytes, _ := loadPrivateKey("data/server_private.key")
+			serverPub, _ = getPublicKeyFromPrivate(serverPrivBytes)
+		}
+
+		res := configureRouterComponents(httpClient, baseURL, &peer, serverPub, s.endpoint, s.port, globalCfg.WanInterface)
+
+		var status string
+		if res.Status == "error" {
+			status = "failed"
+		} else {
+			status = "completed"
+		}
+		os.WriteFile("/tmp/components-apply.status", []byte(status), 0644)
+	}()
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]any{
-		"status":   "ok",
-		"messages": messages,
-		"peer":     peer.Name,
+	json.NewEncoder(w).Encode(map[string]string{"status": "started"})
+}
+
+func (s *Server) getComponentsApplyStatus(w http.ResponseWriter, r *http.Request) {
+	status := "idle"
+	stBytes, _ := os.ReadFile("/tmp/components-apply.status")
+	status = strings.TrimSpace(string(stBytes))
+
+	logBytes, _ := os.ReadFile("/tmp/components-apply.log")
+	logText := string(logBytes)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status": status,
+		"log":    logText,
 	})
 }
 
@@ -1963,4 +2004,19 @@ func (s *Server) manageAmneziaInterface(w http.ResponseWriter, r *http.Request) 
 	default:
 		http.Error(w, "unknown action", http.StatusBadRequest)
 	}
+}
+
+func (s *Server) getDnsApplyStatus(w http.ResponseWriter, r *http.Request) {
+	status := "idle"
+	stBytes, _ := os.ReadFile("/tmp/dns-apply.status")
+	status = strings.TrimSpace(string(stBytes))
+
+	logBytes, _ := os.ReadFile("/tmp/dns-apply.log")
+	logText := string(logBytes)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status": status,
+		"log":    logText,
+	})
 }

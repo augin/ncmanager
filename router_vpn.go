@@ -59,8 +59,7 @@ func keeneticSetInterfaceName(httpClient *http.Client, baseURL, ifaceName, displ
 
 func keeneticSetPeer(httpClient *http.Client, baseURL, ifaceName, serverPubKey, endpoint, allowedIPs, comment string, keepalive int) error {
 	peer := map[string]any{
-		"key":     serverPubKey,
-		"connect": true,
+		"key": serverPubKey,
 	}
 	if endpoint != "" {
 		peer["endpoint"] = map[string]any{"address": endpoint}
@@ -264,7 +263,7 @@ func importWireGuardConfigToRouter(baseURL, login, password string, confData []b
 
 	// Enable the interface (up + save)
 	result.Created = ifaceName
-	upPayload := map[string]any{"interface": map[string]any{"name": ifaceName, "up": "1"}}
+	upPayload := map[string]any{"interface": map[string]any{"name": ifaceName, "up": true}}
 	if data, status, err := keeneticRciPost(httpClient, baseURL, upPayload); err != nil {
 		result.Messages = append(result.Messages, "⚠️ активация: "+err.Error())
 	} else if status != http.StatusOK {

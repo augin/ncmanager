@@ -55,70 +55,6 @@ func sanitizeGroupSlug(name string) string {
 	return s
 }
 
-func keeneticSetupSecureDns(httpClient *http.Client, baseURL string) error {
-	dnsServers := []struct {
-		address string
-		sni     string
-	}{
-		{"9.9.9.9", "dns.quad9.net"},
-		{"1.1.1.1", "cloudflare-dns.com"},
-		{"common.dot.dns.yandex.net", "ru"},
-		{"common.dot.dns.yandex.net", "su"},
-		{"common.dot.dns.yandex.net", "xn--p1ai"},
-	}
-
-	addressesToDelete := make(map[string]bool)
-	for _, srv := range dnsServers {
-		addressesToDelete[srv.address] = true
-	}
-
-	for addr := range addressesToDelete {
-		delPayload := map[string]any{
-			"dns-proxy": map[string]any{
-				"tls": map[string]any{
-					"upstream": []any{map[string]any{"address": addr, "no": true}},
-				},
-			},
-		}
-		var delStatus int
-		var delErr error
-		_, delStatus, delErr = keeneticRciPost(httpClient, baseURL, delPayload)
-		if delErr != nil {
-			return fmt.Errorf("delete dns upstream %s failed: %w", addr, delErr)
-		}
-		if delStatus != http.StatusOK {
-			return fmt.Errorf("delete dns upstream %s failed (HTTP %d)", addr, delStatus)
-		}
-		time.Sleep(150 * time.Millisecond)
-	}
-
-	var upstreams []any
-	for _, srv := range dnsServers {
-		upstream := map[string]any{"address": srv.address}
-		if srv.sni != "" {
-			upstream["fqdn"] = srv.sni
-		}
-		upstreams = append(upstreams, upstream)
-	}
-
-	payload := map[string]any{
-		"dns-proxy": map[string]any{
-			"tls": map[string]any{
-				"upstream": upstreams,
-			},
-		},
-	}
-	_, status, err := keeneticRciPost(httpClient, baseURL, payload)
-	if err != nil {
-		return err
-	}
-	if status != http.StatusOK {
-		return fmt.Errorf("add dns tls failed (HTTP %d)", status)
-	}
-	time.Sleep(200 * time.Millisecond)
-	return nil
-}
-
 type routeApply struct {
 	Name    string
 	Domains []string
@@ -162,7 +98,7 @@ func keeneticApplyDnsRoutes(httpClient *http.Client, baseURL, wgIface string, ro
 			} else if status != http.StatusOK {
 				log.Printf("delete orphaned group %s: HTTP %d", g, status)
 			}
-			time.Sleep(150 * time.Millisecond)
+			time.Sleep(50 * time.Millisecond)
 
 			delRoutePayload := map[string]any{
 				"dns-proxy": map[string]any{
@@ -175,7 +111,7 @@ func keeneticApplyDnsRoutes(httpClient *http.Client, baseURL, wgIface string, ro
 			} else if status != http.StatusOK {
 				log.Printf("delete orphaned route for %s: HTTP %d", g, status)
 			}
-			time.Sleep(100 * time.Millisecond)
+			time.Sleep(30 * time.Millisecond)
 		}
 	}
 
@@ -206,12 +142,12 @@ func keeneticApplyDnsRoutes(httpClient *http.Client, baseURL, wgIface string, ro
 			}
 			_, status, err := keeneticRciPost(httpClient, baseURL, delPayload)
 			if err != nil {
-				return fmt.Errorf("delete old groups for %s: %w", route.Name, err)
+				log.Printf("delete old groups for %s: %v (skipping)", route.Name, err)
 			}
 			if status != http.StatusOK {
 				log.Printf("RCI delete old groups for %s: HTTP %d", route.Name, status)
 			}
-			time.Sleep(150 * time.Millisecond)
+			time.Sleep(50 * time.Millisecond)
 
 			for _, n := range oldNames {
 				delRoutePayload := map[string]any{
@@ -221,12 +157,12 @@ func keeneticApplyDnsRoutes(httpClient *http.Client, baseURL, wgIface string, ro
 				}
 				_, status, err := keeneticRciPost(httpClient, baseURL, delRoutePayload)
 				if err != nil {
-					return fmt.Errorf("delete old route %s: %w", n, err)
+					log.Printf("delete old route %s: %v (skipping)", n, err)
 				}
 				if status != http.StatusOK {
 					log.Printf("RCI delete old route %s: HTTP %d", n, status)
 				}
-				time.Sleep(100 * time.Millisecond)
+				time.Sleep(30 * time.Millisecond)
 			}
 		}
 
@@ -266,12 +202,12 @@ func keeneticApplyDnsRoutes(httpClient *http.Client, baseURL, wgIface string, ro
 			}
 			_, status, err := keeneticRciPost(httpClient, baseURL, groupPayload)
 			if err != nil {
-				return fmt.Errorf("create group %s: %w", groupName, err)
+				log.Printf("create group %s: %v (skipping)", groupName, err)
 			}
 			if status != http.StatusOK {
-				return fmt.Errorf("create group %s: HTTP %d", groupName, status)
+				log.Printf("create group %s: HTTP %d (skipping)", groupName, status)
 			}
-			time.Sleep(150 * time.Millisecond)
+			time.Sleep(50 * time.Millisecond)
 
 			if route.Enabled {
 				routePayload := map[string]any{
@@ -287,12 +223,12 @@ func keeneticApplyDnsRoutes(httpClient *http.Client, baseURL, wgIface string, ro
 				}
 				_, status, err := keeneticRciPost(httpClient, baseURL, routePayload)
 				if err != nil {
-					return fmt.Errorf("create route for %s: %w", groupName, err)
+					log.Printf("create route for %s: %v (skipping)", groupName, err)
 				}
 				if status != http.StatusOK {
-					return fmt.Errorf("create route for %s: HTTP %d", groupName, status)
+					log.Printf("create route for %s: HTTP %d (skipping)", groupName, status)
 				}
-				time.Sleep(150 * time.Millisecond)
+				time.Sleep(50 * time.Millisecond)
 			}
 		}
 	}
@@ -400,99 +336,117 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	type applyResult struct {
-		Peer   string   `json:"peer"`
-		Router string   `json:"router"`
-		Error  string   `json:"error,omitempty"`
-		Routes []string `json:"routes,omitempty"`
-	}
-	var results []applyResult
+	os.WriteFile("/tmp/dns-apply.status", []byte("running"), 0644)
+	os.WriteFile("/tmp/dns-apply.log", []byte("Запуск применения DNS маршрутов...\n"), 0644)
 
-	peers := peersCfg.Peers
-	if req.PeerID != "" {
-		for _, p := range peersCfg.Peers {
-			if p.ID == req.PeerID {
-				peers = []Peer{p}
-				break
+	go func() {
+		type applyResult struct {
+			Peer   string   `json:"peer"`
+			Router string   `json:"router"`
+			Error  string   `json:"error,omitempty"`
+			Routes []string `json:"routes,omitempty"`
+		}
+		var results []applyResult
+
+		peers := peersCfg.Peers
+		if req.PeerID != "" {
+			for _, p := range peersCfg.Peers {
+				if p.ID == req.PeerID {
+					peers = []Peer{p}
+					break
+				}
 			}
 		}
-		if len(peers) == 0 {
-			http.Error(w, "peer not found", http.StatusNotFound)
-			return
-		}
-	}
 
-	for _, peer := range peers {
-		if peer.RouterDomain == "" || peer.RouterLogin == "" || peer.RouterPassword == "" {
-			results = append(results, applyResult{
-				Peer:   peer.Name,
-				Router: peer.RouterDomain,
-				Error:  "router credentials not configured",
-			})
-			continue
-		}
-
-		httpClient, baseURL, err := keeneticSetupClient(peer.RouterDomain, peer.RouterLogin, peer.RouterPassword)
-		if err != nil {
-			log.Printf("dns-routes apply auth failed for %s: %v", peer.Name, err)
-			results = append(results, applyResult{
-				Peer:   peer.Name,
-				Router: peer.RouterDomain,
-				Error:  fmt.Sprintf("auth failed: %v", err),
-			})
-			continue
-		}
-
-		wgIface := peer.RouterIfName
-		if wgIface == "" {
-			wgIface = "Wireguard1"
-		}
-
-		var applyPayload []routeApply
-		var routeNames []string
-		for _, rt := range peersCfg.DnsRoutes {
-			applyPayload = append(applyPayload, routeApply{
-				Name:    rt.Name,
-				Domains: rt.Domains,
-				Subnets: rt.Subnets,
-				Enabled: rt.Enabled,
-			})
-			routeNames = append(routeNames, rt.Name)
-		}
-
-		if len(applyPayload) > 0 {
-			if err := keeneticApplyDnsRoutes(httpClient, baseURL, wgIface, applyPayload); err != nil {
-				log.Printf("dns-routes apply failed for %s: %v", peer.Name, err)
+		for _, peer := range peers {
+			if peer.RouterDomain == "" || peer.RouterLogin == "" || peer.RouterPassword == "" {
 				results = append(results, applyResult{
 					Peer:   peer.Name,
 					Router: peer.RouterDomain,
-					Error:  err.Error(),
+					Error:  "router credentials not configured",
+				})
+				continue
+			}
+
+			httpClient, baseURL, err := keeneticSetupClient(peer.RouterDomain, peer.RouterLogin, peer.RouterPassword)
+			if err != nil {
+				log.Printf("dns-routes apply auth failed for %s: %v", peer.Name, err)
+				results = append(results, applyResult{
+					Peer:   peer.Name,
+					Router: peer.RouterDomain,
+					Error:  fmt.Sprintf("auth failed: %v", err),
+				})
+				continue
+			}
+
+			wgIface := peer.RouterIfName
+			if wgIface == "" {
+				wgIface = "Wireguard1"
+			}
+
+			var applyPayload []routeApply
+			var routeNames []string
+			for _, rt := range peersCfg.DnsRoutes {
+				applyPayload = append(applyPayload, routeApply{
+					Name:    rt.Name,
+					Domains: rt.Domains,
+					Subnets: rt.Subnets,
+					Enabled: rt.Enabled,
+				})
+				routeNames = append(routeNames, rt.Name)
+			}
+
+			if len(applyPayload) > 0 {
+				appendLog(fmt.Sprintf("📡 Применение %d маршрутов на %s (%s)...\n", len(applyPayload), peer.Name, peer.RouterDomain))
+				if err := keeneticApplyDnsRoutes(httpClient, baseURL, wgIface, applyPayload); err != nil {
+					log.Printf("dns-routes apply failed for %s: %v", peer.Name, err)
+					appendLog(fmt.Sprintf("❌ Ошибка применения на %s: %v\n", peer.Name, err))
+					results = append(results, applyResult{
+						Peer:   peer.Name,
+						Router: peer.RouterDomain,
+						Error:  err.Error(),
+						Routes: routeNames,
+					})
+					continue
+				}
+				appendLog(fmt.Sprintf("✅ Маршруты применены на %s\n", peer.Name))
+			}
+
+			if err := keeneticSave(httpClient, baseURL); err != nil {
+				log.Printf("dns-routes save failed for %s: %v", peer.Name, err)
+				appendLog(fmt.Sprintf("❌ Ошибка сохранения на %s: %v\n", peer.Name, err))
+				results = append(results, applyResult{
+					Peer:   peer.Name,
+					Router: peer.RouterDomain,
+					Error:  fmt.Sprintf("save failed: %v", err),
 					Routes: routeNames,
 				})
 				continue
 			}
-		}
 
-		if err := keeneticSave(httpClient, baseURL); err != nil {
-			log.Printf("dns-routes save failed for %s: %v", peer.Name, err)
+			appendLog(fmt.Sprintf("✅ Конфигурация сохранена на %s\n", peer.Name))
 			results = append(results, applyResult{
 				Peer:   peer.Name,
 				Router: peer.RouterDomain,
-				Error:  fmt.Sprintf("save failed: %v", err),
 				Routes: routeNames,
 			})
-			continue
 		}
 
-		results = append(results, applyResult{
-			Peer:   peer.Name,
-			Router: peer.RouterDomain,
-			Routes: routeNames,
-		})
-	}
+		os.WriteFile("/tmp/dns-apply.status", []byte("completed"), 0644)
+		appendLog("\n🎉 Готово!\n")
+	}()
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(results)
+	json.NewEncoder(w).Encode(map[string]string{"status": "started"})
+}
+
+func appendLog(msg string) {
+	f, err := os.OpenFile("/tmp/dns-apply.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if err != nil {
+		return
+	}
+	defer f.Close()
+	f.WriteString(msg)
 }
 
 
