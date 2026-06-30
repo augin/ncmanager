@@ -10,7 +10,7 @@ jobs:
     env:
       PACKAGE_NAME: ncmanager
       ARCH: amd64
-      GO_VERSION: "1.21"
+      GO_VERSION: "1.25"
 
     steps:
       - name: Checkout repository
