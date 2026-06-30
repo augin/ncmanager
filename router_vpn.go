@@ -49,7 +49,6 @@ func keeneticSetInterfaceName(httpClient *http.Client, baseURL, ifaceName, displ
 		return err
 	}
 	respStr := strings.TrimSpace(string(body))
-	log.Printf("RCI setInterfaceName description: HTTP %d body=%s", status, respStr)
 	if status == http.StatusOK {
 		time.Sleep(200 * time.Millisecond)
 		return nil

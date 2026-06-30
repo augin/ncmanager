@@ -85,7 +85,7 @@ sudo iptables -A INPUT -p udp --dport 51820 -j ACCEPT
 | **Настроить компоненты** | Устанавливает компоненты `wireguard` и `dns-tls` через RCI. Пакетная установка — роутер перезагружается один раз. |
 | **Настроить VPN** | Импортирует .conf на роутер, настраивает peer (endpoint, allowed-ips, keepalive), активирует интерфейс. |
 | **Настроить DNS** | Прописывает DoT-серверы: Quad9 (9.9.9.9), Cloudflare (1.1.1.1), Яндекс (77.88.8.8 с доменами ru, su, рф). |
-| **Настроить DNS-маршрутизацию** | Включает/выключает DNS-маршрутизацию на интерфейсе роутера. |
+| **Настроить DNS-маршрутизацию** | Создаёт списки доменных имён и правила маршрутизации на роутере. |
 
 ### RCI-форматы
 
@@ -136,28 +136,29 @@ sudo wg-quick down wg0
 
 ## API
 
-Все endpoints кроме `/` требуют базовую аутентификацию.
+Все endpoints кроме `/` и `/api/version` требуют базовую аутентификацию.
 
 | Метод | Endpoint | Описание |
 |-------|----------|----------|
-| GET | `/status` | Статус WireGuard |
-| GET | `/config` | Текущая конфигурация |
-| POST | `/peers` | Создать пира |
-| DELETE | `/peers/{id}` | Удалить пира |
-| GET | `/peers/{id}/config` | Скачать .conf файл |
-| POST | `/peers/keenetic/{id}` | Настроить VPN на роутере Keenetic |
-| POST | `/peers/keenetic-dns/{id}` | Настроить DoT-серверы |
-| POST | `/peers/keenetic-dns-routes/{id}` | Включить/выключить DNS-маршрутизацию |
-| POST | `/peers/keenetic-components/{id}` | Установить компоненты роутера |
-| POST | `/components/apply` | Установить компоненты (альтернативный endpoint) |
-| GET | `/components/apply/status` | Статус установки компонентов |
-| GET | `/dns/routes` | Список DNS-маршрутов |
-| POST | `/dns/routes/create` | Добавить DNS-маршрут |
-| POST | `/dns/routes/update` | Обновить DNS-маршрут |
-| POST | `/dns/routes/delete` | Удалить DNS-маршрут |
-| POST | `/dns/routes/apply` | Применить DNS-маршруты к роутерам |
-| GET | `/dns/apply/status` | Статус применения DNS-маршрутов |
-| GET | `/presets/dns-routes` | Пресеты DNS-маршрутов |
+| GET | `/api/version` | Версия приложения (публичный) |
+| GET | `/api/status` | Статус WireGuard |
+| GET | `/api/config` | Текущая конфигурация |
+| POST | `/api/peers` | Создать пира |
+| DELETE | `/api/peers/{id}` | Удалить пира |
+| GET | `/api/peers/{id}/config` | Скачать .conf файл |
+| POST | `/api/peers/keenetic/{id}` | Настроить VPN на роутере Keenetic |
+| POST | `/api/peers/keenetic-dns/{id}` | Настроить DoT-серверы |
+| POST | `/api/peers/keenetic-dns-routes/{id}` | Включить/выключить DNS-маршрутизацию |
+| POST | `/api/peers/keenetic-components/{id}` | Установить компоненты роутера |
+| POST | `/api/components/apply` | Установить компоненты (альтернативный endpoint) |
+| GET | `/api/components/apply/status` | Статус установки компонентов |
+| GET | `/api/dns/routes` | Список DNS-маршрутов |
+| POST | `/api/dns/routes/create` | Добавить DNS-маршрут |
+| POST | `/api/dns/routes/update` | Обновить DNS-маршрут |
+| POST | `/api/dns/routes/delete` | Удалить DNS-маршрут |
+| POST | `/api/dns/routes/apply` | Применить DNS-маршруты к роутерам |
+| GET | `/api/dns/apply/status` | Статус применения DNS-маршрутов |
+| GET | `/api/presets/dns-routes` | Пресеты DNS-маршрутов |
 
 ## Лицензия
 
