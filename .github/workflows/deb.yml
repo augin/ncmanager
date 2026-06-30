@@ -40,7 +40,10 @@ jobs:
       - name: Build deb package
         run: dpkg-deb --build _output
 
+      - name: Rename deb package
+        run: cp _output.deb ncmanager_${{ github.event.release.tag_name }}.deb
+
       - name: Upload release asset
         uses: softprops/action-gh-release@v2
         with:
-          files: _output.deb
+          files: ncmanager_${{ github.event.release.tag_name }}.deb
