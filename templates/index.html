@@ -113,6 +113,14 @@
           <label>PostDown (оставьте пустым для автогенерации)</label>
           <textarea id="iPostDown" rows="2" style="width:100%;padding:6px;border-radius:4px;background:var(--color-bg-primary);color:var(--color-text-primary);border:1px solid var(--color-border);font-family:monospace;font-size:0.8rem;resize:vertical" placeholder="iptables ..."></textarea>
         </div>
+
+        <hr style="margin:20px 0;border-color:var(--color-border, #4a5568);grid-column:1/-1">
+
+        <h3 style="grid-column:1/-1;margin:0 0 8px 0;color:#059669">HTTPS (Let's Encrypt)</h3>
+        <label style="grid-column:1/-1"><input type="checkbox" id="iTLSEnabled"> Включить HTTPS</label>
+        <label style="grid-column:1/-1">Домен (TLS Host)<input id="iTLSHost" placeholder="example.com"></label>
+        <label style="grid-column:1/-1">Папка кэша (TLS Cache)<input id="iTLSCache" placeholder="data/tls-cache"></label>
+
         <div class="actions">
           <button type="submit" id="saveConfigBtn">Сохранить</button>
         </div>

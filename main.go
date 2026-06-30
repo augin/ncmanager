@@ -24,6 +24,7 @@ import (
 	"time"
 
 	"github.com/skip2/go-qrcode"
+	"golang.org/x/crypto/acme/autocert"
 )
 
 const dataFile = "data/config.json"
@@ -72,6 +73,9 @@ type Config struct {
 	Subnet       string `json:"subnet"`
 	PostUp       string `json:"postUp,omitempty"`
 	PostDown     string `json:"postDown,omitempty"`
+	TLSEnabled   bool   `json:"tlsEnabled,omitempty"`
+	TLSHost      string `json:"tlsHost,omitempty"`
+	TLSCache     string `json:"tlsCache,omitempty"`
 }
 
 var passwordHash string
@@ -196,6 +200,25 @@ func main() {
 	api.HandleFunc("/amnezia/interfaces", withAuth(server.getAmneziaInterfaces))
 	api.HandleFunc("/amnezia/interface/", withAuth(server.manageAmneziaInterface))
 	http.Handle("/api/", http.StripPrefix("/api", api))
+
+	if cfg.TLSEnabled && cfg.TLSHost != "" {
+		cacheDir := cfg.TLSCache
+		if cacheDir == "" {
+			cacheDir = "data/tls-cache"
+		}
+		_ = os.MkdirAll(cacheDir, 0700)
+		certManager := autocert.Manager{
+			Prompt:     autocert.AcceptTOS,
+			HostPolicy: autocert.HostWhitelist(cfg.TLSHost),
+			Cache:      autocert.DirCache(cacheDir),
+		}
+		go http.ListenAndServe(":http", certManager.HTTPHandler(nil))
+		tlsConfig := certManager.TLSConfig()
+		server := &http.Server{Addr: ":https", Handler: http.Handler(nil)}
+		server.TLSConfig = tlsConfig
+		log.Printf("WireGuard Manager starting on https://%s", cfg.TLSHost)
+		log.Fatalf("HTTPS server error: %v", server.ListenAndServeTLS("", ""))
+	}
 
 	log.Printf("WireGuard Manager starting on :8080")
 	log.Printf("Endpoint: %s", server.endpoint)

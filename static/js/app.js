@@ -1225,6 +1225,9 @@ async function saveConfig(e) {
 		wanInterface: document.getElementById('wanInterface').value,
 		postUp: document.getElementById('iPostUp').value,
 		postDown: document.getElementById('iPostDown').value,
+		tlsEnabled: document.getElementById('iTLSEnabled').checked,
+		tlsHost: document.getElementById('iTLSHost').value,
+		tlsCache: document.getElementById('iTLSCache').value,
 	};
 	const res = await xhr('POST', '/config/save', cfg);
 	if (res.ok) {
@@ -1255,6 +1258,9 @@ async function init() {
 	document.getElementById('iSubnet').value = cfg.subnet || '10.0.0.0/24';
 	document.getElementById('iPostUp').value = cfg.postUp || '';
 	document.getElementById('iPostDown').value = cfg.postDown || '';
+	document.getElementById('iTLSEnabled').checked = cfg.tlsEnabled || false;
+	document.getElementById('iTLSHost').value = cfg.tlsHost || '';
+	document.getElementById('iTLSCache').value = cfg.tlsCache || 'data/tls-cache';
 	document.getElementById('wanInterface').value = cfg.wanInterface || '';
 	document.getElementById('serverForm').addEventListener('submit', saveConfig);
 	await loadInterfaces();
