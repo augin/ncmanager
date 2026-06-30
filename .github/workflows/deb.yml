@@ -27,7 +27,7 @@ jobs:
           mkdir -p _output/DEBIAN
           cat > _output/DEBIAN/control <<EOF
           Package: wireguard-manager
-          Version: \${{ github.event.release.tag_name }}
+          Version: ${{ github.event.release.tag_name }}
           Section: utils
           Priority: optional
           Architecture: amd64
