@@ -68,10 +68,37 @@ async function login() {
 			if (data && data.token) {
 				setToken(data.token);
 			}
-			hideLogin();
-			await init();
+			if (data && data.requirePasswordChange === "true") {
+				document.getElementById('loginForm').style.display = 'none';
+				const cpForm = document.getElementById('changePasswordForm');
+				if (cpForm) cpForm.style.display = '';
+				document.getElementById('newPassword').focus();
+			} else {
+				hideLogin();
+				await init();
+			}
 		} else {
 			alert('Неверный пароль');
+		}
+	} catch (e) {
+		alert('Ошибка: ' + e.message);
+	}
+}
+
+async function changePassword() {
+	const pw = document.getElementById('newPassword').value;
+	if (!pw) return alert('Введите новый пароль');
+	try {
+		const res = await xhr('POST', '/auth/change-password', { newPassword: pw });
+		if (res.ok) {
+			setToken('');
+			showLogin();
+			document.getElementById('changePasswordForm').style.display = 'none';
+			document.getElementById('loginForm').style.display = '';
+			document.getElementById('password').value = '';
+			document.getElementById('newPassword').value = '';
+		} else {
+			alert('Ошибка смены пароля: ' + res.text());
 		}
 	} catch (e) {
 		alert('Ошибка: ' + e.message);
@@ -1288,6 +1315,10 @@ async function loadLogs() {
 document.getElementById('loginForm').addEventListener('submit', function(e) {
 	e.preventDefault();
 	login();
+});
+document.getElementById('changePasswordForm').addEventListener('submit', function(e) {
+	e.preventDefault();
+	changePassword();
 });
 
 window.addEventListener('DOMContentLoaded', async function() {

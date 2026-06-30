@@ -187,6 +187,7 @@ func main() {
 	api.HandleFunc("/keys/generate", withAuth(generateKeys))
 	api.HandleFunc("/login", loginHandler)
 	api.HandleFunc("/logout", withAuth(logoutHandler))
+	api.HandleFunc("/auth/change-password", withAuth(changePasswordHandler))
 	api.HandleFunc("/logs", withAuth(server.getLogs))
 	api.HandleFunc("/router/dump/", withAuth(server.dumpRouterRCI))
 	api.HandleFunc("/amnezia/status", withAuth(server.getAmneziaStatus))
@@ -1576,12 +1577,13 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	log.Printf("LOGIN ATTEMPT: password=%s", req.Password)
 	if checkPassword(req.Password) {
 		token := generateToken("admin", passwordHash, 168*time.Hour)
+		resp := map[string]string{"status": "ok", "token": token}
+		if passwordHash == sha256String("admin") {
+			resp["requirePasswordChange"] = "true"
+		}
 		log.Printf("LOGIN SUCCESS: token prefix=%s", token[:8])
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]string{
-			"status": "ok",
-			"token":  token,
-		})
+		json.NewEncoder(w).Encode(resp)
 	} else {
 		log.Printf("LOGIN FAILED")
 		w.Header().Set("Content-Type", "application/json")
@@ -1591,6 +1593,31 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func logoutHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
+func changePasswordHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	var req struct {
+		NewPassword string `json:"newPassword"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	if strings.TrimSpace(req.NewPassword) == "" {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]string{"error": "password cannot be empty"})
+		return
+	}
+	passwordHash = sha256String(req.NewPassword)
+	_ = os.MkdirAll("data", 0700)
+	_ = os.WriteFile("data/.auth", []byte(passwordHash), 0600)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
