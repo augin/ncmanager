@@ -54,26 +54,40 @@ func (s *Server) getPeerRouterInfo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getRouterInfo(httpClient *http.Client, baseURL string) (model, version string, err error) {
-	type infoResp struct {
-		Version string `json:"version"`
-		Model   string `json:"model"`
-		System  struct {
-			Model   string `json:"model"`
-			Version string `json:"version"`
-		} `json:"system"`
-	}
-	payload := map[string]any{"show": map[string]any{"system": true}}
+	// Try version first
+	payload := map[string]any{"show": map[string]any{"version": true}}
 	data, status, err := keeneticRciPost(httpClient, baseURL, payload)
-	log.Printf("RCI router info response: status=%d body=%s", status, string(data))
-	if err != nil {
-		return "", "", err
+	if err == nil && status == http.StatusOK {
+		log.Printf("RCI version: %s", string(data))
+		var resp struct{ Show struct{ Version string } }
+		if jsonErr := json.Unmarshal(data, &resp); jsonErr == nil && resp.Show.Version != "" {
+			return "", resp.Show.Version, nil
+		}
 	}
-	if status != http.StatusOK {
-		return "", "", fmt.Errorf("status %d", status)
+	// Try platform for model
+	payload = map[string]any{"show": map[string]any{"platform": true}}
+	data, status, err = keeneticRciPost(httpClient, baseURL, payload)
+	if err == nil && status == http.StatusOK {
+		log.Printf("RCI platform: %s", string(data))
+		var resp struct{ Show struct{ Platform string `json:"platform"` } }
+		if jsonErr := json.Unmarshal(data, &resp); jsonErr == nil && resp.Show.Platform != "" {
+			return resp.Show.Platform, "", nil
+		}
 	}
-	var resp infoResp
-	if err := json.Unmarshal(data, &resp); err != nil {
-		return "", "", err
+	// Try hardware info
+	payload = map[string]any{"show": map[string]any{"hardware": true}}
+	data, status, err = keeneticRciPost(httpClient, baseURL, payload)
+	if err == nil && status == http.StatusOK {
+		log.Printf("RCI hardware: %s", string(data))
+		var resp struct {
+			Show struct {
+				Model string `json:"model"`
+				Ver   string `json:"version"`
+			} `json:"hardware"`
+		}
+		if jsonErr := json.Unmarshal(data, &resp); jsonErr == nil {
+			return resp.Show.Model, resp.Show.Ver, nil
+		}
 	}
-	return resp.System.Model, resp.System.Version, nil
+	return "", "", fmt.Errorf("all RCI queries failed")
 }
