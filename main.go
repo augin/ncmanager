@@ -355,6 +355,9 @@ func loadConfig(path string) (*Config, error) {
 }
 
 func saveConfig(path string, cfg *Config) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
 	f, err := os.Create(path)
 	if err != nil {
 		return err
@@ -380,6 +383,9 @@ func loadPeers() (*PeersConfig, error) {
 }
 
 func savePeers(pc *PeersConfig) error {
+	if err := os.MkdirAll(filepath.Dir(peersFile), 0755); err != nil {
+		return err
+	}
 	f, err := os.Create(peersFile)
 	if err != nil {
 		return err
