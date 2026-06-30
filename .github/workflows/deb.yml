@@ -35,8 +35,18 @@ jobs:
           Architecture: amd64
           Maintainer: Your Name <you@example.com>
           Depends: wireguard, wireguard-tools, iptables
-          Description: WireGuard Manager
+          Description: NC Manager
           EOF
+
+      - name: Add postinst for IP forwarding
+        run: |
+          cat > _output/DEBIAN/postinst <<'EOF'
+          #!/bin/bash
+          set -e
+          echo 'net.ipv4.ip_forward=1' > /etc/sysctl.d/99-ncmanager.conf
+          sysctl -p /etc/sysctl.d/99-ncmanager.conf || true
+          EOF
+          chmod 0755 _output/DEBIAN/postinst
 
       - name: Build deb package
         run: dpkg-deb --build _output
