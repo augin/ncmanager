@@ -18,7 +18,7 @@ jobs:
       - name: Build binary
         run: |
           go mod tidy
-          go build -o wg-manager ./main.go
+          go build -o wg-manager .
           mkdir -p _output/usr/local/bin
           mv wg-manager _output/usr/local/bin/
 
