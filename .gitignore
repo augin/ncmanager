@@ -2,3 +2,4 @@ data/*
 !data/README.md
 wg-manager
 opencode.json
+ncmanager
