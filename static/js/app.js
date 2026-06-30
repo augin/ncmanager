@@ -185,6 +185,7 @@ function renderPeers(peers) {
  					<button onclick="configureRouter('${p.id}')" class="btn-qr" style="margin-top:8px;margin-left:8px">Настроить VPN</button>
  					<button onclick="configureDnsRouter('${p.id}')" class="btn-qr" style="margin-top:8px;margin-left:8px">Настроить DNS</button>
  					<button onclick="configureDnsRoutes('${p.id}')" class="btn-qr" style="margin-top:8px;margin-left:8px">Настроить DNS-маршрутизацию</button>
+  					<p id="routerStatus-${p.id}" style="margin-top:8px;color:#059669;font-size:0.85rem"></p>
  					<button onclick="configureComponents('${p.id}')" class="btn-qr" style="margin-top:8px;margin-left:8px">Настроить компоненты</button>
 				</div>
 			</td>
@@ -273,6 +274,9 @@ async function savePeerRouter(id, silent) {
 					btn.classList.remove('copied');
 				}, 2000);
 			}
+			if (routerDomain && routerLogin && routerPassword) {
+				fetchRouterInfo(id);
+			}
 		}
 		return res.ok;
 	} catch (e) {
@@ -288,6 +292,19 @@ async function savePeerRouter(id, silent) {
 		}
 		return false;
 	}
+}
+
+async function fetchRouterInfo(id) {
+	try {
+		const res = await xhr('GET', '/peers/router-info/' + id);
+		if (res.ok) {
+			const info = res.json();
+			const statusEl = document.getElementById('routerStatus-' + id);
+			if (statusEl) {
+				statusEl.textContent = `Модель: ${info.model || '—'} | Версия: ${info.version || '—'}`;
+			}
+		}
+	} catch (e) {}
 }
 
 const MIN_REASONABLE_DATE = new Date('2020-01-01T00:00:00Z').getTime();

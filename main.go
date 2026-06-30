@@ -199,6 +199,7 @@ func main() {
 	api.HandleFunc("/amnezia/import", withAuth(server.importAmneziaConfig))
 	api.HandleFunc("/amnezia/interfaces", withAuth(server.getAmneziaInterfaces))
 	api.HandleFunc("/amnezia/interface/", withAuth(server.manageAmneziaInterface))
+	api.HandleFunc("/peers/router-info/", withAuth(server.getPeerRouterInfo))
 	http.Handle("/api/", http.StripPrefix("/api", api))
 
 	if cfg.TLSEnabled && cfg.TLSHost != "" {
