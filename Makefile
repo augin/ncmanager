@@ -1,7 +1,7 @@
 .PHONY: build run clean install setup
 
 BINARY = ncmanager
-GO      = go
+GO = /usr/lib/go-1.24/bin/go
 GOFLAGS = -ldflags="-s -w"
 
 build:

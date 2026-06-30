@@ -74,7 +74,6 @@ async function login() {
 				if (cpForm) cpForm.style.display = '';
 				document.getElementById('newPassword').focus();
 			} else {
-				hideLogin();
 				await init();
 			}
 		} else {
@@ -1275,7 +1274,18 @@ function restoreExpandedInputs() {
 }
 
 function clearExpandedInputs() {
-	expandedInputs = {};
+  expandedInputs = {};
+}
+
+async function loadVersion() {
+  try {
+    const res = await xhr('GET', '/api/version');
+    if (res.ok) {
+      const data = await res.json();
+      const footer = document.getElementById('versionFooter');
+      if (footer) footer.textContent = 'Версия: ' + (data.version || '—');
+    }
+  } catch (e) {}
 }
 
 async function saveConfig(e) {
@@ -1315,6 +1325,7 @@ async function saveConfig(e) {
 async function init() {
 	console.log('>>> INIT START <<<');
 	hideLogin();
+	await loadVersion();
 	const cfg = await loadConfig();
 	document.getElementById('iInterface').value = cfg.interface || 'wg0';
 	document.getElementById('iPort').value = cfg.port || 51820;
