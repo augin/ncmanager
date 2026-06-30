@@ -1,6 +1,6 @@
 .PHONY: build run clean install setup
 
-BINARY = wg-manager
+BINARY = ncmanager
 GO      = go
 GOFLAGS = -ldflags="-s -w"
 
