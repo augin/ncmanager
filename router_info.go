@@ -2,6 +2,8 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
+	"log"
 	"net/http"
 	"strings"
 )
@@ -55,22 +57,23 @@ func (s *Server) getRouterInfo(httpClient *http.Client, baseURL string) (model, 
 	type infoResp struct {
 		Version string `json:"version"`
 		Model   string `json:"model"`
+		System  struct {
+			Model   string `json:"model"`
+			Version string `json:"version"`
+		} `json:"system"`
 	}
-	payload := map[string]any{"show": map[string]any{"version": true}}
+	payload := map[string]any{"show": map[string]any{"system": true}}
 	data, status, err := keeneticRciPost(httpClient, baseURL, payload)
+	log.Printf("RCI router info response: status=%d body=%s", status, string(data))
 	if err != nil {
 		return "", "", err
 	}
 	if status != http.StatusOK {
-		payload = map[string]any{"show": map[string]any{"platform": true}}
-		data, status, err = keeneticRciPost(httpClient, baseURL, payload)
-		if err != nil || status != http.StatusOK {
-			return "", "", err
-		}
+		return "", "", fmt.Errorf("status %d", status)
 	}
 	var resp infoResp
 	if err := json.Unmarshal(data, &resp); err != nil {
 		return "", "", err
 	}
-	return resp.Model, resp.Version, nil
+	return resp.System.Model, resp.System.Version, nil
 }
