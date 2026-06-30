@@ -168,7 +168,6 @@ function renderPeers(peers) {
 				<button class="btn-dl" onclick="downloadConf('${p.id}')">⬇</button>
  			<button class="btn-qr" onclick="configureRouter('${p.id}')" title="Настроить VPN на роутере Keenetic" style="font-size:0.75rem;font-weight:700;padding:4px 6px;min-width:38px">VPN</button>
  			<button class="btn-qr" onclick="configureDnsRouter('${p.id}')" title="Настроить DNS на роутере Keenetic" style="font-size:0.75rem;font-weight:700;padding:4px 6px;min-width:38px">DNS</button>
- 			<button class="btn-qr" onclick="configureComponents('${p.id}')" title="Настроить компоненты на роутере Keenetic" style="font-size:0.75rem;font-weight:700;padding:4px 6px;min-width:38px">⚙</button>
 				<button class="btn-del" onclick="removePeer('${p.id}')">✕</button>
 			</td>
 			<td style="text-align:right;width:30px"><span class="peer-arrow" onclick="togglePeerDetails('${p.id}', event)" style="cursor:pointer;color:#64748b">${arrow}</span></td>
