@@ -27,6 +27,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
+const appVersion = "1.2.6"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const wgConfigFile = "/etc/wireguard/wg0.conf"
@@ -62,7 +63,6 @@ type Peer struct {
 	Description    string    `json:"description,omitempty"`
 	RouterIfName   string    `json:"routerIfName,omitempty"`
 }
-
 
 type Config struct {
 	Port         int    `json:"port"`
@@ -160,6 +160,7 @@ func main() {
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
 
 	api := http.NewServeMux()
+	api.HandleFunc("/version", server.getVersion)
 	api.HandleFunc("/status", withAuth(server.getStatus))
 	api.HandleFunc("/config", withAuth(server.getConfig))
 	api.HandleFunc("/config/save", withAuth(server.saveConfig))
@@ -223,7 +224,7 @@ func main() {
 
 	log.Printf("WireGuard Manager starting on :8080")
 	log.Printf("Endpoint: %s", server.endpoint)
-	log.Printf("Version: 1.2.4")
+	log.Printf("Version: %s", appVersion)
 	log.Fatal(http.ListenAndServe(":8080", nil))
 }
 
@@ -848,7 +849,7 @@ func generateKeeneticServerConfig(peer *Peer, serverPub, iface, endpoint string,
 	b.WriteString(fmt.Sprintf("ListenPort = %d\n", port))
 	b.WriteString(fmt.Sprintf("PrivateKey = %s\n", strings.TrimSpace(serverPub)))
 	b.WriteString(fmt.Sprintf("PostUp = iptables -A INPUT -p udp --dport %d -j ACCEPT || true; iptables -A FORWARD -i %s -o %%i -j ACCEPT || true; iptables -A FORWARD -i %%i -j ACCEPT || true; iptables -t nat -A POSTROUTING -o %s -j MASQUERADE || true; ip route add default dev %s table 110 || true; ip rule add iif %%i table 110 || true;\n", port, wanIface, wanIface, wanIface))
-	b.WriteString(fmt.Sprintf("PostDown = iptables -D INPUT -p udp --dport %d -j ACCEPT || true; iptables -D FORWARD -i %s -o %%i -j ACCEPT || true; iptables -D FORWARD -i %%i -j ACCEPT || true; iptables -t nat -D POSTROUTING -o %s -j MASQUERADE || true; ip route del default dev %s table 110 || true; ip rule del iif %%i table 110 || true;\n", port,wanIface,wanIface,wanIface))
+	b.WriteString(fmt.Sprintf("PostDown = iptables -D INPUT -p udp --dport %d -j ACCEPT || true; iptables -D FORWARD -i %s -o %%i -j ACCEPT || true; iptables -D FORWARD -i %%i -j ACCEPT || true; iptables -t nat -D POSTROUTING -o %s -j MASQUERADE || true; ip route del default dev %s table 110 || true; ip rule del iif %%i table 110 || true;\n", port, wanIface, wanIface, wanIface))
 	b.WriteString(fmt.Sprintf("SaveConfig = true\n"))
 
 	b.WriteString("\n[Peer]\n")
@@ -1482,7 +1483,7 @@ func generateWgConfig(cfg *Config, peers []Peer) error {
 	if cfg.PostDown != "" {
 		b.WriteString(fmt.Sprintf("PostDown = %s\n", cfg.PostDown))
 	} else {
-		b.WriteString(fmt.Sprintf("PostDown = iptables -D INPUT -p udp --dport %d -j ACCEPT || true; iptables -D FORWARD -i %s -o %%i -j ACCEPT || true; iptables -D FORWARD -i %%i -j ACCEPT || true; iptables -t nat -D POSTROUTING -o %s -j MASQUERADE || true; ip route del default dev %s table 110 || true; ip rule del iif %%i table 110 || true;\n", cfg.Port,wanIface,wanIface,wanIface))
+		b.WriteString(fmt.Sprintf("PostDown = iptables -D INPUT -p udp --dport %d -j ACCEPT || true; iptables -D FORWARD -i %s -o %%i -j ACCEPT || true; iptables -D FORWARD -i %%i -j ACCEPT || true; iptables -t nat -D POSTROUTING -o %s -j MASQUERADE || true; ip route del default dev %s table 110 || true; ip rule del iif %%i table 110 || true;\n", cfg.Port, wanIface, wanIface, wanIface))
 	}
 	b.WriteString("SaveConfig = true\n")
 
@@ -2072,4 +2073,9 @@ func (s *Server) getDnsApplyStatus(w http.ResponseWriter, r *http.Request) {
 		"status": status,
 		"log":    logText,
 	})
+}
+
+func (s *Server) getVersion(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"version": appVersion})
 }
