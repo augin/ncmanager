@@ -1,0 +1,45 @@
+name: Debian package
+
+on:
+  release:
+    types: [created]
+
+jobs:
+  build-deb:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go 1.22
+        uses: actions/setup-go@v5
+        with:
+          go-version: "1.22"
+
+      - name: Build binary
+        run: |
+          go mod tidy
+          go build -o wg-manager ./main.go
+          mkdir -p _output/usr/local/bin
+          mv wg-manager _output/usr/local/bin/
+
+      - name: Create DEB control file
+        run: |
+          mkdir -p _output/DEBIAN
+          cat > _output/DEBIAN/control <<EOF
+          Package: wireguard-manager
+          Version: \${{ github.event.release.tag_name }}
+          Section: utils
+          Priority: optional
+          Architecture: amd64
+          Maintainer: Your Name <you@example.com>
+          Description: WireGuard Manager
+          EOF
+
+      - name: Build deb package
+        run: dpkg-deb --build _output
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wireguard-manager
+          path: _output.deb
