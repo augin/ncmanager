@@ -1315,7 +1315,6 @@ func checkWireGuardStatus(iface string) (bool, *wgInfo, error) {
 		return false, nil, fmt.Errorf("empty output")
 	}
 	lines := strings.Split(raw, "\n")
-	log.Printf("WG DUMP: total_lines=%d first=%q", len(lines), lines[0])
 	info := &wgInfo{PublicKey: pubKey}
 	interfaceParsed := false
 	for _, line := range lines {
@@ -1330,7 +1329,6 @@ func checkWireGuardStatus(iface string) (bool, *wgInfo, error) {
 				fmt.Sscanf(parts[2], "%d", &info.ListenPort)
 			}
 			interfaceParsed = true
-			log.Printf("WG IFACE: pubkey=%s port=%d", info.PublicKey[:12], info.ListenPort)
 			continue
 		}
 		if isBase64(parts[0]) && len(parts) >= 7 {
@@ -1354,8 +1352,6 @@ func checkWireGuardStatus(iface string) (bool, *wgInfo, error) {
 			if len(parts) > 6 {
 				fmt.Sscanf(parts[6], "%d", &p.TransferTx)
 			}
-			log.Printf("WG PEER: pubkey=%s endpoint=%s allowed=%s hs=%v rx=%d tx=%d",
-				truncate(p.PublicKey, 12), p.Endpoint, p.AllowedIPs, p.LastHandshake, p.TransferRx, p.TransferTx)
 			info.Peers = append(info.Peers, p)
 		} else if parts[0] == "peer" {
 			// Newer format with "peer" keyword
