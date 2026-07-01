@@ -15,9 +15,9 @@
 
 ## Требования
 
-- Linux amd64 или arm64 (Debian/Ubuntu/KeeneticOS)
+- Linux amd64 (Debian/Ubuntu)
 - Права root (устанавливаются через deb)
-- Роутер Keenetic с RCI (KeeneticOS 3.x+, поддержка DNS-over-TLS и WireGuard)
+- Роутер Keenetic с RCI (KeeneticOS 5.x+, поддержка DNS-over-TLS и WireGuard)
 
 ## Установка
 
