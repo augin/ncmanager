@@ -27,7 +27,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.2.9"
+const appVersion = "1.3.3"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const wgConfigFile = "/etc/wireguard/wg0.conf"
@@ -201,6 +201,7 @@ func main() {
 	api.HandleFunc("/amnezia/interfaces", withAuth(server.getAmneziaInterfaces))
 	api.HandleFunc("/amnezia/interface/", withAuth(server.manageAmneziaInterface))
 	api.HandleFunc("/peers/router-info/", withAuth(server.getPeerRouterInfo))
+	api.HandleFunc("/peers/router-check/", withAuth(server.checkPeerRouter))
 	http.Handle("/api/", http.StripPrefix("/api", api))
 
 	if cfg.TLSEnabled && cfg.TLSHost != "" {

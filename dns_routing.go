@@ -12,13 +12,13 @@ import (
 )
 
 type DnsRoute struct {
-	ID        string   `json:"id"`
-	Name      string   `json:"name"`
-	Domains   []string `json:"domains"`
-	Subnets   []string `json:"subnets,omitempty"`
-	Enabled   bool     `json:"enabled"`
-	Color     string   `json:"color,omitempty"`
-	TunnelID  string   `json:"tunnelId,omitempty"`
+	ID       string   `json:"id"`
+	Name     string   `json:"name"`
+	Domains  []string `json:"domains"`
+	Subnets  []string `json:"subnets,omitempty"`
+	Enabled  bool     `json:"enabled"`
+	Color    string   `json:"color,omitempty"`
+	TunnelID string   `json:"tunnelId,omitempty"`
 }
 
 var cyrTranslitSlug = map[rune]string{
@@ -449,7 +449,6 @@ func appendLog(msg string) {
 	f.WriteString(msg)
 }
 
-
 func (s *Server) configurePeerDnsRoutes(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -511,10 +510,10 @@ func (s *Server) configurePeerDnsRoutes(w http.ResponseWriter, r *http.Request) 
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"status":  "ok",
-		"enabled": req.Enabled,
+		"status":   "ok",
+		"enabled":  req.Enabled,
 		"wanIface": wanIface,
-		"peer":    peer.Name,
+		"peer":     peer.Name,
 	})
 }
 
@@ -527,4 +526,3 @@ func (s *Server) getDnsRoutePresets(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.Write(data)
 }
-

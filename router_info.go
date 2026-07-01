@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"time"
 )
 
 func (s *Server) getPeerRouterInfo(w http.ResponseWriter, r *http.Request) {
@@ -61,8 +62,8 @@ func (s *Server) getRouterInfo(httpClient *http.Client, baseURL string) (model, 
 	var resp struct {
 		Show struct {
 			Version struct {
-				Model  string `json:"model"`
-				Title  string `json:"title"`
+				Model string `json:"model"`
+				Title string `json:"title"`
 			} `json:"version"`
 		} `json:"show"`
 	}
@@ -70,4 +71,77 @@ func (s *Server) getRouterInfo(httpClient *http.Client, baseURL string) (model, 
 		return "", "", err
 	}
 	return resp.Show.Version.Model, resp.Show.Version.Title, nil
+}
+
+func (s *Server) checkPeerRouter(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 4 || parts[3] == "" {
+		http.Error(w, "peer id required", http.StatusBadRequest)
+		return
+	}
+	peerID := parts[3]
+
+	peersCfg, _ := loadPeers()
+	var peer *Peer
+	for i := range peersCfg.Peers {
+		if peersCfg.Peers[i].ID == peerID {
+			peer = &peersCfg.Peers[i]
+			break
+		}
+	}
+	if peer == nil {
+		http.Error(w, "peer not found", http.StatusNotFound)
+		return
+	}
+
+	if peer.RouterDomain == "" {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"available": false, "model": "", "version": ""})
+		return
+	}
+
+	if peer.RouterLogin != "" && peer.RouterPassword != "" {
+		httpClient, baseURL, err := keeneticSetupClient(peer.RouterDomain, peer.RouterLogin, peer.RouterPassword)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]any{"available": false, "model": "", "version": ""})
+			return
+		}
+		model, version, err := s.getRouterInfo(httpClient, baseURL)
+		if err != nil {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]any{"available": false, "model": "", "version": ""})
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"available": true, "model": model, "version": version})
+		return
+	}
+
+	available := checkRouterHTTPAvailability(peer.RouterDomain)
+	if available {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"available": true, "model": "", "version": ""})
+	} else {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]any{"available": false, "model": "", "version": ""})
+	}
+}
+
+func checkRouterHTTPAvailability(domain string) bool {
+	client := &http.Client{
+		Timeout: 5 * time.Second,
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
+	for _, scheme := range []string{"https", "http"} {
+		url := scheme + "://" + domain + "/"
+		resp, err := client.Get(url)
+		if err == nil {
+			resp.Body.Close()
+			return true
+		}
+	}
+	return false
 }

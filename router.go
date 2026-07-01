@@ -63,8 +63,8 @@ func keeneticAuth(httpClient *http.Client, baseURL, login, password string) erro
 
 func newKeeneticClient() *http.Client {
 	return &http.Client{
-		Jar:         mustCookieJar(),
-		Timeout:     30 * time.Second,
+		Jar:     mustCookieJar(),
+		Timeout: 30 * time.Second,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
@@ -82,8 +82,8 @@ func keeneticSetupClient(domain, login, password string) (*http.Client, string, 
 		var client *http.Client
 		if scheme == "https" {
 			client = &http.Client{
-				Jar:         mustCookieJar(),
-				Timeout:     30 * time.Second,
+				Jar:     mustCookieJar(),
+				Timeout: 30 * time.Second,
 				CheckRedirect: func(req *http.Request, via []*http.Request) error {
 					return http.ErrUseLastResponse
 				},
@@ -386,11 +386,11 @@ func keeneticBatchInstallComponents(httpClient *http.Client, baseURL string, nam
 }
 
 type ComponentInfo struct {
-	Name        string
-	Description string
-	Installed   bool
+	Name         string
+	Description  string
+	Installed    bool
 	RawInstalled string
-	Size        int
+	Size         int
 }
 
 func keeneticGetComponents(httpClient *http.Client, baseURL string) (map[string]ComponentInfo, error) {

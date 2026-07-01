@@ -9,6 +9,7 @@ let activeElementId = null;
 let activeElementCursorStart = null;
 let activeElementCursorEnd = null;
 let _keeneticPeerId = null;
+let routerCheckTimer = null;
 
 function getToken() {
 	return sessionStorage.getItem(TOKEN_KEY) || '';
@@ -106,6 +107,7 @@ async function changePassword() {
 
 async function logout() {
 	stopAutoRefresh();
+	stopRouterCheck();
 	setToken('');
 	await xhr('POST', '/logout');
 	showLogin();
@@ -142,7 +144,7 @@ function renderPeers(peers) {
 		tbody.innerHTML = '<p style="color:#64748b;padding:12px">Нет пиров</p>';
 		return;
 	}
-	let html = '<table><thead><tr><th>Имя</th><th>IP</th><th>Создан</th><th>Handshake</th><th>Endpoint</th><th>Трафик</th><th>Действия</th><th></th></tr></thead><tbody>';
+	let html = '<table><thead><tr><th></th><th>Имя</th><th>IP</th><th>Создан</th><th>Handshake</th><th>Endpoint</th><th>Трафик</th><th>Действия</th><th></th></tr></thead><tbody>';
 	for (const p of peers) {
 		const hs = humanTimeAgo(p.lastHandshake);
 		const age = getPeerAge(p.lastHandshake);
@@ -155,6 +157,7 @@ function renderPeers(peers) {
 		const isExpanded = expandedPeers.has(p.id);
 		const arrow = isExpanded ? '▼' : '▶';
 		html += `<tr class="${rowClass}" data-peer-id="${p.id}">
+			<td style="width:20px;padding:8px 4px"><span class="led led-gray" id="router-led-${p.id}" title="Проверка доступности роутера..."></span></td>
 			<td><span class="peer-name-toggle" onclick="togglePeerDetails('${p.id}', event)" style="cursor:pointer;color:#38bdf8">${escapeHtml(p.name)}</span></td>
 			<td><code>${escapeHtml(p.allowedIPs)}</code></td>
 			<td>${created}</td>
@@ -165,14 +168,14 @@ function renderPeers(peers) {
 				<button class="btn-qr" onclick="showQR('${p.id}','${escapeHtml(p.name)}')">QR</button>
 				<button class="btn-qr" onclick="showText('${p.id}','${escapeHtml(p.name)}')" title="Конфиг пира" style="font-size:0.75rem;font-weight:700;padding:4px 6px;min-width:38px">TXT</button>
 				<button class="btn-dl" onclick="downloadConf('${p.id}')">⬇</button>
- 			<button class="btn-qr" onclick="configureRouter('${p.id}')" title="Настроить VPN на роутере Keenetic" style="font-size:0.75rem;font-weight:700;padding:4px 6px;min-width:38px">VPN</button>
- 			<button class="btn-qr" onclick="configureDnsRouter('${p.id}')" title="Настроить DNS на роутере Keenetic" style="font-size:0.75rem;font-weight:700;padding:4px 6px;min-width:38px">DNS</button>
+  			<button class="btn-qr" onclick="configureRouter('${p.id}')" title="Настроить VPN на роутере Keenetic" style="font-size:0.75rem;font-weight:700;padding:4px 6px;min-width:38px">VPN</button>
+  			<button class="btn-qr" onclick="configureDnsRouter('${p.id}')" title="Настроить DNS на роутере Keenetic" style="font-size:0.75rem;font-weight:700;padding:4px 6px;min-width:38px">DNS</button>
 				<button class="btn-del" onclick="removePeer('${p.id}')">✕</button>
 			</td>
 			<td style="text-align:right;width:30px"><span class="peer-arrow" onclick="togglePeerDetails('${p.id}', event)" style="cursor:pointer;color:#64748b">${arrow}</span></td>
 		</tr>
 		<tr id="details-${p.id}" class="peer-details" style="display:${isExpanded ? '' : 'none'}">
-			<td colspan="8">
+			<td colspan="9">
 				<div class="peer-details-content">
 					<h4>Настройки роутера для ${escapeHtml(p.name)}</h4>
 					<div class="grid-form">
@@ -187,9 +190,9 @@ function renderPeers(peers) {
   					<button onclick="configureDnsRouter('${p.id}')" class="btn-qr" style="margin-top:8px;margin-left:8px">Настроить DNS</button>
   					<button onclick="configureDnsRoutes('${p.id}')" class="btn-qr" style="margin-top:8px;margin-left:8px">Настроить DNS-маршрутизацию</button>
   					<button onclick="configureComponents('${p.id}')" class="btn-qr" style="margin-top:8px;margin-left:8px">Настроить компоненты</button>
-				</div>
-			</td>
-		</tr>`;
+  				</div>
+  			</td>
+  		</tr>`;
 	}
 	html += '</tbody></table>';
 	tbody.innerHTML = html;
@@ -217,6 +220,64 @@ function updatePeerStats(peers) {
 		if (trafficEl) {
 			trafficEl.innerHTML = '<span title="↑ ' + tx + '">↑ ' + tx + '</span> / <span title="↓ ' + rx + '">↓ ' + rx + '</span>';
 		}
+	}
+}
+
+function updateRouterLed(peerId, routerDomain) {
+	const led = document.getElementById('router-led-' + peerId);
+	if (!led) return;
+	if (!routerDomain) {
+		led.className = 'led led-gray';
+		led.title = 'Домен роутера не настроен';
+		return;
+	}
+	xhr('GET', '/peers/router-check/' + encodeURIComponent(peerId))
+		.then(res => {
+			if (res.ok) {
+				const data = res.json();
+				if (data.available) {
+					led.className = 'led led-green';
+					led.title = data.model ? ('Модель: ' + data.model + ' | Версия: ' + data.version) : 'Роутер доступен';
+				} else {
+					led.className = 'led led-gray';
+					led.title = 'Роутер недоступен';
+				}
+			} else {
+				led.className = 'led led-gray';
+				led.title = 'Проверка невозможна';
+			}
+		})
+		.catch(() => {
+			led.className = 'led led-gray';
+			led.title = 'Ошибка проверки';
+		});
+}
+
+function checkAllRouters() {
+	const ledEls = document.querySelectorAll('.led');
+	for (const led of ledEls) {
+		if (!led.id || !led.id.startsWith('router-led-')) continue;
+		const peerId = led.id.replace('router-led-', '');
+		xhr('GET', '/peers/router-check/' + encodeURIComponent(peerId))
+			.then(res => {
+				if (res.ok) {
+					const data = res.json();
+					if (data.available) {
+						led.className = 'led led-green';
+						led.title = data.model ? ('Модель: ' + data.model + ' | Версия: ' + data.version) : 'Роутер доступен';
+					} else {
+						led.className = 'led led-gray';
+						led.title = 'Роутер недоступен';
+					}
+				} else {
+					led.className = 'led led-gray';
+					led.title = 'Проверка невозможна';
+				}
+			})
+			.catch(() => {
+				led.className = 'led led-gray';
+				led.title = 'Ошибка проверки';
+			});
 	}
 }
 
@@ -298,7 +359,7 @@ async function fetchRouterInfo(id) {
 	try {
 		const res = await xhr('GET', '/peers/router-info/' + id);
 		if (res.ok) {
-			const info = res.json();
+			const info = await res.json();
 			const statusEl = document.getElementById('routerStatus-' + id);
 			if (statusEl) {
 				statusEl.textContent = `Модель: ${info.model || '—'} | Версия: ${info.version || '—'}`;
@@ -1211,6 +1272,7 @@ async function refresh() {
 			renderPeers(peers);
 			restoreExpandedInputs();
 			previousPeerIds = currentIds;
+			setTimeout(checkAllRouters, 100);
 		} else {
 			updatePeerStats(peers);
 		}
@@ -1361,12 +1423,28 @@ function startAutoRefresh() {
 			}
 		}
 	}, 5000);
+	startRouterCheck();
 }
 
 function stopAutoRefresh() {
 	if (refreshTimer) {
 		clearInterval(refreshTimer);
 		refreshTimer = null;
+	}
+}
+
+function startRouterCheck() {
+	if (routerCheckTimer) clearInterval(routerCheckTimer);
+	routerCheckTimer = setInterval(() => {
+		checkAllRouters();
+	}, 30000);
+	checkAllRouters();
+}
+
+function stopRouterCheck() {
+	if (routerCheckTimer) {
+		clearInterval(routerCheckTimer);
+		routerCheckTimer = null;
 	}
 }
 
