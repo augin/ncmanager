@@ -148,7 +148,7 @@ sudo wg-quick down wg0
 | GET | `/api/peers/{id}/config` | Скачать .conf файл |
 | POST | `/api/peers/keenetic/{id}` | Настроить VPN на роутере Keenetic |
 | POST | `/api/peers/keenetic-dns/{id}` | Настроить DoT-серверы |
-| POST | `/api/peers/keenetic-dns-routes/{id}` | Включить/выключить DNS-маршрутизацию |
+| POST | `/api/peers/keenetic-dns-routes/{id}` | Настроить DNS-маршрутизацию |
 | POST | `/api/peers/keenetic-components/{id}` | Установить компоненты роутера |
 | POST | `/api/components/apply` | Установить компоненты (альтернативный endpoint) |
 | GET | `/api/components/apply/status` | Статус установки компонентов |
