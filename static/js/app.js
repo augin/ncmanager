@@ -411,13 +411,6 @@ function formatBytes(b) {
 	return (b / Math.pow(u, e)).toFixed(1) + ' ' + 'KMGTPE'[e-1] + 'iB';
 }
 
-function isValidCIDR(cidr) {
-  if (!cidr || typeof cidr !== 'string') return false;
-  const ipv4 = /^(?:(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9])\.){3}(?:25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9])\/([0-9]|[12][0-9]|3[0-2])$/;
-  const ipv6 = /^([0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\/([0-9]|[1-9][0-9]|1[0-2][0-9])$/;
-  return ipv4.test(cidr) || ipv6.test(cidr);
-}
-
 function isValidDomain(domain) {
   if (!domain || typeof domain !== 'string') return false;
   const d = domain.trim().toLowerCase();
@@ -430,12 +423,8 @@ function isValidDomain(domain) {
 
 function validateDnsRouteInput(domains, subnets) {
   const invalidDomains = domains.filter(d => !isValidDomain(d)).slice(0, 3);
-  const invalidSubnets = subnets.filter(s => !isValidCIDR(s)).slice(0, 3);
   if (invalidDomains.length) {
     return 'Неверные домены: ' + invalidDomains.join(', ');
-  }
-  if (invalidSubnets.length) {
-    return 'Неверные CIDR: ' + invalidSubnets.join(', ');
   }
   return '';
 }
@@ -1379,9 +1368,84 @@ async function saveConfig(e) {
 			}, 2000);
 		}
 	}
-} catch (e) {
-	alert('Ошибка: ' + e.message);
+  } catch (e) {
+    alert('Ошибка: ' + e.message);
+  }
 }
+
+async function createBackup() {
+  try {
+    const res = await fetch('/api/backup/create', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + (getToken() || '') }
+    });
+    if (!res.ok) {
+      alert('Ошибка создания бэкапа: ' + (await res.text()));
+      return;
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const match = disposition.match(/filename="?([^"]+)"?/);
+    const filename = match ? match[1] : 'ncmanager-backup.zip';
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    const status = document.getElementById('backupStatus');
+    if (status) {
+      status.textContent = 'Бэкап скачан: ' + filename + ' (' + (blob.size/1024|0) + ' KB)';
+      setTimeout(() => status.textContent = '', 5000);
+    }
+  } catch (e) {
+    alert('Ошибка: ' + e.message);
+  }
+}
+
+function showRestoreModal() {
+  const modal = document.getElementById('restoreModal');
+  const input = document.getElementById('restoreFile');
+  const log = document.getElementById('restoreLog');
+  if (modal) modal.classList.add('show');
+  if (input) input.value = '';
+  if (log) { log.style.display = 'none'; log.textContent = ''; }
+}
+
+function hideRestoreModal() {
+  const modal = document.getElementById('restoreModal');
+  if (modal) modal.classList.remove('show');
+}
+
+async function restoreBackup() {
+  const input = document.getElementById('restoreFile');
+  const log = document.getElementById('restoreLog');
+  if (!input || !input.files || input.files.length === 0) {
+    alert('Выберите файл бэкапа');
+    return;
+  }
+  if (log) { log.style.display = 'block'; log.textContent = 'Восстановление...'; }
+  try {
+    const fd = new FormData();
+    fd.append('backup', input.files[0]);
+    const res = await fetch('/api/backup/restore', {
+      method: 'POST',
+      headers: { 'Authorization': 'Bearer ' + (getToken() || '') },
+      body: fd
+    });
+    const data = await res.json();
+    if (res.ok && data.status === 'ok') {
+      alert('Восстановлено файлов: ' + data.restored.length);
+      if (log) log.textContent = 'Восстановлено: ' + data.restored.join('\n');
+      hideRestoreModal();
+    } else {
+      alert('Ошибка восстановления: ' + (data.error || JSON.stringify(data)));
+    }
+  } catch (e) {
+    alert('Ошибка: ' + e.message);
+  }
 }
 
 async function init() {

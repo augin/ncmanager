@@ -39,6 +39,7 @@
     <button class="tab" onclick="switchTab('waniface', this)">Интерфейс выхода</button>
     <button class="tab" onclick="switchTab('settings', this)">Настройки</button>
     <button class="tab" onclick="switchTab('logs', this)">Логи</button>
+    <button class="tab" onclick="switchTab('backup', this)">Бэкап</button>
   </nav>
 
   <main>
@@ -177,6 +178,16 @@ AllowedIPs = ..."></textarea>
       <pre id="logOutput" style="background:#0f172a;padding:12px;border-radius:4px;overflow:auto;max-height:500px;font-size:0.8rem;white-space:pre-wrap;word-break:break-all;">Загрузка...</pre>
     </section>
 
+    <section class="card" id="tab-backup" style="display:none">
+      <h2>Резервное копирование</h2>
+      <p style="color:#64748b;margin-bottom:16px">Архив содержит настройки, пиры, ключи, конфиги WireGuard и AmneziaWG, веб-интерфейс и systemd-юнит. Восстановление на другом сервере перенесёт всё состояние.</p>
+      <div style="display:flex;gap:12px;flex-wrap:wrap">
+        <button onclick="createBackup()" class="btn-dl">⬇ Скачать резервную копию</button>
+        <button onclick="showRestoreModal()" class="btn-qr">⬆ Восстановить из файла</button>
+      </div>
+      <div id="backupStatus" style="margin-top:12px;color:#64748b"></div>
+    </section>
+
     <footer style="text-align:center;color:#64748b;font-size:0.8rem;padding:24px 0 12px 0" id="versionFooter">Версия: загрузка...</footer>
   </main>
 
@@ -235,6 +246,23 @@ AllowedIPs = ..."></textarea>
         <button class="btn-dl" onclick="hideDnsRouteModal()">Отмена</button>
         <button class="btn-qr" onclick="saveDnsRouteModal()">Сохранить</button>
       </div>
+    </div>
+  </div>
+
+  <div class="modal" id="restoreModal">
+    <div class="modal-content" style="max-width:480px">
+      <button class="modal-close" onclick="hideRestoreModal()">✕</button>
+      <h3>Восстановление из резервной копии</h3>
+      <p style="color:#ff6b6b;margin-bottom:12px">Внимание: текущие настройки и пиры будут заменены содержимым архива. Убедитесь, что вы сделали бэкап перед восстановлением.</p>
+      <div class="form-group">
+        <label>Файл бэкапа (.zip)</label>
+        <input type="file" id="restoreFile" accept=".zip" style="padding:8px;background:var(--color-bg-primary);color:var(--color-text-primary);border:1px solid var(--color-border);border-radius:4px">
+      </div>
+      <div class="actions">
+        <button class="btn-dl" onclick="hideRestoreModal()">Отмена</button>
+        <button onclick="restoreBackup()" class="btn-qr">Восстановить</button>
+      </div>
+      <pre id="restoreLog" style="background:#0f172a;color:#e2e8f0;padding:12px;border-radius:4px;overflow:auto;max-height:40vh;font-size:0.85rem;margin-top:12px;display:none;white-space:pre-wrap;word-break:break-all;"></pre>
     </div>
   </div>
 </div>
