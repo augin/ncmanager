@@ -4,6 +4,7 @@ let currentTab = 'peers';
 let previousPeerIds = new Set();
 let refreshTimer = null;
 let expandedPeers = new Set();
+let peerSearch = '';
 let expandedInputs = {};
 let activeElementId = null;
 let activeElementCursorStart = null;
@@ -159,10 +160,17 @@ async function loadStatus() {
 	return (await xhr('GET', '/status')).json();
 }
 
+function onPeerSearchChange(value) {
+	peerSearch = value.trim();
+	loadPeers().then(renderPeers);
+}
+
 function renderPeers(peers) {
+	const query = peerSearch.trim().toLowerCase();
+	const filtered = query ? peers.filter(p => (p.name || '').toLowerCase().includes(query)) : peers;
 	const tbody = document.getElementById('peersTable');
-	if (!peers.length) {
-		tbody.innerHTML = '<p style="color:#64748b;padding:12px">Нет пиров</p>';
+	if (!filtered.length) {
+		tbody.innerHTML = query ? '<p style="color:#64748b;padding:12px">Нет совпадений</p>' : '<p style="color:#64748b;padding:12px">Нет пиров</p>';
 		return;
 	}
 	let html = '<table><thead><tr><th></th><th>Имя</th><th>IP</th><th>Создан</th><th>Handshake</th><th>Endpoint</th><th>Трафик</th><th>Оплата</th><th>Действия</th><th></th></tr></thead><tbody>';

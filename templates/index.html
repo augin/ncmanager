@@ -69,8 +69,8 @@
         </div>
       </div>
       <div class="add-peer">
-        <input id="peerName" placeholder="Имя пира">
-        <button onclick="addPeer()">Добавить</button>
+        <input type="text" id="peerName" class="peer-search" placeholder="Поиск или имя пира" oninput="onPeerSearchChange(this.value)">
+        <button onclick="addPeer()" class="btn-sm btn-primary">+ Добавить</button>
       </div>
       <div id="peersTable"></div>
     </section>

@@ -277,25 +277,32 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px; }
 .grid-form input:focus { outline: none; border-color: var(--color-accent); }
 .actions { grid-column: 1/-1; display: flex; gap: 8px; }
 
-.add-peer { display: flex; gap: 8px; margin-bottom: 16px; }
-.add-peer input {
-  flex: 1;
-  background: var(--color-bg-primary);
+.add-peer { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 12px; flex-wrap: wrap; }
+.peer-search {
+  height: 32px;
+  padding: 0 0.5rem;
   border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  background: var(--color-bg-primary);
   color: var(--color-text-primary);
-  padding: 8px;
-  border-radius: var(--radius-sm);
+  font-size: 0.6875rem;
+  font-family: var(--font-sans);
 }
-.add-peer button {
-  background: var(--color-success);
-  border: none;
-  color: #1a1b26;
-  padding: 8px 16px;
+.peer-search::placeholder { color: var(--color-text-muted); }
+.peer-search:focus { outline: none; border-color: var(--color-accent); }
+.btn-primary {
+  height: 32px;
+  padding: 0 0.875rem;
+  border: 1px solid transparent;
   border-radius: var(--radius-sm);
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
   cursor: pointer;
-  font-weight: 600;
+  transition: background var(--t-fast) ease, color var(--t-fast) ease, border-color var(--t-fast) ease;
 }
-.add-peer button:hover { filter: brightness(1.1); }
+.btn-primary:hover { background: var(--color-accent-hover); }
 
 table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 th, td { text-align: left; padding: 10px; border-bottom: 1px solid var(--color-border); }
