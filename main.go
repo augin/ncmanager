@@ -55,14 +55,15 @@ type Peer struct {
 	CreatedAt      time.Time `json:"createdAt"`
 	AllowedIPs     string    `json:"allowedIPs"`
 	LastHandshake  time.Time `json:"lastHandshake,omitempty"`
-	TransferRx     int64     `json:"transferRx,omitempty"`
-	TransferTx     int64     `json:"transferTx,omitempty"`
+	TransferRx     int64     `json:"transferRx"`
+	TransferTx     int64     `json:"transferTx"`
 	Endpoint       string    `json:"endpoint,omitempty"`
 	RouterDomain   string    `json:"routerDomain,omitempty"`
 	RouterLogin    string    `json:"routerLogin,omitempty"`
 	RouterPassword string    `json:"routerPassword,omitempty"`
 	Description    string    `json:"description,omitempty"`
 	RouterIfName   string    `json:"routerIfName,omitempty"`
+	Paid           bool      `json:"paid,omitempty"`
 }
 
 type Config struct {
@@ -720,6 +721,7 @@ func (s *Server) updatePeer(w http.ResponseWriter, r *http.Request) {
 		RouterLogin    string `json:"routerLogin"`
 		RouterPassword string `json:"routerPassword"`
 		Description    string `json:"description"`
+		Paid           bool   `json:"paid"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
@@ -744,6 +746,7 @@ func (s *Server) updatePeer(w http.ResponseWriter, r *http.Request) {
 				peersCfg.Peers[i].RouterPassword = req.RouterPassword
 			}
 			peersCfg.Peers[i].Description = req.Description
+			peersCfg.Peers[i].Paid = req.Paid
 			found = true
 			break
 		}
