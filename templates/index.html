@@ -24,23 +24,33 @@
     </div>
   </div>
 
-  <header class="topbar">
-    <h1>NC Manager</h1>
-    <div>
-      <span class="status-badge" id="statusBadge">Проверка...</span>
-      <button onclick="toggleServer()" id="btnToggle">Запустить</button>
-      <button onclick="logout()">Выход</button>
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="header-brand">NC Manager</div>
+      <nav class="nav">
+        <a class="nav-link nav-link--active" data-tab="peers">Пиры</a>
+        <a class="nav-link" data-tab="dns">DNS маршрутизация</a>
+        <a class="nav-link" data-tab="waniface">Интерфейс выхода</a>
+        <a class="nav-link" data-tab="settings">Настройки</a>
+        <a class="nav-link" data-tab="logs">Логи</a>
+        <a class="nav-link" data-tab="backup">Бэкап</a>
+      </nav>
+      <div class="header-toolbar">
+        <span class="status-badge" id="statusBadge">Проверка...</span>
+        <button onclick="toggleServer()" id="btnToggle" class="btn-sm">Запустить</button>
+        <button onclick="logout()" class="btn-sm btn-icon" aria-label="Выход">✕</button>
+        <button class="hamburger" onclick="toggleMobileMenu()" aria-label="Menu">☰</button>
+      </div>
+    </div>
+    <div class="mobile-nav" id="mobileNav">
+      <a class="mobile-nav-link nav-link--active" data-tab="peers">Пиры</a>
+      <a class="mobile-nav-link nav-link" data-tab="dns">DNS маршрутизация</a>
+      <a class="mobile-nav-link nav-link" data-tab="waniface">Интерфейс выхода</a>
+      <a class="mobile-nav-link nav-link" data-tab="settings">Настройки</a>
+      <a class="mobile-nav-link nav-link" data-tab="logs">Логи</a>
+      <a class="mobile-nav-link nav-link" data-tab="backup">Бэкап</a>
     </div>
   </header>
-
-  <nav class="tabs">
-    <button class="tab active" onclick="switchTab('peers', this)">Пиры</button>
-    <button class="tab" onclick="switchTab('dns', this)">DNS маршрутизация</button>
-    <button class="tab" onclick="switchTab('waniface', this)">Интерфейс выхода</button>
-    <button class="tab" onclick="switchTab('settings', this)">Настройки</button>
-    <button class="tab" onclick="switchTab('logs', this)">Логи</button>
-    <button class="tab" onclick="switchTab('backup', this)">Бэкап</button>
-  </nav>
 
   <main>
     <section class="card" id="tab-peers">

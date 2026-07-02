@@ -115,8 +115,9 @@ async function logout() {
 
 function switchTab(name, btn) {
 	currentTab = name;
-	document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
-	if (btn) btn.classList.add('active');
+	document.querySelectorAll('.nav-link').forEach(link => link.classList.remove('nav-link--active'));
+	document.querySelectorAll('.mobile-nav-link').forEach(link => link.classList.remove('nav-link--active'));
+	if (btn) btn.classList.add('nav-link--active');
 	document.querySelectorAll('[id^="tab-"]').forEach(el => el.style.display = 'none');
 	const target = document.getElementById('tab-' + name);
 	if (target) target.style.display = '';
@@ -124,6 +125,15 @@ function switchTab(name, btn) {
 	if (name === 'dns') loadDnsRoutes();
 	if (name === 'waniface') loadAmneziaInterfaces();
 	try { localStorage.setItem('ncmanager_tab', name); } catch (e) {}
+	closeMobileMenu();
+}
+
+function toggleMobileMenu() {
+	document.getElementById('mobileNav').classList.toggle('open');
+}
+function closeMobileMenu() {
+	const nav = document.getElementById('mobileNav');
+	if (nav) nav.classList.remove('open');
 }
 
 async function loadConfig() {
@@ -1499,7 +1509,7 @@ async function init() {
 	await loadAmneziaStatus();
 	await loadPresets();
 	const saved = localStorage.getItem('ncmanager_tab') || 'peers';
-	const tabBtn = Array.from(document.querySelectorAll('.tab')).find(b => b.getAttribute('onclick').includes("'" + saved + "'")) || document.querySelector('.tab');
+	const tabBtn = Array.from(document.querySelectorAll('.nav-link')).find(b => b.getAttribute('data-tab') === saved) || document.querySelector('.nav-link');
 	switchTab(saved, tabBtn);
 	startAutoRefresh();
 	refresh();
@@ -1705,7 +1715,7 @@ function renderAmneziaInterfaces(ifaces) {
   let html = '<table><thead><tr><th>Имя</th><th>Статус</th><th>Адрес</th><th>PublicKey</th><th>Handshake / Ping</th><th>Трафик</th><th>Действия</th></tr></thead><tbody>';
   for (const iface of ifaces) {
     const running = iface.running === 'true';
-    const statusText = running ? '🟢 Запущен' : '🔴 Остановлен';
+    const statusText = running ? ' Запущен' : 'Остановлен';
     const statusClass = running ? 'led-green' : 'led-gray';
     const pubKey = iface.publicKey ? iface.publicKey.substring(0, 16) + '...' : '—';
     const addr = iface.address || '—';
