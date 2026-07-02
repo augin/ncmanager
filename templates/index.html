@@ -39,8 +39,6 @@
         <a class="nav-link" data-tab="backup" onclick="switchTab('backup', this)">Бэкап</a>
       </nav>
       <div class="header-toolbar">
-        <span class="status-badge" id="statusBadge">Проверка...</span>
-        <button onclick="toggleServer()" id="btnToggle" class="btn-sm">Запустить</button>
         <button onclick="logout()" class="btn-sm btn-icon" aria-label="Выход">✕</button>
         <button class="hamburger" onclick="toggleMobileMenu()" aria-label="Menu">☰</button>
       </div>
@@ -57,7 +55,13 @@
 
   <main>
     <section class="card" id="tab-peers">
-      <h2>Пиры</h2>
+      <div style="display:flex;align-items:center;justify-content:space-between">
+        <h2 style="margin:0">Пиры</h2>
+        <div style="display:flex;align-items:center;gap:8px">
+          <span class="status-badge" id="statusBadge">Проверка...</span>
+          <button onclick="toggleServer()" id="btnToggle" class="btn-sm">Запустить</button>
+        </div>
+      </div>
       <div class="add-peer">
         <input id="peerName" placeholder="Имя пира">
         <button onclick="addPeer()">Добавить</button>
