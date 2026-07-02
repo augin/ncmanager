@@ -374,24 +374,31 @@ code {
 .led-green { background: var(--color-success); box-shadow: 0 0 6px var(--color-success); }
 .led-gray { background: var(--color-text-muted); }
 
-.paid-toggle {
-	appearance: none;
-	-webkit-appearance: none;
+.paid-input {
+	position: absolute;
+	opacity: 0;
+	width: 0;
+	height: 0;
+}
+.paid-indicator {
+	display: inline-block;
 	width: 18px;
 	height: 18px;
-	border: 2px solid var(--color-error);
 	border-radius: 4px;
-	background: transparent;
 	cursor: pointer;
-	position: relative;
 	vertical-align: middle;
-	margin-left: 8px;
+	flex-shrink: 0;
 }
-.paid-toggle:checked {
+.paid-indicator--off {
+	background: transparent;
+	border: 2px solid var(--color-error);
+}
+.paid-indicator--on {
 	background: var(--color-success);
 	border-color: var(--color-success);
+	position: relative;
 }
-.paid-toggle:checked::after {
+.paid-indicator--on::after {
 	content: '✓';
 	position: absolute;
 	inset: 0;
