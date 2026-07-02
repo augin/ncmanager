@@ -28,12 +28,12 @@
     <div class="header-inner">
       <div class="header-brand">NC Manager</div>
       <nav class="nav">
-        <a class="nav-link nav-link--active" data-tab="peers">Пиры</a>
-        <a class="nav-link" data-tab="dns">DNS маршрутизация</a>
-        <a class="nav-link" data-tab="waniface">Интерфейс выхода</a>
-        <a class="nav-link" data-tab="settings">Настройки</a>
-        <a class="nav-link" data-tab="logs">Логи</a>
-        <a class="nav-link" data-tab="backup">Бэкап</a>
+        <a class="nav-link nav-link--active" data-tab="peers" onclick="switchTab('peers', this)">Пиры</a>
+        <a class="nav-link" data-tab="dns" onclick="switchTab('dns', this)">DNS маршрутизация</a>
+        <a class="nav-link" data-tab="waniface" onclick="switchTab('waniface', this)">Интерфейс выхода</a>
+        <a class="nav-link" data-tab="settings" onclick="switchTab('settings', this)">Настройки</a>
+        <a class="nav-link" data-tab="logs" onclick="switchTab('logs', this)">Логи</a>
+        <a class="nav-link" data-tab="backup" onclick="switchTab('backup', this)">Бэкап</a>
       </nav>
       <div class="header-toolbar">
         <span class="status-badge" id="statusBadge">Проверка...</span>
@@ -43,12 +43,12 @@
       </div>
     </div>
     <div class="mobile-nav" id="mobileNav">
-      <a class="mobile-nav-link nav-link--active" data-tab="peers">Пиры</a>
-      <a class="mobile-nav-link nav-link" data-tab="dns">DNS маршрутизация</a>
-      <a class="mobile-nav-link nav-link" data-tab="waniface">Интерфейс выхода</a>
-      <a class="mobile-nav-link nav-link" data-tab="settings">Настройки</a>
-      <a class="mobile-nav-link nav-link" data-tab="logs">Логи</a>
-      <a class="mobile-nav-link nav-link" data-tab="backup">Бэкап</a>
+      <a class="mobile-nav-link nav-link--active" data-tab="peers" onclick="switchTab('peers', this)">Пиры</a>
+      <a class="mobile-nav-link nav-link" data-tab="dns" onclick="switchTab('dns', this)">DNS маршрутизация</a>
+      <a class="mobile-nav-link nav-link" data-tab="waniface" onclick="switchTab('waniface', this)">Интерфейс выхода</a>
+      <a class="mobile-nav-link nav-link" data-tab="settings" onclick="switchTab('settings', this)">Настройки</a>
+      <a class="mobile-nav-link nav-link" data-tab="logs" onclick="switchTab('logs', this)">Логи</a>
+      <a class="mobile-nav-link nav-link" data-tab="backup" onclick="switchTab('backup', this)">Бэкап</a>
     </div>
   </header>
 
