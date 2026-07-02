@@ -1373,8 +1373,6 @@ async function loadVersion() {
     const res = await xhr('GET', '/version');
     if (res.ok) {
       const data = await res.json();
-      const footer = document.getElementById('versionFooter');
-      if (footer) footer.textContent = 'Версия: ' + (data.version || '—');
       const pill = document.getElementById('versionPill');
       if (pill) pill.textContent = data.version || '';
     }
