@@ -17,17 +17,17 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+	"unicode"
 
 	"github.com/skip2/go-qrcode"
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.3.4"
+const appVersion = "1.3.5"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const wgConfigFile = "/etc/wireguard/wg0.conf"
@@ -844,8 +844,26 @@ func (s *Server) downloadPeerConfig(w http.ResponseWriter, r *http.Request) {
 }
 
 func sanitizeFilename(s string) string {
-	re := regexp.MustCompile(`[^a-zA-Z0-9_\-]`)
-	return re.ReplaceAllString(s, "_")
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		if tr, ok := cyrTranslitSlug[unicode.ToLower(r)]; ok {
+			b.WriteString(tr)
+		} else if (r >= 'a' && r <= 'z') || (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
+			b.WriteRune(r)
+		} else {
+			b.WriteRune('_')
+		}
+	}
+	out := b.String()
+	for strings.Contains(out, "__") {
+		out = strings.ReplaceAll(out, "__", "_")
+	}
+	out = strings.Trim(out, "_")
+	if out == "" {
+		return "peer"
+	}
+	return out
 }
 
 func generateKeeneticServerConfig(peer *Peer, serverPub, iface, endpoint string, port int, subnet, wanIface string) string {
