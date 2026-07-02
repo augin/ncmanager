@@ -360,14 +360,21 @@ async function savePeerRouter(id, silent) {
 }
 
 async function togglePeerPaid(id, checked) {
+	const indicator = document.querySelector('label:has(#rpaid-' + id + ') .paid-indicator');
 	try {
 		await xhr('POST', '/peers/update', {
 			id: id,
 			paid: checked,
 		});
+		if (indicator) {
+			indicator.className = 'paid-indicator ' + (checked ? 'paid-indicator--on' : 'paid-indicator--off');
+		}
 	} catch (e) {
 		const el = document.getElementById('rpaid-' + id);
 		if (el) el.checked = !checked;
+		if (indicator) {
+			indicator.className = 'paid-indicator ' + (!checked ? 'paid-indicator--on' : 'paid-indicator--off');
+		}
 		alert('Ошибка обновления статуса оплаты');
 	}
 }
