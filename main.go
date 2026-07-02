@@ -27,7 +27,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.3.3"
+const appVersion = "1.3.4"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const wgConfigFile = "/etc/wireguard/wg0.conf"
@@ -533,8 +533,12 @@ func (s *Server) saveConfig(w http.ResponseWriter, r *http.Request) {
 	if v, ok := req["dns"].(string); ok {
 		cfg.DNS = v
 	}
-	if v, ok := req["subnet"].(string); ok {
-		cfg.Subnet = v
+	subnetChanged := false
+	if raw, ok := req["subnet"]; ok {
+		if s, ok := raw.(string); ok && s != "" && s != oldCfg.Subnet {
+			cfg.Subnet = s
+			subnetChanged = true
+		}
 	}
 	if v, ok := req["postUp"].(string); ok {
 		cfg.PostUp = v
@@ -557,6 +561,16 @@ func (s *Server) saveConfig(w http.ResponseWriter, r *http.Request) {
 	s.mu.Unlock()
 
 	peersCfg, _ := loadPeers()
+	if subnetChanged {
+		for i := range peersCfg.Peers {
+			ip, err := nextAvailableIP(peersCfg.Peers, cfg.Subnet)
+			if err != nil {
+				log.Printf("recalc IP for peer %s: %v", peersCfg.Peers[i].ID, err)
+				continue
+			}
+			peersCfg.Peers[i].AllowedIPs = ip
+		}
+	}
 	if peers, ok := req["peers"].([]any); ok {
 		peersCfg.Peers = nil
 		for _, p := range peers {
@@ -573,11 +587,13 @@ func (s *Server) saveConfig(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, fmt.Sprintf("failed to generate wg config: %v", err), http.StatusInternalServerError)
 		return
 	}
+	log.Printf("saveConfig: wg config generated subnet=%s peers=%d", cfg.Subnet, len(peersCfg.Peers))
 
 	if err := s.restartServerDirect(); err != nil {
 		http.Error(w, fmt.Sprintf("failed to restart server: %v", err), http.StatusInternalServerError)
 		return
 	}
+	log.Printf("saveConfig: wg restarted subnet=%s", cfg.Subnet)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
@@ -1199,13 +1215,11 @@ func (s *Server) restartServerDirect() error {
 	if downErr != nil {
 		log.Printf("wg-quick down: %s", string(downOut))
 	}
-	time.Sleep(500 * time.Millisecond)
+	exec.Command("ip", "link", "del", "dev", "wg0").CombinedOutput()
+	time.Sleep(700 * time.Millisecond)
 	out, err := exec.Command("wg-quick", "up", path).CombinedOutput()
 	if err != nil {
 		msg := string(out)
-		if strings.Contains(msg, "already exists") || strings.Contains(msg, "is already up") {
-			return nil
-		}
 		log.Printf("wg-quick up failed: %s", msg)
 		return fmt.Errorf("%s: %w", msg, err)
 	}
@@ -1486,15 +1500,33 @@ func generateWgConfig(cfg *Config, peers []Peer) error {
 	} else {
 		b.WriteString(fmt.Sprintf("PostDown = iptables -D INPUT -p udp --dport %d -j ACCEPT || true; iptables -D FORWARD -i %s -o %%i -j ACCEPT || true; iptables -D FORWARD -i %%i -j ACCEPT || true; iptables -t nat -D POSTROUTING -o %s -j MASQUERADE || true; ip route del default dev %s table 110 || true; ip rule del iif %%i table 110 || true;\n", cfg.Port, wanIface, wanIface, wanIface))
 	}
-	b.WriteString("SaveConfig = true\n")
-
 	for _, p := range peers {
 		b.WriteString("\n[Peer]\n")
 		b.WriteString(fmt.Sprintf("# %s\n", p.Name))
 		b.WriteString(fmt.Sprintf("PublicKey = %s\n", p.PublicKey))
 		b.WriteString(fmt.Sprintf("AllowedIPs = %s\n", p.AllowedIPs))
 	}
-	return os.WriteFile(wgConfigFile, []byte(b.String()), 0600)
+	log.Printf("generateWgConfig: subnet=%s serverAddr=%s peers=%d", cfg.Subnet, serverAddr, len(peers))
+	return writeFileAtomic(wgConfigFile, []byte(b.String()))
+}
+
+func writeFileAtomic(path string, data []byte) error {
+	dir := filepath.Dir(path)
+	tmp, err := os.CreateTemp(dir, "tmp-")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		os.Remove(tmpName)
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(tmpName)
+		return err
+	}
+	return os.Rename(tmpName, path)
 }
 
 func generatePeerConfig(peer *Peer, serverPub, iface, endpoint string, port int, dns string) string {
@@ -1835,6 +1867,8 @@ func (s *Server) importAmneziaConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	exec.Command("systemctl", "enable", "--now", "awg-quick@"+name).CombinedOutput()
+
 	var publicKey string
 	for _, line := range strings.Split(req.ConfigText, "\n") {
 		line = strings.TrimSpace(line)
@@ -2049,9 +2083,11 @@ func (s *Server) manageAmneziaInterface(w http.ResponseWriter, r *http.Request) 
 			http.Error(w, "awg-quick up failed", http.StatusInternalServerError)
 			return
 		}
+		exec.Command("systemctl", "enable", "--now", "awg-quick@"+name).CombinedOutput()
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "name": name})
 	case "delete":
+		exec.Command("systemctl", "disable", "--now", "awg-quick@"+name).CombinedOutput()
 		exec.Command("awg-quick", "down", name).CombinedOutput()
 		os.Remove(fmt.Sprintf("/etc/amnezia/amneziawg/%s.conf", name))
 		w.Header().Set("Content-Type", "application/json")
