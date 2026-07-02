@@ -182,7 +182,7 @@ function renderPeers(peers) {
 						<label>Домен<input id="rd-${p.id}" value="${escapeHtml(p.routerDomain || '')}" placeholder="router.local"></label>
 						<label>Логин<input id="rl-${p.id}" value="${escapeHtml(p.routerLogin || '')}" placeholder="admin"></label>
  <label>Пароль<span class="pwd-wrap"><input type='password' id='rp-${p.id}' value='${escapeHtml(p.routerPassword || '')}' placeholder='••••••'><button type='button' class='pwd-toggle' onclick="togglePwd('rp-${p.id}', this)" title="Показать/скрыть">👁</button></span></label>
- 						<label style="display:inline-flex;align-items:center;gap:6px;margin-left:12px"><input type='checkbox' id='rpaid-${p.id}' class='paid-toggle' ${p.paid ? 'checked' : ''} onchange="togglePeerPaid('${p.id}', this.checked)"><span class="paid-label'>Оплачено</span></label>
+ 						<label style="display:inline-flex;align-items:center;gap:6px;margin-left:12px"><input type='checkbox' id='rpaid-${p.id}' class='paid-toggle' ${p.paid ? 'checked' : ''} onchange="togglePeerPaid('${p.id}', this.checked)"><span class="paid-label">Оплачено</span></label>
  						<p id="routerStatus-${p.id}" style="grid-column:1/-1;color:#059669;font-size:0.85rem"></p>
   						<label style="grid-column:1/-1">Описание<textarea id='rdesc-${p.id}' rows="4" style="width:100%;padding:6px;border-radius:4px;background:var(--color-bg-primary);color:var(--color-text-primary);border:1px solid var(--color-border);font-family:var(--font-sans);font-size:0.85rem;resize:vertical;min-height:100px" placeholder='Комментарий'>${escapeHtml(p.description || '')}</textarea></label>
   					</div>
