@@ -418,12 +418,23 @@ code {
 .paid-indicator-row {
 	font-weight: 700;
 	font-size: 0.85rem;
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 22px;
+	height: 22px;
+	border-radius: 4px;
+	border: 2px solid transparent;
 }
 .paid-indicator-row--off {
 	color: var(--color-error);
+	border-color: var(--color-error);
+	background: rgba(247,118,142,0.1);
 }
 .paid-indicator-row--on {
 	color: var(--color-success);
+	border-color: var(--color-success);
+	background: rgba(158,206,106,0.1);
 }
 
 /* DNS route modal */
