@@ -415,6 +415,17 @@ code {
 	margin-left: 6px;
 }
 
+.paid-indicator-row {
+	font-weight: 700;
+	font-size: 0.85rem;
+}
+.paid-indicator-row--off {
+	color: var(--color-error);
+}
+.paid-indicator-row--on {
+	color: var(--color-success);
+}
+
 /* DNS route modal */
 .dns-modal-overlay {
   position: fixed; inset: 0; background: rgba(0,0,0,0.6);

@@ -144,7 +144,7 @@ function renderPeers(peers) {
 		tbody.innerHTML = '<p style="color:#64748b;padding:12px">Нет пиров</p>';
 		return;
 	}
-	let html = '<table><thead><tr><th></th><th>Имя</th><th>IP</th><th>Создан</th><th>Handshake</th><th>Endpoint</th><th>Трафик</th><th>Действия</th><th></th></tr></thead><tbody>';
+	let html = '<table><thead><tr><th></th><th>Имя</th><th>IP</th><th>Создан</th><th>Handshake</th><th>Endpoint</th><th>Трафик</th><th>Оплата</th><th>Действия</th><th></th></tr></thead><tbody>';
 	for (const p of peers) {
 		const hs = humanTimeAgo(p.lastHandshake);
 		const age = getPeerAge(p.lastHandshake);
@@ -164,6 +164,7 @@ function renderPeers(peers) {
 			<td><span class="peer-age ${status.class}" data-field="handshake" title="${p.lastHandshake && new Date(p.lastHandshake).getTime() >= MIN_REASONABLE_DATE ? new Date(p.lastHandshake).toLocaleString('ru-RU') : 'никогда'}">${status.text} · ${hs}</span></td>
 			<td><code>${escapeHtml(endpoint)}</code></td>
 			<td data-field="traffic"><span title="↑ ${tx}">↑ ${tx}</span> / <span title="↓ ${rx}">↓ ${rx}</span></td>
+			<td><span class="paid-indicator-row ${p.paid ? 'paid-indicator-row--on' : 'paid-indicator-row--off'}" title="${p.paid ? 'Оплачено' : 'Не оплачено'}">${p.paid ? '$' : '$'}</span></td>
 			<td class="peer-actions">
 				<button class="btn-qr" onclick="showQR('${p.id}','${escapeHtml(p.name)}')">QR</button>
 				<button class="btn-qr" onclick="showText('${p.id}','${escapeHtml(p.name)}')" title="Конфиг пира" style="font-size:0.75rem;font-weight:700;padding:4px 6px;min-width:38px">TXT</button>
@@ -175,7 +176,7 @@ function renderPeers(peers) {
 			<td style="text-align:right;width:30px"><span class="peer-arrow" onclick="togglePeerDetails('${p.id}', event)" style="cursor:pointer;color:#64748b">${arrow}</span></td>
 		</tr>
 		<tr id="details-${p.id}" class="peer-details" style="display:${isExpanded ? '' : 'none'}">
-			<td colspan="9">
+			<td colspan="10">
 				<div class="peer-details-content">
 					<h4>Настройки роутера для ${escapeHtml(p.name)}</h4>
 					<div class="grid-form">
@@ -220,6 +221,11 @@ function updatePeerStats(peers) {
 		const trafficEl = row.querySelector('[data-field="traffic"]');
 		if (trafficEl) {
 			trafficEl.innerHTML = '<span title="↑ ' + tx + '">↑ ' + tx + '</span> / <span title="↓ ' + rx + '">↓ ' + rx + '</span>';
+		}
+		const paidEl = row.querySelector('.paid-indicator-row');
+		if (paidEl) {
+			paidEl.className = 'paid-indicator-row ' + (p.paid ? 'paid-indicator-row--on' : 'paid-indicator-row--off');
+			paidEl.title = p.paid ? 'Оплачено' : 'Не оплачено';
 		}
 	}
 }
