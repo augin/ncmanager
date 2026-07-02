@@ -137,7 +137,18 @@ function closeMobileMenu() {
 }
 
 async function loadConfig() {
-	return (await xhr('GET', '/config')).json();
+	try {
+		const data = await (await xhr('GET', '/config')).json();
+		const meta = document.getElementById('peerMeta');
+		if (meta && data.interface && data.subnet) {
+			meta.textContent = data.interface + '  ' + data.subnet;
+		} else if (meta) {
+			meta.textContent = '';
+		}
+		return data;
+	} catch (e) {
+		return {};
+	}
 }
 
 async function loadPeers() {

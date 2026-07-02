@@ -163,6 +163,16 @@ body { min-height: 100vh; }
 .toggle-switch input:checked + .toggle-slider::before {
   transform: translateX(16px);
 }
+.peer-meta {
+  font-size: 12px;
+  color: var(--color-text-muted);
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: 2px 8px;
+  font-family: var(--font-mono);
+  letter-spacing: 0.02em;
+}
 .hamburger {
   display: none;
   background: none;

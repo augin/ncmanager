@@ -56,7 +56,10 @@
   <main>
     <section class="card" id="tab-peers">
       <div style="display:flex;align-items:center;justify-content:space-between">
-        <h2 style="margin:0">Пиры</h2>
+        <div style="display:flex;align-items:center;gap:10px">
+          <h2 style="margin:0">Пиры</h2>
+          <span class="peer-meta" id="peerMeta" style="color:var(--color-text-muted);font-size:0.8rem"></span>
+        </div>
         <div style="display:flex;align-items:center;gap:8px">
           <span class="status-badge" id="statusBadge">Проверка...</span>
           <label class="toggle-switch" title="Запустить/Остановить">
