@@ -59,7 +59,10 @@
         <h2 style="margin:0">Пиры</h2>
         <div style="display:flex;align-items:center;gap:8px">
           <span class="status-badge" id="statusBadge">Проверка...</span>
-          <button onclick="toggleServer()" id="btnToggle" class="btn-sm">Запустить</button>
+          <label class="toggle-switch" title="Запустить/Остановить">
+            <input type="checkbox" id="btnToggle" onchange="toggleServer()">
+            <span class="toggle-slider"></span>
+          </label>
         </div>
       </div>
       <div class="add-peer">

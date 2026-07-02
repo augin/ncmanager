@@ -1310,11 +1310,11 @@ async function refresh() {
 		if (status.running) {
 			badge.textContent = 'Запущен';
 			badge.className = 'status-badge up';
-			btn.textContent = 'Остановить';
+			if (btn) btn.checked = true;
 		} else {
 			badge.textContent = 'Остановлен';
 			badge.className = 'status-badge down';
-			btn.textContent = 'Запустить';
+			if (btn) btn.checked = false;
 		}
 	} catch (e) {
 		console.error('refresh error:', e);

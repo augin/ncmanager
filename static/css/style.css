@@ -127,6 +127,42 @@ body { min-height: 100vh; }
   justify-content: center;
   font-size: 16px;
 }
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 36px;
+  height: 20px;
+}
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  inset: 0;
+  background: var(--color-text-muted);
+  border-radius: 999px;
+  transition: background 0.2s;
+}
+.toggle-slider::before {
+  content: '';
+  position: absolute;
+  height: 16px;
+  width: 16px;
+  left: 2px;
+  bottom: 2px;
+  background: white;
+  border-radius: 50%;
+  transition: transform 0.2s;
+}
+.toggle-switch input:checked + .toggle-slider {
+  background: var(--color-success);
+}
+.toggle-switch input:checked + .toggle-slider::before {
+  transform: translateX(16px);
+}
 .hamburger {
   display: none;
   background: none;
