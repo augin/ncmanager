@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NC Manager</title>
-<link rel="stylesheet" href="/static/css/style.css?v=2026070309">
+<link rel="stylesheet" href="/static/css/style.css?v=2026070310">
 </head>
 <body>
 <div id="app">
@@ -122,13 +122,10 @@
 
         <div class="form-section">
           <h3>HTTPS (Let's Encrypt)</h3>
-          <div class="form-group">
-            <h3 style="margin:0 0 12px 0">HTTPS (Let's Encrypt)</h3>
-            <label class="toggle-switch" title="Включить HTTPS">
-              <input type="checkbox" id="iTLSEnabled">
-              <span class="toggle-slider"></span>
-            </label>
-          </div>
+          <label class="toggle-switch" title="Включить HTTPS">
+            <input type="checkbox" id="iTLSEnabled">
+            <span class="toggle-slider"></span>
+          </label>
           <label>Домен (TLS Host)<input id="iTLSHost" placeholder="example.com"></label>
           <label>Папка кэша (TLS Cache)<input id="iTLSCache" placeholder="data/tls-cache"></label>
         </div>
