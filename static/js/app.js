@@ -1032,7 +1032,17 @@ const PRESET_CAT_LABELS = {
   all:'Все', ai:'AI', block:'Блок-листы', cloud:'Облака',
   developer:'Developer', gaming:'Игры', media:'Медиа', social:'Соцсети'
 };
+const GROUP_PRESET_NAMES = ['Все AI сервисы', 'Все игры', 'Всё медиа'];
+
 let activePresetCategory = 'all';
+
+function isGroupAdded(cat, existingNames) {
+  return DNS_PRESETS.some(p =>
+    p.cat === cat &&
+    GROUP_PRESET_NAMES.includes(p.name) &&
+    existingNames.has(p.name)
+  );
+}
 
 function renderPresetCatalog() {
   const filters = document.getElementById('presetFilters');
@@ -1051,7 +1061,7 @@ function renderPresetCatalog() {
   const items = activePresetCategory === 'all' ? DNS_PRESETS : DNS_PRESETS.filter(p => p.cat === activePresetCategory);
   grid.innerHTML = items.map(p => {
     const catClass = 'cat-' + (p.cat || 'default');
-    const isAdded = existingRouteNames.has(p.name);
+    const isAdded = existingRouteNames.has(p.name) || isGroupAdded(p.cat, existingRouteNames);
     const parts = [];
     if (p.domains.length) parts.push(`${p.domains.length} доменов`);
     if (p.subnets && p.subnets.length) parts.push(`${p.subnets.length} CIDR`);
