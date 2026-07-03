@@ -234,6 +234,8 @@ html.light .theme-icon--moon,
   padding: 2px 8px;
   font-family: var(--font-mono);
   letter-spacing: 0.02em;
+  text-align: center;
+  flex: 1;
 }
 .hamburger {
   display: none;
@@ -324,14 +326,21 @@ main { max-width: 1366px; margin: 0 auto; padding: 24px; }
 }
 .card-header-row .card-title {
   margin: 0;
+  flex-shrink: 0;
 }
 .card-header-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   flex-wrap: wrap;
   margin-bottom: 16px;
+}
+.peer-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 .card-subtitle {
   margin: 0 0 16px 0;

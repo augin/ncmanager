@@ -179,12 +179,6 @@ function closeMobileMenu() {
 async function loadConfig() {
 	try {
 		const data = await (await xhr('GET', '/config')).json();
-		const meta = document.getElementById('peerMeta');
-		if (meta && data.interface && data.subnet) {
-			meta.textContent = data.interface + '  ' + data.subnet;
-		} else if (meta) {
-			meta.textContent = '';
-		}
 		return data;
 	} catch (e) {
 		return {};
@@ -266,6 +260,12 @@ function renderPeers(peers) {
 	}
 	html += '</tbody></table>';
 	tbody.innerHTML = html;
+	const meta = document.getElementById('peerMeta');
+	if (meta) {
+		const total = peers.length;
+		const unpaid = peers.filter(p => !p.paid).length;
+		meta.textContent = total + ' всего/ ' + unpaid + ' неоплачено';
+	}
 }
 
 function updatePeerStats(peers) {
@@ -295,6 +295,12 @@ function updatePeerStats(peers) {
 			paidEl.className = 'paid-indicator-row ' + (p.paid ? 'paid-indicator-row--on' : 'paid-indicator-row--off');
 			paidEl.title = p.paid ? 'Оплачено' : 'Не оплачено';
 		}
+	}
+	const meta = document.getElementById('peerMeta');
+	if (meta) {
+		const total = peers.length;
+		const unpaid = peers.filter(p => !p.paid).length;
+		meta.textContent = total + ' всего/ ' + unpaid + ' неоплачено';
 	}
 }
 

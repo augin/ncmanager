@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NC Manager</title>
-<link rel="stylesheet" href="/static/css/style.css?v=2026070304">
+<link rel="stylesheet" href="/static/css/style.css?v=2026070305">
 </head>
 <body>
 <div id="app">
@@ -60,11 +60,9 @@
   <main>
     <section class="card" id="tab-peers">
       <div class="card-header-row">
-        <div style="display:flex;align-items:center;gap:10px">
-          <h2 class="card-title">Пиры</h2>
-          <span class="peer-meta" id="peerMeta" style="color:var(--color-text-muted);font-size:0.8rem"></span>
-        </div>
-        <div style="display:flex;align-items:center;gap:8px">
+        <h2 class="card-title">Пиры</h2>
+        <span class="peer-meta" id="peerMeta"></span>
+        <div class="peer-header-actions">
           <span class="status-badge" id="statusBadge">Проверка...</span>
           <label class="toggle-switch" title="Запустить/Остановить">
             <input type="checkbox" id="btnToggle" onchange="toggleServer()">
