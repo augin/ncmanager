@@ -28,7 +28,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.9.0"
+const appVersion = "1.9.1"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
@@ -403,12 +403,20 @@ func loadPeers() (*PeersConfig, error) {
 		return &PeersConfig{Peers: []Peer{}}, nil
 	}
 	defer f.Close()
+	var raw map[string]json.RawMessage
+	if err := json.NewDecoder(f).Decode(&raw); err != nil {
+		return &PeersConfig{Peers: []Peer{}}, nil
+	}
 	var pc PeersConfig
-	if err := json.NewDecoder(f).Decode(&pc); err != nil {
+	if err := json.Unmarshal(raw["peers"], &pc.Peers); err != nil {
 		return &PeersConfig{Peers: []Peer{}}, nil
 	}
 	if pc.Peers == nil {
 		pc.Peers = []Peer{}
+	}
+	if _, hasDns := raw["dnsRoutes"]; hasDns {
+		delete(raw, "dnsRoutes")
+		_ = savePeers(&pc)
 	}
 	return &pc, nil
 }
