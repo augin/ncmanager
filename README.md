@@ -57,16 +57,6 @@ sudo systemctl restart ncmanager
 - DNS-маршруты: `/var/lib/ncmanager/data/dns-routes.json`
 - Конфигурация WG: `/etc/wireguard/wg0.conf`
 
-### Открытие порта в firewall
-
-```bash
-sudo ufw allow 51820/udp
-```
-
-Или `iptables`:
-```bash
-sudo iptables -A INPUT -p udp --dport 51820 -j ACCEPT
-```
 
 ## Первый запуск
 
