@@ -28,7 +28,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.8.4"
+const appVersion = "1.8.5"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const wgConfigFile = "/etc/wireguard/wg0.conf"
@@ -505,6 +505,7 @@ func (s *Server) getConfig(w http.ResponseWriter, r *http.Request) {
 		"endpoint":     cfg.Endpoint,
 		"dns":          cfg.DNS,
 		"subnet":       cfg.Subnet,
+		"interfaceIP":  getInterfaceIP(cfg.Subnet),
 		"postUp":       cfg.PostUp,
 		"postDown":     cfg.PostDown,
 		"peers":        peersCfg.Peers,
@@ -600,7 +601,7 @@ func (s *Server) saveConfig(w http.ResponseWriter, r *http.Request) {
 	log.Printf("saveConfig: wg restarted subnet=%s", cfg.Subnet)
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "interfaceIP": getInterfaceIP(cfg.Subnet)})
 }
 
 func (s *Server) listPeers(w http.ResponseWriter, r *http.Request) {
@@ -1274,6 +1275,21 @@ func generateID() string {
 	b := make([]byte, 8)
 	_, _ = rand.Read(b)
 	return fmt.Sprintf("%x", b)
+}
+
+func getInterfaceIP(subnet string) string {
+	if subnet == "" {
+		subnet = "10.0.0.0/24"
+	}
+	_, ipnet, err := net.ParseCIDR(subnet)
+	if err != nil {
+		return ""
+	}
+	base := ipnet.IP
+	serverIP := make(net.IP, len(base))
+	copy(serverIP, base)
+	serverIP[3]++
+	return serverIP.String()
 }
 
 func nextAvailableIP(peers []Peer, subnet string) (string, error) {

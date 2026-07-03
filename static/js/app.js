@@ -1480,7 +1480,10 @@ async function saveConfig(e) {
 		const interfaceNameEl = document.getElementById('interfaceName');
 		if (interfaceNameEl) interfaceNameEl.textContent = cfg.interface ? '(' + cfg.interface + ')' : '(wg0)';
 		const interfaceIPEl = document.getElementById('interfaceIP');
-		if (interfaceIPEl) interfaceIPEl.textContent = cfg.endpoint ? '(' + cfg.endpoint + ')' : '';
+		if (interfaceIPEl) {
+			const ip = cfg.interfaceIP || '';
+			interfaceIPEl.textContent = ip ? '(' + ip + ')' : '';
+		}
 	}
   } catch (e) {
     alert('Ошибка: ' + e.message);
@@ -1571,7 +1574,10 @@ async function init() {
 	const interfaceNameEl = document.getElementById('interfaceName');
 	if (interfaceNameEl) interfaceNameEl.textContent = cfg.interface ? '(' + cfg.interface + ')' : '(wg0)';
 	const interfaceIPEl = document.getElementById('interfaceIP');
-	if (interfaceIPEl) interfaceIPEl.textContent = cfg.endpoint ? '(' + cfg.endpoint + ')' : '';
+	if (interfaceIPEl) {
+		const ip = cfg.interfaceIP || '';
+		interfaceIPEl.textContent = ip ? '(' + ip + ')' : '';
+	}
 	document.getElementById('iPort').value = cfg.port || 51820;
 	document.getElementById('iEndpoint').value = cfg.endpoint || '';
 	document.getElementById('iDns').value = cfg.dns || '1.1.1.1';
