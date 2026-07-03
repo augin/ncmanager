@@ -1481,8 +1481,6 @@ async function saveConfig(e) {
 		if (interfaceNameEl) interfaceNameEl.textContent = cfg.interface ? '(' + cfg.interface + ')' : '(wg0)';
 		const interfaceIPEl = document.getElementById('interfaceIP');
 		if (interfaceIPEl) interfaceIPEl.textContent = cfg.endpoint ? '(' + cfg.endpoint + ')' : '';
-		const interfaceIPEl = document.getElementById('interfaceIP');
-		if (interfaceIPEl) interfaceIPEl.textContent = cfg.endpoint ? '(' + cfg.endpoint + ')' : '';
 	}
   } catch (e) {
     alert('Ошибка: ' + e.message);
