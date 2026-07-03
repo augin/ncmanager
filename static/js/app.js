@@ -1477,6 +1477,8 @@ async function saveConfig(e) {
 				btn.classList.remove('copied');
 			}, 2000);
 		}
+		const interfaceNameEl = document.getElementById('interfaceName');
+		if (interfaceNameEl) interfaceNameEl.textContent = cfg.interface ? '(' + cfg.interface + ')' : '(wg0)';
 	}
   } catch (e) {
     alert('Ошибка: ' + e.message);
@@ -1564,6 +1566,8 @@ async function init() {
 	await loadVersion();
 	const cfg = await loadConfig();
 	document.getElementById('iInterface').value = cfg.interface || 'wg0';
+	const interfaceNameEl = document.getElementById('interfaceName');
+	if (interfaceNameEl) interfaceNameEl.textContent = cfg.interface ? '(' + cfg.interface + ')' : '(wg0)';
 	document.getElementById('iPort').value = cfg.port || 51820;
 	document.getElementById('iEndpoint').value = cfg.endpoint || '';
 	document.getElementById('iDns').value = cfg.dns || '1.1.1.1';
