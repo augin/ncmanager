@@ -260,12 +260,14 @@ function renderPeers(peers) {
 	}
 	html += '</tbody></table>';
 	tbody.innerHTML = html;
-	const meta = document.getElementById('peerMeta');
-	if (meta) {
+	const countEl = document.getElementById('peerMetaCount');
+	const unpaidEl = document.getElementById('peerMetaUnpaid');
+	if (countEl && unpaidEl) {
 		const total = peers.length;
 		const unpaid = peers.filter(p => !p.paid).length;
-		meta.textContent = total + ' всего/ ' + unpaid + ' неоплачено';
-		meta.classList.toggle('peer-meta--unpaid', unpaid > 0);
+		countEl.textContent = total + ' всего/ ';
+		unpaidEl.textContent = unpaid + ' неоплачено';
+		unpaidEl.classList.toggle('peer-meta-unpaid', unpaid > 0);
 	}
 }
 
@@ -297,12 +299,14 @@ function updatePeerStats(peers) {
 			paidEl.title = p.paid ? 'Оплачено' : 'Не оплачено';
 		}
 	}
-	const meta = document.getElementById('peerMeta');
-	if (meta) {
+	const countEl = document.getElementById('peerMetaCount');
+	const unpaidEl = document.getElementById('peerMetaUnpaid');
+	if (countEl && unpaidEl) {
 		const total = peers.length;
 		const unpaid = peers.filter(p => !p.paid).length;
-		meta.textContent = total + ' всего/ ' + unpaid + ' неоплачено';
-		meta.classList.toggle('peer-meta--unpaid', unpaid > 0);
+		countEl.textContent = total + ' всего/ ';
+		unpaidEl.textContent = unpaid + ' неоплачено';
+		unpaidEl.classList.toggle('peer-meta-unpaid', unpaid > 0);
 	}
 }
 

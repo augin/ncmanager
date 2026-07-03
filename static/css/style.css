@@ -237,10 +237,9 @@ html.light .theme-icon--moon,
   text-align: center;
   flex: 1;
 }
-.peer-meta--unpaid {
+.peer-meta-unpaid {
   color: var(--color-error);
-  border-color: var(--color-error-border);
-  background: var(--color-error-tint);
+  font-weight: 600;
 }
 .hamburger {
   display: none;
