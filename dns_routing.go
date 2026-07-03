@@ -236,9 +236,9 @@ func keeneticApplyDnsRoutes(httpClient *http.Client, baseURL, wgIface string, ro
 }
 
 func (s *Server) listDnsRoutes(w http.ResponseWriter, r *http.Request) {
-	peersCfg, _ := loadPeers()
+	routes, _ := loadDnsRoutes()
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(peersCfg.DnsRoutes)
+	json.NewEncoder(w).Encode(routes)
 }
 
 func (s *Server) createDnsRoute(w http.ResponseWriter, r *http.Request) {
@@ -251,7 +251,7 @@ func (s *Server) createDnsRoute(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
-	peersCfg, _ := loadPeers()
+	routes, _ := loadDnsRoutes()
 	route := DnsRoute{
 		ID:      generateID(),
 		Name:    req.Name,
@@ -259,8 +259,8 @@ func (s *Server) createDnsRoute(w http.ResponseWriter, r *http.Request) {
 		Subnets: req.Subnets,
 		Enabled: true,
 	}
-	peersCfg.DnsRoutes = append(peersCfg.DnsRoutes, route)
-	_ = savePeers(peersCfg)
+	routes = append(routes, route)
+	_ = saveDnsRoutes(routes)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(route)
 }
@@ -277,16 +277,16 @@ func (s *Server) updateDnsRoute(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
-	peersCfg, _ := loadPeers()
-	for i := range peersCfg.DnsRoutes {
-		if peersCfg.DnsRoutes[i].ID == req.ID {
-			peersCfg.DnsRoutes[i].Name = req.Name
-			peersCfg.DnsRoutes[i].Domains = req.Domains
-			peersCfg.DnsRoutes[i].Subnets = req.Subnets
-			peersCfg.DnsRoutes[i].Enabled = req.Enabled
-			_ = savePeers(peersCfg)
+	routes, _ := loadDnsRoutes()
+	for i := range routes {
+		if routes[i].ID == req.ID {
+			routes[i].Name = req.Name
+			routes[i].Domains = req.Domains
+			routes[i].Subnets = req.Subnets
+			routes[i].Enabled = req.Enabled
+			_ = saveDnsRoutes(routes)
 			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(peersCfg.DnsRoutes[i])
+			json.NewEncoder(w).Encode(routes[i])
 			return
 		}
 	}
@@ -301,15 +301,14 @@ func (s *Server) deleteDnsRoute(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "invalid json", http.StatusBadRequest)
 		return
 	}
-	peersCfg, _ := loadPeers()
-	filtered := peersCfg.DnsRoutes[:0]
-	for _, r := range peersCfg.DnsRoutes {
+	routes, _ := loadDnsRoutes()
+	filtered := routes[:0]
+	for _, r := range routes {
 		if r.ID != req.ID {
 			filtered = append(filtered, r)
 		}
 	}
-	peersCfg.DnsRoutes = filtered
-	_ = savePeers(peersCfg)
+	_ = saveDnsRoutes(filtered)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
@@ -330,8 +329,8 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 		}
 	}
 
-	peersCfg, _ := loadPeers()
-	if len(peersCfg.DnsRoutes) == 0 {
+	routes, _ := loadDnsRoutes()
+	if len(routes) == 0 {
 		http.Error(w, "no dns routes configured", http.StatusBadRequest)
 		return
 	}
@@ -347,7 +346,7 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 			Routes []string `json:"routes,omitempty"`
 		}
 		var results []applyResult
-
+		peersCfg, _ := loadPeers()
 		peers := peersCfg.Peers
 		if req.PeerID != "" {
 			for _, p := range peersCfg.Peers {
@@ -384,17 +383,17 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 				wgIface = "Wireguard1"
 			}
 
-			var applyPayload []routeApply
-			var routeNames []string
-			for _, rt := range peersCfg.DnsRoutes {
-				applyPayload = append(applyPayload, routeApply{
-					Name:    rt.Name,
-					Domains: rt.Domains,
-					Subnets: rt.Subnets,
-					Enabled: rt.Enabled,
-				})
-				routeNames = append(routeNames, rt.Name)
-			}
+		var applyPayload []routeApply
+		var routeNames []string
+		for _, rt := range routes {
+			applyPayload = append(applyPayload, routeApply{
+				Name:    rt.Name,
+				Domains: rt.Domains,
+				Subnets: rt.Subnets,
+				Enabled: rt.Enabled,
+			})
+			routeNames = append(routeNames, rt.Name)
+		}
 
 			if len(applyPayload) > 0 {
 				appendLog(fmt.Sprintf("📡 Применение %d маршрутов на %s (%s)...\n", len(applyPayload), peer.Name, peer.RouterDomain))

@@ -28,14 +28,14 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.8.7"
+const appVersion = "1.9.0"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
+const dnsRoutesFile = "data/dns-routes.json"
 const wgConfigFile = "/etc/wireguard/wg0.conf"
 
 type PeersConfig struct {
-	Peers     []Peer     `json:"peers"`
-	DnsRoutes []DnsRoute `json:"dnsRoutes,omitempty"`
+	Peers []Peer `json:"peers"`
 }
 
 type Server struct {
@@ -425,6 +425,62 @@ func savePeers(pc *PeersConfig) error {
 	return json.NewEncoder(f).Encode(pc)
 }
 
+func loadDnsRoutes() ([]DnsRoute, error) {
+	if _, err := os.Stat(dnsRoutesFile); err == nil {
+		f, err := os.Open(dnsRoutesFile)
+		if err != nil {
+			return nil, err
+		}
+		defer f.Close()
+		var routes []DnsRoute
+		if err := json.NewDecoder(f).Decode(&routes); err != nil {
+			return nil, err
+		}
+		if routes == nil {
+			return []DnsRoute{}, nil
+		}
+		return routes, nil
+	}
+
+	f, err := os.Open(peersFile)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return []DnsRoute{}, nil
+		}
+		return nil, err
+	}
+	defer f.Close()
+
+	var raw map[string]json.RawMessage
+	if err := json.NewDecoder(f).Decode(&raw); err != nil {
+		return []DnsRoute{}, nil
+	}
+
+	var migrated []DnsRoute
+	if rawDns, ok := raw["dnsRoutes"]; ok && len(rawDns) > 0 && string(rawDns) != "null" {
+		_ = json.Unmarshal(rawDns, &migrated)
+	}
+	if len(migrated) > 0 {
+		_ = saveDnsRoutes(migrated)
+	}
+	return migrated, nil
+}
+
+func saveDnsRoutes(routes []DnsRoute) error {
+	if err := os.MkdirAll(filepath.Dir(dnsRoutesFile), 0755); err != nil {
+		return err
+	}
+	f, err := os.Create(dnsRoutesFile)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	if routes == nil {
+		routes = []DnsRoute{}
+	}
+	return json.NewEncoder(f).Encode(routes)
+}
+
 func getPublicIP() string {
 	resp, err := http.Get("https://api.ipify.org?format=text")
 	if err != nil {
@@ -497,6 +553,7 @@ func (s *Server) getConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	peersCfg, _ := loadPeers()
+	routes, _ := loadDnsRoutes()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"port":         cfg.Port,
@@ -509,7 +566,7 @@ func (s *Server) getConfig(w http.ResponseWriter, r *http.Request) {
 		"postUp":       cfg.PostUp,
 		"postDown":     cfg.PostDown,
 		"peers":        peersCfg.Peers,
-		"dnsRoutes":    peersCfg.DnsRoutes,
+		"dnsRoutes":    routes,
 	})
 }
 
