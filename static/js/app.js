@@ -265,6 +265,7 @@ function renderPeers(peers) {
 		const total = peers.length;
 		const unpaid = peers.filter(p => !p.paid).length;
 		meta.textContent = total + ' всего/ ' + unpaid + ' неоплачено';
+		meta.classList.toggle('peer-meta--unpaid', unpaid > 0);
 	}
 }
 
@@ -301,6 +302,7 @@ function updatePeerStats(peers) {
 		const total = peers.length;
 		const unpaid = peers.filter(p => !p.paid).length;
 		meta.textContent = total + ' всего/ ' + unpaid + ' неоплачено';
+		meta.classList.toggle('peer-meta--unpaid', unpaid > 0);
 	}
 }
 
