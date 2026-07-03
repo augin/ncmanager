@@ -184,7 +184,7 @@ func keeneticApplyDnsRoutes(httpClient *http.Client, baseURL, wgIface string, ro
 		}
 
 		for chunkIdx, chunk := range chunks {
-			groupName := fmt.Sprintf("%s_p%d", slug, chunkIdx+1)
+			groupName := fmt.Sprintf("%s_NCM%d", slug, chunkIdx+1)
 
 			includes := make([]any, len(chunk))
 			for i, item := range chunk {
