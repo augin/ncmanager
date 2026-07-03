@@ -28,7 +28,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.6.0"
+const appVersion = "1.7.0"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const wgConfigFile = "/etc/wireguard/wg0.conf"

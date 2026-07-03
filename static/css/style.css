@@ -81,7 +81,7 @@ body { min-height: 100vh; }
   border-bottom: 1px solid var(--color-border);
 }
 .header-inner {
-  max-width: 1260px;
+  max-width: 1386px;
   margin: 0 auto;
   padding: 0 1.25rem;
   height: 56px;
@@ -300,7 +300,7 @@ html.light .theme-icon--moon,
 .pBtn-warn { background: var(--color-warning); color: #1a1b26; }
 .pBtn-warn:hover { filter: brightness(1.1); }
 
-main { max-width: 1240px; margin: 0 auto; padding: 24px; }
+main { max-width: 1366px; margin: 0 auto; padding: 24px; }
 .card {
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
