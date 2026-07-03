@@ -11,6 +11,45 @@ let activeElementCursorStart = null;
 let activeElementCursorEnd = null;
 let _keeneticPeerId = null;
 let routerCheckTimer = null;
+const THEME_KEY = 'ncmanager_theme';
+
+function getSystemTheme() {
+	return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+}
+
+function getSavedTheme() {
+	try {
+		const saved = localStorage.getItem(THEME_KEY);
+		if (saved === 'light' || saved === 'dark') return saved;
+	} catch (e) {}
+	return null;
+}
+
+function applyTheme(mode) {
+	const root = document.documentElement;
+	if (mode === 'light') {
+		root.classList.add('light');
+		root.setAttribute('data-theme', 'light');
+		root.style.colorScheme = 'light';
+	} else {
+		root.classList.remove('light');
+		root.setAttribute('data-theme', 'dark');
+		root.style.colorScheme = 'dark';
+	}
+}
+
+function toggleTheme() {
+	const current = document.documentElement.classList.contains('light') ? 'light' : 'dark';
+	const next = current === 'dark' ? 'light' : 'dark';
+	applyTheme(next);
+	try { localStorage.setItem(THEME_KEY, next); } catch (e) {}
+}
+
+function initTheme() {
+	const saved = getSavedTheme();
+	const mode = saved || getSystemTheme();
+	applyTheme(mode);
+}
 
 function getToken() {
 	return sessionStorage.getItem(TOKEN_KEY) || '';
@@ -1530,6 +1569,7 @@ async function init() {
 	const saved = localStorage.getItem('ncmanager_tab') || 'peers';
 	const tabBtn = Array.from(document.querySelectorAll('.nav-link')).find(b => b.getAttribute('data-tab') === saved) || document.querySelector('.nav-link');
 	switchTab(saved, tabBtn);
+	initTheme();
 	startAutoRefresh();
 	refresh();
 }
