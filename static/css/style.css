@@ -81,7 +81,7 @@ body { min-height: 100vh; }
   border-bottom: 1px solid var(--color-border);
 }
 .header-inner {
-  max-width: 1120px;
+  max-width: 1260px;
   margin: 0 auto;
   padding: 0 1.25rem;
   height: 56px;
@@ -300,7 +300,7 @@ html.light .theme-icon--moon,
 .pBtn-warn { background: var(--color-warning); color: #1a1b26; }
 .pBtn-warn:hover { filter: brightness(1.1); }
 
-main { max-width: 1100px; margin: 0 auto; padding: 24px; }
+main { max-width: 1240px; margin: 0 auto; padding: 24px; }
 .card {
   background: var(--color-bg-secondary);
   border: 1px solid var(--color-border);
@@ -314,6 +314,92 @@ main { max-width: 1100px; margin: 0 auto; padding: 24px; }
   color: var(--color-text-primary);
   border-bottom: 1px solid var(--color-border);
   padding-bottom: 8px;
+}
+.card .card-title {
+  font-size: 1.1rem;
+  margin: 0 0 16px 0;
+  color: var(--color-text-primary);
+  border-bottom: none;
+  padding-bottom: 0;
+}
+.card-header-row .card-title {
+  margin: 0;
+}
+.card-header-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+.card-subtitle {
+  margin: 0 0 16px 0;
+  color: var(--color-text-muted);
+  font-size: 0.85rem;
+}
+.card-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.card-divider {
+  grid-column: 1 / -1;
+  margin: 20px 0;
+  border: none;
+  border-top: 1px solid var(--color-border);
+}
+.form-section {
+  margin-bottom: 20px;
+}
+.grid-form .form-section {
+  grid-column: 1 / -1;
+}
+.form-section h3 {
+  font-size: 0.95rem;
+  margin: 0 0 12px 0;
+  color: var(--color-text-primary);
+}
+.form-textarea {
+  width: 100%;
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  font-family: monospace;
+  font-size: 0.8rem;
+  resize: vertical;
+}
+.form-control {
+  padding: 8px;
+  border-radius: 6px;
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  border: 1px solid var(--color-border);
+  font-family: var(--font-sans);
+  font-size: 0.85rem;
+}
+.code-block {
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  padding: 12px;
+  border-radius: 4px;
+  overflow: auto;
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+.log-output {
+  background: var(--color-bg-primary);
+  color: var(--color-text-primary);
+  padding: 12px;
+  border-radius: 4px;
+  overflow: auto;
+  max-height: 500px;
+  font-size: 0.8rem;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 .grid-form {
   display: grid;

@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NC Manager</title>
-<link rel="stylesheet" href="/static/css/style.css?v=2026070214">
+<link rel="stylesheet" href="/static/css/style.css?v=2026070303">
 </head>
 <body>
 <div id="app">
@@ -59,9 +59,9 @@
 
   <main>
     <section class="card" id="tab-peers">
-      <div style="display:flex;align-items:center;justify-content:space-between">
+      <div class="card-header-row">
         <div style="display:flex;align-items:center;gap:10px">
-          <h2 style="margin:0">Пиры</h2>
+          <h2 class="card-title">Пиры</h2>
           <span class="peer-meta" id="peerMeta" style="color:var(--color-text-muted);font-size:0.8rem"></span>
         </div>
         <div style="display:flex;align-items:center;gap:8px">
@@ -80,13 +80,15 @@
     </section>
 
     <section class="card" id="tab-dns" style="display:none">
-      <h2>DNS маршрутизация</h2>
-      <div class="dns-section">
-        <div class="dns-actions" style="margin-bottom:16px">
+      <div class="card-header-row">
+        <h2 class="card-title">DNS маршрутизация</h2>
+        <div class="dns-actions">
           <button onclick="showAddDnsRoute()" class="btn-qr">+ Новый маршрут</button>
           <button onclick="applyDnsRoutes()" class="btn-dl">Настроить DNS</button>
           <button onclick="loadDnsRoutes()" class="btn-dl">Обновить</button>
         </div>
+      </div>
+      <div class="dns-section">
         <div id="dnsRouteList" class="dns-route-list">
           <p style="color:#64748b">Загрузка...</p>
         </div>
@@ -99,33 +101,35 @@
           <div class="preset-grid" id="presetGrid"></div>
         </div>
       </div>
-
-</div>
   </section>
 
     <section class="card" id="tab-settings" style="display:none">
-      <h2>Настройки сервера</h2>
+      <h2 class="card-title">Настройки сервера</h2>
       <form id="serverForm" class="grid-form">
         <label>Интерфейс<input id="iInterface" value="wg0"></label>
         <label>Порт<input id="iPort" type="number" value="51820"></label>
         <label>Endpoint<input id="iEndpoint" placeholder="AUTO"></label>
         <label>DNS<input id="iDns" value="1.1.1.1"></label>
         <label>Подсеть<input id="iSubnet" value="10.0.0.0/24" placeholder="10.0.0.0/24"></label>
-        <div class="form-group" style="margin-top:12px;grid-column:1/-1">
+        <div class="form-section">
           <label>PostUp (оставьте пустым для автогенерации)</label>
-          <textarea id="iPostUp" rows="2" style="width:100%;padding:6px;border-radius:4px;background:var(--color-bg-primary);color:var(--color-text-primary);border:1px solid var(--color-border);font-family:monospace;font-size:0.8rem;resize:vertical" placeholder="iptables ..."></textarea>
+          <textarea id="iPostUp" rows="2" class="form-textarea" placeholder="iptables ..."></textarea>
         </div>
-        <div class="form-group" style="margin-top:12px;grid-column:1/-1">
+        <div class="form-section">
           <label>PostDown (оставьте пустым для автогенерации)</label>
-          <textarea id="iPostDown" rows="2" style="width:100%;padding:6px;border-radius:4px;background:var(--color-bg-primary);color:var(--color-text-primary);border:1px solid var(--color-border);font-family:monospace;font-size:0.8rem;resize:vertical" placeholder="iptables ..."></textarea>
+          <textarea id="iPostDown" rows="2" class="form-textarea" placeholder="iptables ..."></textarea>
         </div>
 
-        <hr style="margin:20px 0;border-color:var(--color-border, #4a5568);grid-column:1/-1">
+        <hr class="card-divider">
 
-        <h3 style="grid-column:1/-1;margin:0 0 8px 0;color:#059669">HTTPS (Let's Encrypt)</h3>
-        <div style="grid-column:1/-1"><div class="tls-checkbox"><input type="checkbox" id="iTLSEnabled"><label for="iTLSEnabled">Включить HTTPS</label></div></div>
-        <label style="grid-column:1/-1">Домен (TLS Host)<input id="iTLSHost" placeholder="example.com"></label>
-        <label style="grid-column:1/-1">Папка кэша (TLS Cache)<input id="iTLSCache" placeholder="data/tls-cache"></label>
+        <div class="form-section">
+          <h3>HTTPS (Let's Encrypt)</h3>
+          <div class="form-group">
+            <div class="tls-checkbox"><input type="checkbox" id="iTLSEnabled"><label for="iTLSEnabled">Включить HTTPS</label></div>
+          </div>
+          <label>Домен (TLS Host)<input id="iTLSHost" placeholder="example.com"></label>
+          <label>Папка кэша (TLS Cache)<input id="iTLSCache" placeholder="data/tls-cache"></label>
+        </div>
 
         <div class="actions">
           <button type="submit" id="saveConfigBtn">Сохранить</button>
@@ -134,48 +138,51 @@
     </section>
 
     <section class="card" id="tab-waniface" style="display:none">
-      <h2>Интерфейс выхода</h2>
-      <p style="color:#64748b;margin-bottom:12px">
+      <h2 class="card-title">Интерфейс выхода</h2>
+      <p class="card-subtitle">
         Выберите сетевой интерфейс, через который происходит выход в интернет (NAT/MASQUERADE).
       </p>
-      <label>Интерфейс</label>
-      <select id="wanInterface" style="width:auto;padding:8px;border-radius:6px;background:var(--color-bg-primary);color:var(--color-text-primary);border:1px solid var(--color-border)">
-        <option value="">— загрузка —</option>
-      </select>
-      <button onclick="saveWanInterface()" class="btn-dl" style="margin-left:8px">Сохранить</button>
-      <p id="wanStatus" style="margin-top:8px;color:#64748b"></p>
+      <div class="card-actions" style="align-items:center">
+        <label>Интерфейс</label>
+        <select id="wanInterface" class="form-control">
+          <option value="">— загрузка —</option>
+        </select>
+        <button onclick="saveWanInterface()" class="btn-dl">Сохранить</button>
+      </div>
+      <p id="wanStatus" class="card-subtitle"></p>
 
-      <hr style="margin:20px 0;border-color:var(--color-border, #4a5568)">
+      <hr class="card-divider">
 
-      <h3>Amnezia WireGuard</h3>
-      <p id="amneziaStatus" style="color:#64748b;margin-bottom:8px">Проверка...</p>
-      <button id="amneziaInstallBtn" onclick="installAmnezia()" class="btn-qr" style="display:none">Установить Amnezia WG</button>
+      <div class="form-section">
+        <h3>Amnezia WireGuard</h3>
+        <p id="amneziaStatus" class="card-subtitle">Проверка...</p>
+        <button id="amneziaInstallBtn" onclick="installAmnezia()" class="btn-qr" style="display:none">Установить Amnezia WG</button>
 
-      <div class="modal" id="amneziaInstallModal">
-        <div class="modal-content" style="max-width:640px;text-align:left">
-          <button class="modal-close" onclick="closeAmneziaModal()">✕</button>
-          <h3>Установка Amnezia WG</h3>
-          <textarea id="amneziaInstallLog" readonly style="width:100%;height:300px;padding:8px;border-radius:6px;background:#1e293b;color:#e2e8f0;border:1px solid #334155;font-family:monospace;font-size:0.8rem;white-space:pre-wrap;word-break:break-all"></textarea>
-          <p id="amneziaInstallStatus" style="margin-top:8px;color:#64748b"></p>
+        <div class="modal" id="amneziaInstallModal">
+          <div class="modal-content" style="max-width:640px;text-align:left">
+            <button class="modal-close" onclick="closeAmneziaModal()">✕</button>
+            <h3>Установка Amnezia WG</h3>
+      <textarea id="amneziaInstallLog" readonly class="code-block" style="width:100%;height:300px;resize:vertical"></textarea>
+            <p id="amneziaInstallStatus" style="margin-top:8px;color:#64748b"></p>
+          </div>
         </div>
       </div>
 
-      <div style="margin-top:20px">
+      <div class="form-section">
         <button onclick="showImportModal()" class="btn-dl">Импортировать конфиг</button>
-        <p id="importStatus" style="margin-top:8px;color:#64748b"></p>
-      </div>
+        <p id="importStatus" class="card-subtitle"></p>
 
-      <div class="modal" id="amneziaImportModal">
-        <div class="modal-content" style="max-width:640px;text-align:left">
-          <button class="modal-close" onclick="closeImportModal()">✕</button>
-          <h3>Импорт конфигурации Amnezia WG</h3>
-          <div class="form-group">
-            <label>Имя интерфейса</label>
-            <input type="text" id="amneziaInterfaceName" placeholder="Например: awg0" style="width:100%;padding:8px;border-radius:6px;background:var(--color-bg-primary);color:var(--color-text-primary);border:1px solid var(--color-border);font-family:monospace;font-size:0.85rem">
-          </div>
-          <div class="form-group" style="margin-top:12px">
-            <label>Конфигурация</label>
-            <textarea id="amneziaConfigText" rows="8" style="width:100%;padding:8px;border-radius:6px;background:var(--color-bg-primary);color:var(--color-text-primary);border:1px solid var(--color-border);font-family:monospace;font-size:0.85rem" placeholder="[Interface]
+        <div class="modal" id="amneziaImportModal">
+          <div class="modal-content" style="max-width:640px;text-align:left">
+            <button class="modal-close" onclick="closeImportModal()">✕</button>
+            <h3>Импорт конфигурации Amnezia WG</h3>
+            <div class="form-group">
+              <label>Имя интерфейса</label>
+              <input type="text" id="amneziaInterfaceName" placeholder="Например: awg0" style="width:100%;padding:8px;border-radius:6px;background:var(--color-bg-primary);color:var(--color-text-primary);border:1px solid var(--color-border);font-family:monospace;font-size:0.85rem">
+            </div>
+            <div class="form-group" style="margin-top:12px">
+              <label>Конфигурация</label>
+              <textarea id="amneziaConfigText" rows="8" style="width:100%;padding:8px;border-radius:6px;background:var(--color-bg-primary);color:var(--color-text-primary);border:1px solid var(--color-border);font-family:monospace;font-size:0.85rem" placeholder="[Interface]
 PrivateKey = ...
 Address = ...
 ...
@@ -183,36 +190,43 @@ Address = ...
 PublicKey = ...
 Endpoint = ...
 AllowedIPs = ..."></textarea>
-          </div>
-          <div class="actions" style="margin-top:16px">
-            <button onclick="importAmneziaConfig()" class="btn-dl">Импортировать</button>
+            </div>
+            <div class="actions" style="margin-top:16px">
+              <button onclick="importAmneziaConfig()" class="btn-dl">Импортировать</button>
+            </div>
           </div>
         </div>
       </div>
 
-      <hr style="margin:24px 0;border-color:var(--color-border, #4a5568)">
-      <h3>Импортированные AWG интерфейсы</h3>
-      <button onclick="loadAmneziaInterfaces()" class="btn-dl" style="margin-bottom:12px">Обновить</button>
-      <div id="amneziaInterfaceList">
-        <p style="color:#64748b">Загрузка...</p>
-      </div>
+      <hr class="card-divider">
 
+      <div class="form-section">
+        <h3>Импортированные AWG интерфейсы</h3>
+        <div style="margin-bottom:12px">
+          <button onclick="loadAmneziaInterfaces()" class="btn-dl">Обновить</button>
+        </div>
+        <div id="amneziaInterfaceList">
+          <p style="color:#64748b">Загрузка...</p>
+        </div>
+      </div>
     </section>
 
     <section class="card" id="tab-logs" style="display:none">
-      <h2>Логи</h2>
-      <button onclick="loadLogs()" class="btn-dl" style="margin-bottom:12px">Обновить</button>
-      <pre id="logOutput" style="background:#0f172a;padding:12px;border-radius:4px;overflow:auto;max-height:500px;font-size:0.8rem;white-space:pre-wrap;word-break:break-all;">Загрузка...</pre>
+      <div class="card-header-row">
+        <h2 class="card-title">Логи</h2>
+        <button onclick="loadLogs()" class="btn-dl">Обновить</button>
+      </div>
+      <pre id="logOutput" class="log-output">Загрузка...</pre>
     </section>
 
     <section class="card" id="tab-backup" style="display:none">
-      <h2>Резервное копирование</h2>
-      <p style="color:#64748b;margin-bottom:16px">Архив содержит настройки, пиры, ключи, конфиги WireGuard и AmneziaWG, веб-интерфейс и systemd-юнит. Восстановление на другом сервере перенесёт всё состояние.</p>
-      <div style="display:flex;gap:12px;flex-wrap:wrap">
+      <h2 class="card-title">Резервное копирование</h2>
+      <p class="card-subtitle">Архив содержит настройки, пиры, ключи, конфиги WireGuard и AmneziaWG, веб-интерфейс и systemd-юнит. Восстановление на другом сервере перенесёт всё состояние.</p>
+      <div class="card-actions">
         <button onclick="createBackup()" class="btn-dl">⬇ Скачать резервную копию</button>
         <button onclick="showRestoreModal()" class="btn-qr">⬆ Восстановить из файла</button>
       </div>
-      <div id="backupStatus" style="margin-top:12px;color:#64748b"></div>
+      <p id="backupStatus" class="card-subtitle"></p>
     </section>
 
     <footer style="text-align:center;color:#64748b;font-size:0.8rem;padding:24px 0 12px 0" id="versionFooter"></footer>
@@ -232,7 +246,7 @@ AllowedIPs = ..."></textarea>
       <button class="modal-close" onclick="closeText()">✕</button>
       <h3>Конфиг пира</h3>
       <p id="textPeerName" style="margin-bottom:12px;color:#64748b"></p>
-      <pre id="textOutput" style="background:#0f172a;color:#e2e8f0;padding:12px;border-radius:4px;overflow:auto;max-height:60vh;font-size:0.85rem"></pre>
+      <pre id="textOutput" class="code-block"></pre>
       <button onclick="copyText(this)" class="btn-dl" style="margin-top:12px">Скопировать</button>
     </div>
   </div>
@@ -289,7 +303,7 @@ AllowedIPs = ..."></textarea>
         <button class="btn-dl" onclick="hideRestoreModal()">Отмена</button>
         <button onclick="restoreBackup()" class="btn-qr">Восстановить</button>
       </div>
-      <pre id="restoreLog" style="background:#0f172a;color:#e2e8f0;padding:12px;border-radius:4px;overflow:auto;max-height:40vh;font-size:0.85rem;margin-top:12px;display:none;white-space:pre-wrap;word-break:break-all;"></pre>
+      <pre id="restoreLog" class="code-block" style="max-height:40vh;margin-top:12px;display:none"></pre>
     </div>
   </div>
 </div>
