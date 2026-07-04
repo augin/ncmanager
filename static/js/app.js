@@ -1285,6 +1285,7 @@ async function toggleDnsRoute(id) {
 }
 
 async function applyDnsRoutes() {
+	if (!confirm('Настроить DNS на всех роутерах?')) return;
 	let poll = null;
     try {
     	const btn = event.target;
