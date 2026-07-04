@@ -179,6 +179,7 @@ html.light .theme-icon--moon,
   gap: 0.375rem;
   height: 32px;
   padding: 0 0.875rem;
+  vertical-align: middle;
   border-radius: var(--radius-sm);
   border: 1px solid var(--color-border);
   background: transparent;
@@ -209,7 +210,7 @@ html.light .theme-icon--moon,
   padding: 0 0.625rem;
   font-size: 0.75rem;
 }
-.btn-icon-sm {
+.btn.btn-icon-sm {
   font-size: 0.75rem;
   font-weight: 700;
   padding: 4px 6px;
