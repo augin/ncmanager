@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NC Manager</title>
-<link rel="stylesheet" href="/static/css/style.css?v=2026070435">
+<link rel="stylesheet" href="/static/css/style.css?v=2026070449">
 </head>
 <body>
 <div id="app">
@@ -405,44 +405,81 @@ AllowedIPs = ..."></textarea>
       </div>
       <form id="awgEditForm" onsubmit="event.preventDefault(); saveAwgConfig();">
         <div class="awg-edit-panel" id="awgPanelBasic">
-          <label>Название<input id="awgName"></label>
-          <div class="awg-obfs-row">
-            <label>IPv4<input id="awgIPv4" placeholder="10.0.0.2/32"></label>
-            <label>IPv6<input id="awgIPv6" placeholder="fd00::2/128"></label>
+          <div class="awg-edit-section">
+            <div class="awg-edit-section-title">
+              <span class="icon-badge" aria-hidden="true">
+                <svg class="section-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+              </span>
+              <span class="label-text">Основное</span>
+              <span class="label-divider"></span>
+            </div>
+            <div class="awg-edit-row full">
+              <label>Название<input id="awgName"></label>
+            </div>
+            <div class="awg-edit-row">
+              <label>IPv4<input id="awgIPv4" placeholder="10.0.0.2/32"></label>
+              <label>MTU<input id="awgMtu" type="number" value="1420"></label>
+              <label>DNS<input id="awgDns" placeholder="1.1.1.1"></label>
+            </div>
+            <div class="awg-edit-row full">
+              <label>IPv6<input id="awgIPv6" placeholder="fd00::2/128"></label>
+            </div>
           </div>
-          <div class="awg-obfs-row">
-            <label>MTU<input id="awgMtu" type="number" value="1420"></label>
-            <label>DNS<input id="awgDns" placeholder="1.1.1.1"></label>
+
+          <div class="awg-edit-section">
+            <div class="awg-edit-section-title">
+              <span class="icon-badge" aria-hidden="true">
+                <svg class="section-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+              </span>
+              <span class="label-text">Сервер [Peer]</span>
+              <span class="label-divider"></span>
+            </div>
+            <div class="awg-edit-row full">
+              <label>Endpoint<input id="awgEndpoint" placeholder="x.x.x.x:51820"></label>
+            </div>
+            <div class="awg-edit-row full">
+              <label>Public Key<input id="awgPubKey" readonly></label>
+            </div>
+            <div class="awg-edit-row full">
+              <label>AllowedIPs<input id="awgAllowedIPs" value="0.0.0.0/0, ::/0"></label>
+            </div>
+            <div class="awg-edit-row">
+              <label>Keepalive<input id="awgKeepalive" type="number" value="25"></label>
+            </div>
           </div>
-          <label>Endpoint<input id="awgEndpoint" placeholder="x.x.x.x:51820"></label>
-          <label>Public Key<input id="awgPubKey" readonly></label>
-          <label>AllowedIPs<input id="awgAllowedIPs" value="0.0.0.0/0, ::/0"></label>
-          <label>Keepalive<input id="awgKeepalive" type="number" value="25"></label>
         </div>
+
         <div class="awg-edit-panel" id="awgPanelObfs" style="display:none">
-          <div class="awg-obfs-row">
-            <label>JC<input id="awgJc" type="number" value="4"></label>
-            <label>JMIN<input id="awgJmin" type="number" value="40"></label>
-            <label>JMAX<input id="awgJmax" type="number" value="70"></label>
-          </div>
-          <div class="awg-obfs-row">
-            <label>S1<input id="awgS1" type="number" value="0"></label>
-            <label>S2<input id="awgS2" type="number" value="0"></label>
-            <label>S3<input id="awgS3" type="number" value="0"></label>
-            <label>S4<input id="awgS4" type="number" value="0"></label>
-          </div>
-          <div class="awg-obfs-row">
-            <label>H1<input id="awgH1"></label>
-            <label>H2<input id="awgH2"></label>
-            <label>H3<input id="awgH3"></label>
-            <label>H4<input id="awgH4"></label>
-          </div>
-          <div class="awg-obfs-row">
-            <label>I1<input id="awgI1"></label>
-            <label>I2<input id="awgI2"></label>
-            <label>I3<input id="awgI3"></label>
-            <label>I4<input id="awgI4"></label>
-            <label>I5<input id="awgI5"></label>
+          <div class="awg-edit-section">
+            <div class="awg-edit-section-title">
+              <span class="icon-badge" aria-hidden="true">
+                <svg class="section-icon" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+              </span>
+              <span class="label-text">Обфускация</span>
+              <span class="label-divider"></span>
+            </div>
+            <div class="awg-edit-row small">
+              <label>JC<input id="awgJc" type="number" value="4"></label>
+              <label>JMIN<input id="awgJmin" type="number" value="40"></label>
+              <label>JMAX<input id="awgJmax" type="number" value="70"></label>
+            </div>
+            <div class="awg-edit-row small">
+              <label>S1<input id="awgS1" type="number" value="0"></label>
+              <label>S2<input id="awgS2" type="number" value="0"></label>
+              <label>S3<input id="awgS3" type="number" value="0"></label>
+              <label>S4<input id="awgS4" type="number" value="0"></label>
+            </div>
+            <div class="awg-edit-row compact">
+              <label>H1<input id="awgH1"></label>
+              <label>H2<input id="awgH2"></label>
+              <label>H3<input id="awgH3"></label>
+              <label>H4<input id="awgH4"></label>
+            </div>
+            <div class="awg-edit-row full"><label>I1<input id="awgI1"></label></div>
+            <div class="awg-edit-row full"><label>I2<input id="awgI2"></label></div>
+            <div class="awg-edit-row full"><label>I3<input id="awgI3"></label></div>
+            <div class="awg-edit-row full"><label>I4<input id="awgI4"></label></div>
+            <div class="awg-edit-row full"><label>I5<input id="awgI5"></label></div>
           </div>
         </div>
         <div class="modal-footer">
@@ -454,6 +491,6 @@ AllowedIPs = ..."></textarea>
   </div>
 </div>
 
-<script src="/static/js/app.js?v=2026070445"></script>
+<script src="/static/js/app.js?v=2026070446"></script>
 </body>
 </html>

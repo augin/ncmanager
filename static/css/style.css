@@ -17,8 +17,8 @@
   --color-border-hover: #565f89;
   --font-sans: 'IBM Plex Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   --font-mono: 'IBM Plex Mono', 'SF Mono', monospace;
-  --radius: 8px;
-  --radius-sm: 4px;
+  --radius: 12px;
+  --radius-sm: 6px;
   --shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
   --color-error-tint: color-mix(in srgb, var(--color-error) 18%, transparent);
   --color-error-border: color-mix(in srgb, var(--color-error) 40%, transparent);
@@ -731,7 +731,7 @@ code {
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   width: 100%;
-  max-width: min(32rem, calc(100vw - 2rem));
+  max-width: min(40rem, calc(100vw - 2rem));
   max-height: calc(100dvh - 2rem);
   display: flex;
   flex-direction: column;
@@ -807,6 +807,11 @@ code {
 .max-w-lg   { max-width: min(40rem, calc(100vw - 2rem)); }
 .max-w-xl   { max-width: min(48rem, calc(100vw - 2rem)); }
 .max-w-wide { max-width: min(960px, calc(100vw - 2rem)); }
+
+/* AWG Edit Modal wider */
+#awgEditModal .modal-content {
+  max-width: min(48rem, calc(100vw - 2rem));
+}
 
 /* DNS routing tab */
 .dns-section { padding: 8px 0; }
@@ -1381,35 +1386,106 @@ code {
   flex-direction: column;
   gap: 12px;
 }
-.awg-obfs-row {
+.awg-edit-section {
+  padding: 12px;
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
   display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.awg-edit-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-width: 0;
+}
+.icon-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 0.625rem;
+  flex-shrink: 0;
+  margin-top: 0.0625rem;
+  background: var(--color-bg-tertiary);
+  color: var(--color-text-secondary);
+  transition: background var(--t-fast) ease, color var(--t-fast) ease;
+}
+.section-icon {
+  width: 14px;
+  height: 14px;
+}
+.label-text {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  line-height: 1.25;
+  color: var(--color-text);
+  min-width: 0;
+  flex-shrink: 0;
+}
+.label-divider {
+  flex: 1 1 auto;
+  height: 2px;
+  border-radius: 1px;
+  background: var(--color-bg-tertiary);
+  min-width: 0;
+}
+.awg-edit-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(90px, 1fr));
   gap: 12px;
-  flex-wrap: wrap;
 }
-.awg-obfs-row label {
-  flex: 1 1 60px;
-  min-width: 80px;
+.awg-edit-row.full {
+  grid-template-columns: 1fr;
 }
-.awg-edit-form label {
+.awg-edit-row.compact {
+  grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+  gap: 8px;
+}
+.awg-edit-row.small {
+  grid-template-columns: repeat(auto-fit, minmax(52px, 1fr));
+  gap: 8px;
+}
+.awg-edit-row.small label {
+  min-width: 0;
+}
+.awg-edit-panel label {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  font-size: 0.75rem;
-  color: var(--color-text-muted);
+  font-size: 13px;
+  color: var(--color-text-secondary);
+  font-weight: 500;
+  min-width: 0;
 }
-.awg-edit-form input {
+.awg-edit-panel input {
+  display: block;
+  width: 100%;
   background: var(--color-bg-primary);
   border: 1px solid var(--color-border);
   border-radius: var(--radius-sm);
   color: var(--color-text-primary);
-  padding: 6px 10px;
+  padding: 0.4375rem 0.625rem;
   font: inherit;
-  font-size: 0.8125rem;
+  font-size: 13px;
+  line-height: 1.4;
+  transition: border-color var(--t-fast) ease;
+  box-shadow: none;
 }
-.awg-edit-form input:read-only {
+.awg-edit-panel input::placeholder {
+  color: var(--color-text-muted);
+}
+.awg-edit-panel input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  box-shadow: none;
+}
+.awg-edit-panel input:read-only {
   opacity: 0.7;
 }
-
 .led-pulse {
   animation: led-blink 1.5s ease-in-out infinite;
 }
