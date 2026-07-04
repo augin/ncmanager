@@ -2136,7 +2136,8 @@ var result []map[string]interface{}
 			"name":      name,
 			"running":   fmt.Sprintf("%v", running),
 			"publicKey": pubKey,
-			"address":   address,
+			"address":     address,
+			"endpoint":    getAmneziaEndpoint(name),
 			"handshake": handshake,
 			"ping":      getAmneziaPing(name),
 			"rx":        rx,
@@ -2367,6 +2368,21 @@ func getAmneziaAddress(name string) string {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "Address = ") {
 			return strings.TrimSpace(strings.TrimPrefix(line, "Address = "))
+		}
+	}
+	return ""
+}
+
+func getAmneziaEndpoint(name string) string {
+	confPath := fmt.Sprintf("/etc/amnezia/amneziawg/%s.conf", name)
+	data, err := os.ReadFile(confPath)
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "Endpoint = ") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "Endpoint = "))
 		}
 	}
 	return ""

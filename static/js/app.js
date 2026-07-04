@@ -2325,6 +2325,7 @@ function renderAmneziaInterfaces(ifaces) {
     const ledClass = running ? 'led-green' : 'led-gray';
     const name = escapeHtml(iface.name);
     const addr = escapeHtml(iface.address || '—');
+    const endpoint = escapeHtml(iface.endpoint || '');
     const hs = escapeHtml(iface.handshake || '—');
     const rxBytes = Number(iface.rxBytes || 0);
     const txBytes = Number(iface.txBytes || 0);
@@ -2402,7 +2403,8 @@ function renderAmneziaInterfaces(ifaces) {
       '<div class="awg-card-details">' +
         '<div class="awg-card-kv-cols">' +
           '<div class="awg-card-kv-col">' +
-            '<div class="awg-kv"><span class="awg-kv-label">Адрес</span><code class="awg-kv-value">' + addr + '</code></div>' +
+            '<div class="awg-kv"><span class="awg-kv-label">Адрес</span><span class="awg-kv-value">' + addr + '</span></div>' +
+            (endpoint ? '<div class="awg-kv"><span class="awg-kv-label">Endpoint</span><span class="awg-kv-value">' + endpoint + '</span></div>' : '') +
           '</div>' +
           '<div class="awg-card-kv-col awg-card-kv-col-right">' +
             '<div class="awg-kv"><span class="awg-kv-label">Handshake</span><span class="awg-kv-value">' + hs + '</span></div>' +
