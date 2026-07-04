@@ -4,6 +4,7 @@ import (
 	"archive/zip"
 	"bufio"
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha256"
@@ -28,7 +29,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.10.22"
+const appVersion = "1.10.23"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
@@ -158,6 +159,7 @@ type Peer struct {
 
 type Config struct {
 	Port         int    `json:"port"`
+	HttpPort     int    `json:"httpPort"`
 	Interface    string `json:"interface"`
 	WanInterface string `json:"wanInterface"`
 	Endpoint     string `json:"endpoint"`
@@ -281,6 +283,7 @@ func main() {
 	api.HandleFunc("/server/start", withAuth(server.startServer))
 	api.HandleFunc("/server/stop", withAuth(server.stopServer))
 	api.HandleFunc("/server/restart", withAuth(server.restartServer))
+	api.HandleFunc("/server/restart-service", withAuth(server.restartService))
 	api.HandleFunc("/keys/generate", withAuth(generateKeys))
 	api.HandleFunc("/login", loginHandler)
 	api.HandleFunc("/logout", withAuth(logoutHandler))
@@ -320,10 +323,11 @@ func main() {
 	go startAmneziaTrafficPoller()
 	go startAmneziaTrafficCleanup()
 
-	log.Printf("WireGuard Manager starting on :8080")
+	addr := fmt.Sprintf(":%d", cfg.HttpPort)
+	log.Printf("WireGuard Manager starting on %s", addr)
 	log.Printf("Endpoint: %s", server.endpoint)
 	log.Printf("Version: %s", appVersion)
-	log.Fatal(http.ListenAndServe(":8080", nil))
+	log.Fatal(http.ListenAndServe(addr, nil))
 }
 
 func startAmneziaTrafficPoller() {
@@ -499,6 +503,7 @@ func createDefaultConfig() (*Config, error) {
 	}
 	cfg := &Config{
 		Port:      51820,
+		HttpPort:  8080,
 		Interface: "wg0",
 		Endpoint:  getPublicIP(),
 		DNS:       "1.1.1.1",
@@ -703,6 +708,7 @@ func (s *Server) getConfig(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
 		"port":         cfg.Port,
+		"httpPort":     cfg.HttpPort,
 		"interface":    cfg.Interface,
 		"wanInterface": cfg.WanInterface,
 		"endpoint":     cfg.Endpoint,
@@ -731,6 +737,15 @@ func (s *Server) saveConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	if v, ok := req["port"].(float64); ok {
 		cfg.Port = int(v)
+	}
+	if v, ok := req["httpPort"].(float64); ok {
+		p := int(v)
+		if p < 1 || p > 65535 {
+			s.mu.Unlock()
+			http.Error(w, "invalid httpPort: must be 1-65535", http.StatusBadRequest)
+			return
+		}
+		cfg.HttpPort = p
 	}
 	if v, ok := req["interface"].(string); ok {
 		cfg.Interface = v
@@ -1469,6 +1484,17 @@ func (s *Server) restartServerDirect() error {
 		return fmt.Errorf("%s: %w", msg, err)
 	}
 	return nil
+}
+
+func (s *Server) restartService(w http.ResponseWriter, r *http.Request) {
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		cmd := exec.CommandContext(ctx, "systemctl", "restart", "ncmanager")
+		cmd.Run()
+	}()
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
 func generateKeyPair() (priv, pub string, err error) {

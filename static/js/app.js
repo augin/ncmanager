@@ -1,6 +1,7 @@
 const API = '/api';
 const TOKEN_KEY = 'wg_token';
 let currentTab = 'peers';
+let originalHttpPort = null;
 let previousPeerIds = new Set();
 let refreshTimer = null;
 let expandedPeers = new Set();
@@ -1591,6 +1592,7 @@ async function saveConfig(e) {
 	const cfg = {
 		interface: document.getElementById('iInterface').value,
 		port: parseInt(document.getElementById('iPort').value),
+		httpPort: parseInt(document.getElementById('iHttpPort').value),
 		endpoint: document.getElementById('iEndpoint').value,
 		dns: document.getElementById('iDns').value,
 		subnet: document.getElementById('iSubnet').value,
@@ -1619,6 +1621,23 @@ async function saveConfig(e) {
 		if (interfaceIPEl) {
 			const ip = cfg.interfaceIP || '';
 			interfaceIPEl.textContent = ip ? '(' + ip + ')' : '';
+		}
+
+		if (cfg.httpPort && cfg.httpPort !== originalHttpPort) {
+			const msg = 'Порт веб-интерфейса будет применён после перезапуска сервиса. Перезапустить сейчас?';
+			if (confirm(msg)) {
+				try {
+					const restartBtn = document.getElementById('saveConfigBtn');
+					if (restartBtn) {
+						restartBtn.textContent = 'Перезапуск...';
+						restartBtn.disabled = true;
+					}
+					await xhr('POST', '/server/restart-service', {});
+					document.body.innerHTML = '<div style="display:flex;align-items:center;justify-content:center;height:100vh;font-size:1.2rem;color:#64748b">Сервис перезапускается...<br>Обновите страницу через несколько секунд.</div>';
+				} catch (e) {
+					alert('Ошибка перезапуска: ' + e.message);
+				}
+			}
 		}
 	}
   } catch (e) {
@@ -1720,6 +1739,8 @@ async function init() {
 		interfaceIPEl.textContent = ip ? '(' + ip + ')' : '';
 	}
 	document.getElementById('iPort').value = cfg.port || 51820;
+	document.getElementById('iHttpPort').value = cfg.httpPort || 8080;
+	originalHttpPort = cfg.httpPort || 8080;
 	document.getElementById('iEndpoint').value = cfg.endpoint || '';
 	document.getElementById('iDns').value = cfg.dns || '1.1.1.1';
 	document.getElementById('iSubnet').value = cfg.subnet || '10.0.0.0/24';
