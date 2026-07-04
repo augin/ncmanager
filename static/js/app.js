@@ -702,6 +702,7 @@ async function toggleServer() {
 }
 
 function showQR(id, name) {
+	closeAllModals();
 	document.getElementById('qrPeerName').textContent = name || id;
 	const img = document.getElementById('qrImage');
 	img.src = '';
@@ -731,6 +732,7 @@ function closeQR() {
 }
 
 function showText(id, name) {
+	closeAllModals();
 	document.getElementById('textPeerName').textContent = name || id;
 	document.getElementById('textOutput').textContent = 'Загрузка...';
 	document.getElementById('textModal').classList.add('show');
@@ -773,6 +775,7 @@ async function configureRouter(id) {
 	const dlBtn = document.getElementById('keeneticDownloadBtn');
 	if (dlBtn) dlBtn.style.display = 'none';
 
+	closeAllModals();
 	document.getElementById('routerModal').classList.add('show');
 	document.getElementById('routerLog').style.display = '';
 
@@ -830,7 +833,9 @@ async function configureRouter(id) {
   	const dlBtn = document.getElementById('keeneticDownloadBtn');
   	if (dlBtn) dlBtn.style.display = 'none';
 
-  	document.getElementById('routerModal').classList.add('show');
+  	closeAllModals();
+	closeAllModals();
+	document.getElementById('routerModal').classList.add('show');
   	document.getElementById('routerLog').style.display = '';
 
   	try {
@@ -899,6 +904,7 @@ async function configureRouter(id) {
 	const dlBtn = document.getElementById('keeneticDownloadBtn');
 	if (dlBtn) dlBtn.style.display = 'none';
 
+	closeAllModals();
 	document.getElementById('routerModal').classList.add('show');
 	document.getElementById('routerLog').style.display = '';
 
@@ -948,6 +954,7 @@ async function configureDnsRoutes(id) {
 	const dlBtn = document.getElementById('keeneticDownloadBtn');
 	if (dlBtn) dlBtn.style.display = 'none';
 
+	closeAllModals();
 	document.getElementById('routerModal').classList.add('show');
 	document.getElementById('routerLog').style.display = '';
 
@@ -1293,7 +1300,8 @@ async function applyDnsRoutes() {
     	}
     	if (closeBtn) closeBtn.style.display = 'none';
     	if (dlBtn) dlBtn.style.display = 'none';
-    	document.getElementById('routerModal').classList.add('show');
+	closeAllModals();
+	document.getElementById('routerModal').classList.add('show');
     	if (log) log.style.display = '';
 
     	const startRes = await xhr('POST', '/dns/routes/apply');
@@ -1648,12 +1656,17 @@ async function createBackup() {
 }
 
 function showRestoreModal() {
+  closeAllModals();
   const modal = document.getElementById('restoreModal');
   const input = document.getElementById('restoreFile');
   const log = document.getElementById('restoreLog');
   if (modal) modal.classList.add('show');
   if (input) input.value = '';
   if (log) { log.style.display = 'none'; log.textContent = ''; }
+}
+
+function closeAllModals() {
+  document.querySelectorAll('.modal.show').forEach(function(m) { m.classList.remove('show'); });
 }
 
 function hideRestoreModal() {
@@ -1894,6 +1907,7 @@ async function loadAmneziaStatus() {
 }
 
 function showAmneziaModal() {
+  closeAllModals();
   const m = document.getElementById('amneziaInstallModal');
   if (m) m.classList.add('show');
 }
@@ -2119,6 +2133,7 @@ async function checkAmneziaPing(name) {
 }
 
 function openAwgChartModal(name) {
+  closeAllModals();
   awgChartName = name;
   awgChartPeriod = '1h';
   awgChartPoints = [];
@@ -2491,6 +2506,7 @@ async function installAmnezia() {
 }
 
 function showImportModal() {
+  closeAllModals();
   const m = document.getElementById('amneziaImportModal');
   if (m) m.classList.add('show');
   const nameEl = document.getElementById('amneziaInterfaceName');
