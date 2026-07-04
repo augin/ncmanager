@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NC Manager</title>
-<link rel="stylesheet" href="/static/css/style.css?v=2026070316">
+<link rel="stylesheet" href="/static/css/style.css?v=2026070419">
 </head>
 <body>
 <div id="app">
@@ -289,6 +289,65 @@ AllowedIPs = ..."></textarea>
     </div>
   </div>
 
+  <div class="modal" id="awgChartModal">
+    <div class="modal-content" style="max-width:960px">
+      <button class="modal-close" onclick="closeAwgChartModal()">✕</button>
+      <h3 id="awgChartTitle">Трафик</h3>
+      <div class="awg-chart-meta-row">
+        <div class="awg-chart-meta-pills">
+          <span class="awg-pill" id="awgChartNamePill"></span>
+          <span class="awg-pill-muted" id="awgChartPeriodPill">последний час</span>
+        </div>
+        <div class="awg-chart-period-switch">
+          <button class="awg-chart-period-btn" data-period="1h" onclick="selectAwgChartPeriod('1h', this)">1 ч</button>
+          <button class="awg-chart-period-btn" data-period="3h" onclick="selectAwgChartPeriod('3h', this)">3 ч</button>
+          <button class="awg-chart-period-btn" data-period="24h" onclick="selectAwgChartPeriod('24h', this)">24 ч</button>
+        </div>
+      </div>
+      <div class="awg-chart-stats-line">
+        <span class="awg-chart-stat">
+          <span class="awg-chart-stat-label">Трафик:</span>
+          <span class="awg-chart-stat-val rx" id="awgChartTrafficRx">↓ —</span>
+          <span class="awg-chart-stat-sep">/</span>
+          <span class="awg-chart-stat-val tx" id="awgChartTrafficTx">↑ —</span>
+        </span>
+        <span class="awg-chart-stat-sep">·</span>
+        <span class="awg-chart-stat">
+          <span class="awg-chart-stat-label">Пик:</span>
+          <span class="awg-chart-stat-val" id="awgChartPeak">—</span>
+        </span>
+        <span class="awg-chart-stat-sep">·</span>
+        <span class="awg-chart-stat">
+          <span class="awg-chart-stat-label">Средняя:</span>
+          <span class="awg-chart-stat-val rx" id="awgChartAvgRx">↓ —</span>
+          <span class="awg-chart-stat-sep">/</span>
+          <span class="awg-chart-stat-val tx" id="awgChartAvgTx">↑ —</span>
+        </span>
+      </div>
+      <div class="awg-chart-stage">
+        <div class="awg-chart-wrap">
+          <div class="awg-chart-top"><span class="awg-chart-max-rate" id="awgChartMaxRate"></span></div>
+          <div class="awg-chart-body">
+            <div id="awgChartContainer"></div>
+            <div id="awgChartTooltip" style="position:absolute;display:none;padding:6px 10px;background:var(--color-bg-secondary);border:1px solid var(--color-border);border-radius:4px;font-size:0.75rem;pointer-events:none;z-index:10;white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,0.2)"></div>
+          </div>
+          <div class="awg-chart-bottom">
+            <span class="awg-chart-time" id="awgChartTimeStart"></span>
+            <span class="awg-chart-legend">
+              <span class="awg-chart-dot rx"></span>Прием: <span class="awg-chart-legend-val rx" id="awgChartLegRx">—</span>
+              <span class="awg-chart-stat-sep">·</span>
+              <span class="awg-chart-dot tx"></span>Передача: <span class="awg-chart-legend-val tx" id="awgChartLegTx">—</span>
+            </span>
+            <span class="awg-chart-time" id="awgChartTimeEnd"></span>
+          </div>
+        </div>
+        <div class="awg-chart-overlay" id="awgChartOverlay" style="display:none">
+          <div class="awg-chart-overlay-label">Обновляем график…</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="modal" id="restoreModal">
     <div class="modal-content" style="max-width:480px">
       <button class="modal-close" onclick="hideRestoreModal()">✕</button>
@@ -307,6 +366,6 @@ AllowedIPs = ..."></textarea>
   </div>
 </div>
 
-<script src="/static/js/app.js?v=2026070217"></script>
+<script src="/static/js/app.js?v=2026070418"></script>
 </body>
 </html>

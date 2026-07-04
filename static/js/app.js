@@ -51,6 +51,92 @@ function initTheme() {
 	applyTheme(mode);
 }
 
+const AMNEZIA_TRAFFIC = new Map();
+const AMNEZIA_MAX_POINTS = 3600;
+const AMNEZIA_CARD_WINDOW = 360;
+const AMNEZIA_CARD_DISPLAY = 60;
+const AMNEZIA_POLL_INTERVAL = 30;
+
+function feedAmneziaTraffic(name, rxBytes, txBytes) {
+	const now = Date.now();
+	let entry = AMNEZIA_TRAFFIC.get(name);
+	if (!entry) {
+		entry = { lastRxBytes: 0, lastTxBytes: 0, lastTimestamp: 0, rxRates: [], txRates: [] };
+		AMNEZIA_TRAFFIC.set(name, entry);
+	}
+	if (entry.lastTimestamp > 0) {
+		const dtSec = (now - entry.lastTimestamp) / 1000;
+		if (dtSec > 0.5) {
+			const dRx = rxBytes - entry.lastRxBytes;
+			const dTx = txBytes - entry.lastTxBytes;
+			if (dRx >= 0 && dTx >= 0) {
+				entry.rxRates.push(dRx / dtSec);
+				entry.txRates.push(dTx / dtSec);
+				if (entry.rxRates.length > AMNEZIA_MAX_POINTS) {
+					entry.rxRates = entry.rxRates.slice(-AMNEZIA_MAX_POINTS);
+					entry.txRates = entry.txRates.slice(-AMNEZIA_MAX_POINTS);
+				}
+			}
+		}
+	}
+	entry.lastRxBytes = rxBytes;
+	entry.lastTxBytes = txBytes;
+	entry.lastTimestamp = now;
+}
+
+function getAmneziaTrafficRates(name) {
+	const entry = AMNEZIA_TRAFFIC.get(name);
+	if (!entry) return { rx: [], tx: [] };
+	const rxRaw = entry.rxRates.length > AMNEZIA_CARD_WINDOW ? entry.rxRates.slice(-AMNEZIA_CARD_WINDOW) : entry.rxRates;
+	const txRaw = entry.txRates.length > AMNEZIA_CARD_WINDOW ? entry.txRates.slice(-AMNEZIA_CARD_WINDOW) : entry.txRates;
+	return {
+		rx: downsampleMaxAmnezia(rxRaw, AMNEZIA_CARD_DISPLAY),
+		tx: downsampleMaxAmnezia(txRaw, AMNEZIA_CARD_DISPLAY)
+	};
+}
+
+function downsampleMaxAmnezia(src, target) {
+	if (!src || src.length <= target) return src || [];
+	const bucket = src.length / target;
+	const out = new Array(target);
+	for (let i = 0; i < target; i++) {
+		const start = Math.floor(i * bucket);
+		const end = Math.min(src.length, Math.floor((i + 1) * bucket));
+		let m = src[start];
+		for (let j = start + 1; j < end; j++) {
+			if (src[j] > m) m = src[j];
+		}
+		out[i] = m;
+	}
+	return out;
+}
+
+async function loadAmneziaHistory(name, period) {
+	try {
+		const res = await xhr('GET', '/amnezia/interface/' + encodeURIComponent(name) + '/stats?period=' + encodeURIComponent(period || '1h'));
+		if (res.ok) {
+			const data = res.json();
+			if (!data || !data.points) return;
+			let entry = AMNEZIA_TRAFFIC.get(name);
+			if (!entry) {
+				entry = { lastRxBytes: 0, lastTxBytes: 0, lastTimestamp: 0, rxRates: [], txRates: [] };
+				AMNEZIA_TRAFFIC.set(name, entry);
+			}
+			const stepSec = 30;
+			for (const pt of data.points) {
+				entry.rxRates.push(pt.rx);
+				entry.txRates.push(pt.tx);
+			}
+			if (entry.rxRates.length > AMNEZIA_MAX_POINTS) {
+				entry.rxRates = entry.rxRates.slice(-AMNEZIA_MAX_POINTS);
+				entry.txRates = entry.txRates.slice(-AMNEZIA_MAX_POINTS);
+			}
+		}
+	} catch (e) {
+		console.error('loadAmneziaHistory failed:', e);
+	}
+}
+
 function getToken() {
 	return sessionStorage.getItem(TOKEN_KEY) || '';
 }
@@ -163,7 +249,8 @@ function switchTab(name, btn) {
 	if (target) target.style.display = '';
 	if (name === 'logs') loadLogs();
 	if (name === 'dns') loadDnsRoutes();
-	if (name === 'waniface') loadAmneziaInterfaces();
+  if (name === 'waniface') loadAmneziaInterfaces();
+  if (name !== 'waniface') cancelAmneziaPingRefresh();
 	try { localStorage.setItem('ncmanager_tab', name); } catch (e) {}
 	closeMobileMenu();
 }
@@ -1830,40 +1917,524 @@ async function loadAmneziaInterfaces() {
   }
 }
 
+function formatRate(bytesPerSec) {
+  if (!isFinite(bytesPerSec) || bytesPerSec < 0) return '—';
+  const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+  let u = 0;
+  let v = bytesPerSec;
+  while (v >= 1024 && u < units.length - 1) { v /= 1024; u++; }
+  return v.toFixed(u === 0 ? 0 : 1) + ' ' + units[u];
+}
+
+function formatBytesStatic(v) {
+  if (!isFinite(v) || v < 0) return '0 B';
+  const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+  let u = 0;
+  let val = v;
+  while (val >= 1024 && u < units.length - 1) { val /= 1024; u++; }
+  return (u === 0 ? Math.round(val) : val.toFixed(1)) + ' ' + units[u];
+}
+
+function buildAmneziaSparkline(rxRates, txRates) {
+  const width = 300;
+  const padTop = 6;
+  const padBottom = 6;
+  const height = 24;
+  const innerH = height - padTop - padBottom;
+  const rx = rxRates || [];
+  const tx = txRates || [];
+  const n = Math.min(rx.length, tx.length);
+  if (n < 2) {
+    return '<svg class="awg-sparkline" viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="none"><line x1="0" x2="' + width + '" y1="' + (height - padBottom) + '" y2="' + (height - padBottom) + '" stroke="var(--color-border-hover)" stroke-width="1" opacity="0.7"/></svg>';
+  }
+  let maxVal = 1;
+  for (let i = 0; i < n; i++) {
+    const rv = rx[i] || 0;
+    const tv = tx[i] || 0;
+    if (rv > maxVal) maxVal = rv;
+    if (tv > maxVal) maxVal = tv;
+  }
+  function rateToY(rate) { return padTop + innerH * (1 - rate / maxVal); }
+  function buildPath(rates, color, opacity) {
+    if (n < 2) return '';
+    const step = width / (n - 1);
+    const pts = [];
+    for (let i = 0; i < n; i++) pts.push([i * step, rateToY(rates[i] || 0)]);
+    let d = 'M' + pts[0][0].toFixed(1) + ',' + pts[0][1].toFixed(1);
+    const tension = 0.5;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[Math.max(0, i - 1)];
+      const p1 = pts[i];
+      const p2 = pts[i + 1];
+      const p3 = pts[Math.min(pts.length - 1, i + 2)];
+      const cp1x = p1[0] + ((p2[0] - p0[0]) / 6) * tension;
+      const cp1y = p1[1] + ((p2[1] - p0[1]) / 6) * tension;
+      const cp2x = p2[0] - ((p3[0] - p1[0]) / 6) * tension;
+      const cp2y = p2[1] - ((p3[1] - p1[1]) / 6) * tension;
+      d += ' C' + cp1x.toFixed(1) + ',' + cp1y.toFixed(1) + ' ' + cp2x.toFixed(1) + ',' + cp2y.toFixed(1) + ' ' + p2[0].toFixed(1) + ',' + p2[1].toFixed(1);
+    }
+    return '<path d="' + d + '" fill="none" stroke="' + color + '" stroke-opacity="' + opacity + '" stroke-width="1" stroke-linecap="round" stroke-linejoin="round"/>';
+  }
+  function buildArea(rates, color) {
+    if (n < 2) return '';
+    const baseY = (height - padBottom).toFixed(1);
+    const step = width / (n - 1);
+    const pts = [];
+    for (let i = 0; i < n; i++) pts.push([i * step, rateToY(rates[i] || 0)]);
+    let d = 'M' + pts[0][0].toFixed(1) + ',' + pts[0][1].toFixed(1);
+    const tension = 0.5;
+    for (let i = 0; i < pts.length - 1; i++) {
+      const p0 = pts[Math.max(0, i - 1)];
+      const p1 = pts[i];
+      const p2 = pts[i + 1];
+      const p3 = pts[Math.min(pts.length - 1, i + 2)];
+      const cp1x = p1[0] + ((p2[0] - p0[0]) / 6) * tension;
+      const cp1y = p1[1] + ((p2[1] - p0[1]) / 6) * tension;
+      const cp2x = p2[0] - ((p3[0] - p1[0]) / 6) * tension;
+      const cp2y = p2[1] - ((p3[1] - p1[1]) / 6) * tension;
+      d += ' C' + cp1x.toFixed(1) + ',' + cp1y.toFixed(1) + ' ' + cp2x.toFixed(1) + ',' + cp2y.toFixed(1) + ' ' + p2[0].toFixed(1) + ',' + p2[1].toFixed(1);
+    }
+    d += ' L' + (width).toFixed(1) + ',' + baseY + ' L0,' + baseY + ' Z';
+    return '<path d="' + d + '" fill="url(#' + color + '-grad)" opacity="0.55"/>';
+  }
+  const rxLine = buildPath(rx, 'var(--color-accent)', '1');
+  const txLine = buildPath(tx, 'var(--color-success)', '0.95');
+  const rxArea = buildArea(rx, 'awg-rx');
+  const txArea = buildArea(tx, 'awg-tx');
+  return '<svg class="awg-sparkline" viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="none"><defs><linearGradient id="awg-rx-grad" x1="0" y1="' + padTop + '" x2="0" y2="' + (height - padBottom) + '" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="var(--color-accent)" stop-opacity="0.55"/><stop offset="100%" stop-color="var(--color-accent)" stop-opacity="0"/></linearGradient><linearGradient id="awg-tx-grad" x1="0" y1="' + padTop + '" x2="0" y2="' + (height - padBottom) + '" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="var(--color-success)" stop-opacity="0.55"/><stop offset="100%" stop-color="var(--color-success)" stop-opacity="0"/></linearGradient></defs>' + rxArea + txArea + rxLine + txLine + '</svg>';
+}
+
+let awgChartPeriod = '1h';
+let awgChartName = '';
+let awgChartPoints = [];
+let awgChartRxRates = [];
+let awgChartTxRates = [];
+const AWG_CHART_W = 840;
+
+let awgPingStatus = {}; // name -> {checking, hasResult, connected, latency, text}
+let awgLastIfaces = []; // cached ifaces for ping re-render
+const awgPingTimers = new Map();
+
+function scheduleAmneziaPing(name, delay) {
+  if (awgPingTimers.has(name)) clearTimeout(awgPingTimers.get(name));
+  const handle = setTimeout(function() {
+    awgPingTimers.delete(name);
+    checkAmneziaPing(name);
+  }, delay || 300);
+  awgPingTimers.set(name, handle);
+}
+
+function refreshAmneziaPings() {
+  if (!awgLastIfaces || !awgLastIfaces.length) return;
+  for (const iface of awgLastIfaces) {
+    if (iface.running !== 'true') continue;
+    const st = awgPingStatus[iface.name];
+    if (!st || !st.hasResult) {
+      scheduleAmneziaPing(iface.name, 0);
+    }
+  }
+}
+
+let awgPingNonce = 0;
+let awgCheckingPings = new Set();
+
+async function checkAmneziaPing(name) {
+  if (awgCheckingPings.has(name)) return;
+  awgCheckingPings.add(name);
+  awgPingStatus[name] = awgPingStatus[name] || {};
+  awgPingStatus[name].checking = true;
+  renderAmneziaInterfaces(awgLastIfaces);
+  try {
+    const res = await xhr('GET', '/amnezia/interface/' + encodeURIComponent(name) + '/ping');
+    if (res.ok) {
+      const data = res.json();
+      awgPingStatus[name] = {
+        checking: false,
+        hasResult: true,
+        connected: !!data.connected,
+        latency: data.latency || 0,
+        text: data.text || '—'
+      };
+    } else {
+      awgPingStatus[name] = { checking: false, hasResult: true, connected: false, latency: 0, text: 'err' };
+    }
+  } catch (e) {
+    awgPingStatus[name] = { checking: false, hasResult: true, connected: false, latency: 0, text: 'err' };
+  }
+  awgCheckingPings.delete(name);
+  renderAmneziaInterfaces(awgLastIfaces);
+  scheduleAmneziaRefresh();
+}
+
+let awgPingRefreshHandle = null;
+function scheduleAmneziaRefresh() {
+  if (awgPingRefreshHandle) clearTimeout(awgPingRefreshHandle);
+  awgPingRefreshHandle = setTimeout(function() {
+    refreshAmneziaPings();
+  }, 5000);
+}
+
+function cancelAmneziaPingRefresh() {
+  if (awgPingRefreshHandle) clearTimeout(awgPingRefreshHandle);
+  awgPingRefreshHandle = null;
+  for (const [name, handle] of awgPingTimers) {
+    clearTimeout(handle);
+  }
+  awgPingTimers.clear();
+}
+const AWG_CHART_PAD_TOP = 16;
+const AWG_CHART_PAD_BOTTOM = 32;
+const AWG_CHART_HEIGHT = 220;
+let awgChartMaxRate = 1;
+
+function awgTier(ms) {
+  if (ms < 100) return 'tier-good';
+  if (ms < 150) return 'tier-warn';
+  if (ms < 220) return 'tier-high';
+  return 'tier-bad';
+}
+
+async function checkAmneziaPing(name) {
+  awgPingStatus[name] = awgPingStatus[name] || {};
+  awgPingStatus[name].checking = true;
+  renderAmneziaInterfaces(awgLastIfaces);
+  try {
+    const res = await xhr('GET', '/amnezia/interface/' + encodeURIComponent(name) + '/ping');
+    if (res.ok) {
+      const data = res.json();
+      awgPingStatus[name] = {
+        checking: false,
+        hasResult: true,
+        connected: !!data.connected,
+        latency: data.latency || 0,
+        text: data.text || '—'
+      };
+    } else {
+      awgPingStatus[name] = { checking: false, hasResult: true, connected: false, latency: 0, text: 'err' };
+    }
+  } catch (e) {
+    awgPingStatus[name] = { checking: false, hasResult: true, connected: false, latency: 0, text: 'err' };
+  }
+  renderAmneziaInterfaces(awgLastIfaces);
+}
+
+function openAwgChartModal(name) {
+  awgChartName = name;
+  awgChartPeriod = '1h';
+  awgChartPoints = [];
+  awgChartRxRates = [];
+  awgChartTxRates = [];
+  const modal = document.getElementById('awgChartModal');
+  if (!modal) return;
+  modal.classList.add('show');
+  document.getElementById('awgChartTitle').textContent = 'Трафик: ' + name;
+  document.querySelectorAll('.awg-chart-period-btn').forEach(function(btn) {
+    btn.classList.toggle('active', btn.dataset.period === '1h');
+  });
+  renderAwgChart(name, '1h');
+}
+
+function closeAwgChartModal() {
+  const modal = document.getElementById('awgChartModal');
+  if (modal) modal.classList.remove('show');
+  awgChartName = '';
+}
+
+const PERIOD_LABELS = { '1h': 'последний час', '3h': 'последние 3 часа', '24h': 'последние сутки' };
+
+async function renderAwgChart(name, period) {
+  const container = document.getElementById('awgChartContainer');
+  const overlay = document.getElementById('awgChartOverlay');
+  if (!container) return;
+  if (overlay) overlay.style.display = 'none';
+  container.innerHTML = '<p style="color:var(--color-text-muted);padding:16px">Загрузка...</p>';
+  try {
+    const res = await xhr('GET', '/amnezia/interface/' + encodeURIComponent(name) + '/stats?period=' + encodeURIComponent(period));
+    if (!res.ok) throw new Error('Failed to load stats');
+    const data = res.json();
+    const points = data.points || [];
+    if (points.length < 2) {
+      container.innerHTML = '<p style="color:var(--color-text-muted);padding:16px">Недостаточно данных за выбранный период</p>';
+      return;
+    }
+    const namePill = document.getElementById('awgChartNamePill');
+    if (namePill) namePill.textContent = name;
+    const periodPill = document.getElementById('awgChartPeriodPill');
+    if (periodPill) periodPill.textContent = PERIOD_LABELS[period] || period;
+
+    const rxRates = [];
+    const txRates = [];
+    for (const pt of points) { rxRates.push(pt.rx || 0); txRates.push(pt.tx || 0); }
+    awgChartPoints = points;
+    awgChartRxRates = rxRates;
+    awgChartTxRates = txRates;
+    const n = points.length;
+    const width = 840;
+    const padTop = 16;
+    const padBottom = 32;
+    const height = 220;
+    const innerH = height - padTop - padBottom;
+    let maxRate = 1;
+    for (let i = 0; i < n; i++) {
+      if (rxRates[i] > maxRate) maxRate = rxRates[i];
+      if (txRates[i] > maxRate) maxRate = txRates[i];
+    }
+    awgChartMaxRate = maxRate;
+    function rateToY(rate) { return padTop + innerH * (1 - rate / maxRate); }
+    function indexToX(i) { return (i * (width - padBottom)) / (n - 1); }
+    function smoothPath(pts) {
+      if (pts.length < 2) return '';
+      if (pts.length === 2) return 'M' + pts[0][0].toFixed(1) + ',' + pts[0][1].toFixed(1) + ' L' + pts[1][0].toFixed(1) + ',' + pts[1][1].toFixed(1);
+      const tension = 0.5;
+      let d = 'M' + pts[0][0].toFixed(1) + ',' + pts[0][1].toFixed(1);
+      for (let i = 0; i < pts.length - 1; i++) {
+        const p0 = pts[Math.max(0, i - 1)];
+        const p1 = pts[i];
+        const p2 = pts[i + 1];
+        const p3 = pts[Math.min(pts.length - 1, i + 2)];
+        const cp1x = p1[0] + ((p2[0] - p0[0]) / 6) * tension;
+        const cp1y = p1[1] + ((p2[1] - p0[1]) / 6) * tension;
+        const cp2x = p2[0] - ((p3[0] - p1[0]) / 6) * tension;
+        const cp2y = p2[1] - ((p3[1] - p1[1]) / 6) * tension;
+        d += ' C' + cp1x.toFixed(1) + ',' + cp1y.toFixed(1) + ' ' + cp2x.toFixed(1) + ',' + cp2y.toFixed(1) + ' ' + p2[0].toFixed(1) + ',' + p2[1].toFixed(1);
+      }
+      return d;
+    }
+    function buildLine(rates) {
+      const pts = [];
+      for (let i = 0; i < n; i++) pts.push([indexToX(i), rateToY(rates[i] || 0)]);
+      return smoothPath(pts);
+    }
+    const rxLine = buildLine(rxRates);
+    const txLine = buildLine(txRates);
+    function buildArea(linePath) {
+      const endX = width.toFixed(1);
+      const startX = '0';
+      const baseY = (height - padBottom).toFixed(1);
+      return linePath + ' L' + endX + ',' + baseY + ' L' + startX + ',' + baseY + ' Z';
+    }
+    const rxArea = buildArea(rxLine);
+    const txArea = buildArea(txLine);
+
+    const fmtTime = function(ts) {
+      if (!ts && ts !== 0) return '—';
+      const d = new Date(ts * 1000);
+      if (isNaN(d.getTime())) return '—';
+      return d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0') + ':' + d.getSeconds().toString().padStart(2,'0');
+    };
+    const startT = fmtTime(points[0].ts);
+    const endT = fmtTime(points[points.length - 1].ts);
+
+    const maxRateEl = document.getElementById('awgChartMaxRate');
+    if (maxRateEl) maxRateEl.textContent = formatRate(maxRate);
+    const timeStartEl = document.getElementById('awgChartTimeStart');
+    if (timeStartEl) timeStartEl.textContent = startT;
+    const timeEndEl = document.getElementById('awgChartTimeEnd');
+    if (timeEndEl) timeEndEl.textContent = endT;
+
+    const peak = data.stats ? data.stats.peakRate : 0;
+    const avgRx = data.stats ? data.stats.avgRx : 0;
+    const avgTx = data.stats ? data.stats.avgTx : 0;
+    const curRx = data.stats ? data.stats.currentRx : (rxRates.length ? rxRates[rxRates.length-1] : 0);
+    const curTx = data.stats ? data.stats.currentTx : (txRates.length ? txRates[txRates.length-1] : 0);
+
+    const trafficRxEl = document.getElementById('awgChartTrafficRx');
+    if (trafficRxEl) trafficRxEl.textContent = '↓ ' + formatRate(curRx);
+    const trafficTxEl = document.getElementById('awgChartTrafficTx');
+    if (trafficTxEl) trafficTxEl.textContent = '↑ ' + formatRate(curTx);
+    const peakEl = document.getElementById('awgChartPeak');
+    if (peakEl) peakEl.textContent = formatRate(peak);
+    const avgRxEl = document.getElementById('awgChartAvgRx');
+    if (avgRxEl) avgRxEl.textContent = '↓ ' + formatRate(avgRx);
+    const avgTxEl = document.getElementById('awgChartAvgTx');
+    if (avgTxEl) avgTxEl.textContent = '↑ ' + formatRate(avgTx);
+
+    const legRxEl = document.getElementById('awgChartLegRx');
+    if (legRxEl) legRxEl.textContent = formatRate(curRx);
+    const legTxEl = document.getElementById('awgChartLegTx');
+    if (legTxEl) legTxEl.textContent = formatRate(curTx);
+
+    container.innerHTML = '<svg viewBox="0 0 ' + width + ' ' + height + '" preserveAspectRatio="none" style="display:block;width:100%;height:100%" onmousemove="awgChartHover(event)" onmouseleave="awgChartLeave()"><defs><linearGradient id="awg-rx-grad" x1="0" y1="' + padTop + '" x2="0" y2="' + (height - padBottom) + '" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="var(--color-accent)" stop-opacity="0.55"/><stop offset="100%" stop-color="var(--color-accent)" stop-opacity="0"/></linearGradient><linearGradient id="awg-tx-grad" x1="0" y1="' + padTop + '" x2="0" y2="' + (height - padBottom) + '" gradientUnits="userSpaceOnUse"><stop offset="0%" stop-color="var(--color-success)" stop-opacity="0.55"/><stop offset="100%" stop-color="var(--color-success)" stop-opacity="0"/></linearGradient></defs><path d="' + rxArea + '" fill="url(#awg-rx-grad)"/><path d="' + rxLine + '" fill="none" stroke="var(--color-accent)" stroke-width="1.6" stroke-linejoin="round" stroke-linecap="round"/><path d="' + txArea + '" fill="url(#awg-tx-grad)"/><path d="' + txLine + '" fill="none" stroke="var(--color-success)" stroke-width="1.4" stroke-linejoin="round" stroke-linecap="round" opacity="0.95"/><g id="awgChartCrosshair" style="display:none"><line id="awgCrossV" x1="0" y1="' + padTop + '" x2="0" y2="' + (height - padBottom) + '" stroke="var(--color-text-muted)" stroke-width="0.6" stroke-dasharray="2,2" opacity="0.8"/><circle id="awgCrossRx" cx="0" cy="0" r="3.5" fill="var(--color-accent)" stroke="var(--color-bg-secondary)" stroke-width="1"/><circle id="awgCrossTx" cx="0" cy="0" r="3.5" fill="var(--color-success)" stroke="var(--color-bg-secondary)" stroke-width="1"/></g><line x1="0" x2="' + width + '" y1="' + (height - padBottom) + '" y2="' + (height - padBottom) + '" stroke="var(--color-border-hover)" stroke-width="1" opacity="0.7"/></svg>';
+  } catch (e) {
+    container.innerHTML = '<p style="color:var(--color-error);padding:16px">Ошибка загрузки графика</p>';
+  }
+}
+
+function awgChartHover(e) {
+  const svg = e.target.closest('svg');
+  if (!svg || awgChartPoints.length < 2) return;
+  const rect = svg.getBoundingClientRect();
+  const mouseX = e.clientX - rect.left;
+  const width = AWG_CHART_W;
+  const vbX = mouseX * (width / rect.width);
+  const innerW = width;
+  const step = innerW / (awgChartPoints.length - 1);
+  const idx = Math.max(0, Math.min(awgChartPoints.length - 1, Math.round(vbX / step)));
+  const x = idx * step;
+  const innerH = AWG_CHART_HEIGHT - AWG_CHART_PAD_TOP - AWG_CHART_PAD_BOTTOM;
+  const rxY = AWG_CHART_PAD_TOP + innerH * (1 - (awgChartRxRates[idx] || 0) / awgChartMaxRate);
+  const txY = AWG_CHART_PAD_TOP + innerH * (1 - (awgChartTxRates[idx] || 0) / awgChartMaxRate);
+
+  const cross = document.getElementById('awgChartCrosshair');
+  if (cross) cross.style.display = 'block';
+  const vLine = document.getElementById('awgCrossV');
+  if (vLine) { vLine.setAttribute('x1', x); vLine.setAttribute('x2', x); }
+  const rxDot = document.getElementById('awgCrossRx');
+  if (rxDot) { rxDot.setAttribute('cx', x); rxDot.setAttribute('cy', rxY); }
+  const txDot = document.getElementById('awgCrossTx');
+  if (txDot) { txDot.setAttribute('cx', x); txDot.setAttribute('cy', txY); }
+
+  const tooltip = document.getElementById('awgChartTooltip');
+  if (!tooltip) return;
+  const rx = awgChartRxRates[idx] || 0;
+  const tx = awgChartTxRates[idx] || 0;
+  const ts = awgChartPoints[idx] ? awgChartPoints[idx].ts : 0;
+  const d = new Date(ts * 1000);
+  const timeStr = d.getHours().toString().padStart(2,'0') + ':' + d.getMinutes().toString().padStart(2,'0') + ':' + d.getSeconds().toString().padStart(2,'0');
+  tooltip.innerHTML = '<div style="color:var(--color-text-muted);margin-bottom:2px">' + timeStr + '</div><div style="color:var(--color-accent)">↓ ' + formatRate(rx) + '</div><div style="color:var(--color-success)">↑ ' + formatRate(tx) + '</div>';
+  tooltip.style.display = 'block';
+  tooltip.style.left = Math.min(vbX + 12, rect.width - 140) + 'px';
+  tooltip.style.top = '40px';
+}
+
+function awgChartLeave() {
+  const tooltip = document.getElementById('awgChartTooltip');
+  if (tooltip) tooltip.style.display = 'none';
+  const cross = document.getElementById('awgChartCrosshair');
+  if (cross) cross.style.display = 'none';
+}
+
+function selectAwgChartPeriod(period, btn) {
+  awgChartPeriod = period;
+  document.querySelectorAll('.awg-chart-period-btn').forEach(function(b) { b.classList.remove('active'); });
+  if (btn) btn.classList.add('active');
+  if (awgChartName) renderAwgChart(awgChartName, period);
+}
+
 function renderAmneziaInterfaces(ifaces) {
+  awgLastIfaces = ifaces || [];
   const list = document.getElementById('amneziaInterfaceList');
   if (!list) return;
   if (!ifaces || !ifaces.length) {
     list.innerHTML = '<p style="color:#64748b">Нет импортированных интерфейсов</p>';
     return;
   }
-  let html = '<table><thead><tr><th>Имя</th><th>Статус</th><th>Адрес</th><th>PublicKey</th><th>Handshake / Ping</th><th>Трафик</th><th>Действия</th></tr></thead><tbody>';
+  let html = '';
   for (const iface of ifaces) {
     const running = iface.running === 'true';
-    const statusText = running ? ' Запущен' : 'Остановлен';
-    const statusClass = running ? 'led-green' : 'led-gray';
-    const pubKey = iface.publicKey ? iface.publicKey.substring(0, 16) + '...' : '—';
-    const addr = iface.address || '—';
-    const hs = iface.handshake || '—';
-    const ping = iface.ping || '—';
-    const rx = iface.rx || '0 B';
-    const tx = iface.tx || '0 B';
-    html += `<tr>
-      <td><code>${escapeHtml(iface.name)}</code></td>
-      <td><span class="led ${statusClass}"></span> ${statusText}</td>
-      <td><code>${escapeHtml(addr)}</code></td>
-      <td><code title="${escapeHtml(iface.publicKey || '')}">${escapeHtml(pubKey)}</code></td>
-      <td>${escapeHtml(hs)}<br><span style="color:#38bdf8;font-size:0.85rem">ping: ${escapeHtml(ping)}</span></td>
-      <td><span title="↓ ${escapeHtml(rx)}">↓ ${escapeHtml(rx)}</span> / <span title="↑ ${escapeHtml(tx)}">↑ ${escapeHtml(tx)}</span></td>
-      <td style="display:flex;gap:4px">
-        ${!running ? `<button class="btn-qr" onclick="manageAmneziaInterface('${escapeHtml(iface.name)}','up')" title="Запустить">▶</button>` : ''}
-        ${running ? `<button class="btn-dl" onclick="manageAmneziaInterface('${escapeHtml(iface.name)}','down')" title="Остановить">⏸</button>` : ''}
-        <button class="btn-del" onclick="manageAmneziaInterface('${escapeHtml(iface.name)}','delete')" title="Удалить">✕</button>
-      </td>
-    </tr>`;
+    const ledClass = running ? 'led-green' : 'led-gray';
+    const name = escapeHtml(iface.name);
+    const addr = escapeHtml(iface.address || '—');
+    const hs = escapeHtml(iface.handshake || '—');
+    const rxBytes = Number(iface.rxBytes || 0);
+    const txBytes = Number(iface.txBytes || 0);
+    if (running) {
+      feedAmneziaTraffic(iface.name, rxBytes, txBytes);
+    }
+    const rates = getAmneziaTrafficRates(iface.name);
+    const sparkline = buildAmneziaSparkline(rates.rx, rates.tx);
+    const currentRxRate = rates.rx.length ? rates.rx[rates.rx.length - 1] : 0;
+    const currentTxRate = rates.tx.length ? rates.tx[rates.tx.length - 1] : 0;
+
+    const pingState = awgPingStatus[name] || {};
+    const pingChecking = pingState.checking;
+    const pingConnected = pingState.connected;
+    const pingLatency = pingState.latency;
+
+    let pingLabel, pingTierClass, pingTitle, pingDisabled, pingSpinning, pingShowIcon;
+    if (pingChecking) {
+      pingLabel = '...';
+      pingTierClass = '';
+      pingTitle = 'Проверить связь';
+      pingDisabled = true;
+      pingSpinning = true;
+      pingShowIcon = true;
+    } else if (pingConnected) {
+      const ms = Math.round(pingLatency);
+      pingLabel = ms + 'ms';
+      pingTierClass = awgTier(ms);
+      pingTitle = 'Проверить связь';
+      pingDisabled = false;
+      pingSpinning = false;
+      pingShowIcon = true;
+    } else if (pingState.hasResult) {
+      pingLabel = 'Нет связи';
+      pingTierClass = 'tier-bad';
+      pingTitle = 'Нет связи. Нажать для проверки';
+      pingDisabled = false;
+      pingSpinning = false;
+      pingShowIcon = false;
+    } else {
+      pingLabel = '...';
+      pingTierClass = '';
+      pingTitle = 'Проверить связь';
+      pingDisabled = false;
+      pingSpinning = false;
+      pingShowIcon = false;
+    }
+
+    html += '<div class="awg-card view-dense">' +
+      '<div class="awg-card-header">' +
+        '<div class="awg-card-title-group">' +
+          '<div class="awg-card-title-row">' +
+            '<span class="led ' + ledClass + '"></span>' +
+            '<span class="awg-card-name">' + name + '</span>' +
+          '</div>' +
+          '<div class="awg-card-meta-tags">' +
+            '<span class="awg-iface-tag" title="' + escapeHtml(iface.name) + '">' + escapeHtml(iface.name) + '</span>' +
+          '</div>' +
+        '</div>' +
+        '<div class="awg-card-toolbar">' +
+          '<div class="awg-toolbar-row">' +
+            '<label class="toggle-switch" title="' + (running ? 'Остановить' : 'Запустить') + '">' +
+              '<input type="checkbox" ' + (running ? 'checked' : '') + ' onchange="manageAmneziaInterface(\'' + name + '\',' + (running ? '\'down\'' : '\'up\'') + ')">' +
+              '<span class="toggle-slider"></span>' +
+            '</label>' +
+          '</div>' +
+          (running ?
+            '<button type="button" class="ping-btn ' + pingTierClass + (pingSpinning ? ' spinning' : '') + ' force-border" onclick="checkAmneziaPing(\'' + name + '\')" title="' + pingTitle + '" ' + (pingDisabled ? 'disabled' : '') + '>' +
+              pingLabel +
+              (pingShowIcon ? '<span class="refresh-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg></span>' : '') +
+            '</button>'
+          : '') +
+        '</div>' +
+      '</div>' +
+      '<div class="awg-card-details">' +
+        '<div class="awg-card-kv-cols">' +
+          '<div class="awg-card-kv-col">' +
+            '<div class="awg-kv"><span class="awg-kv-label">Адрес</span><code class="awg-kv-value">' + addr + '</code></div>' +
+          '</div>' +
+          '<div class="awg-card-kv-col awg-card-kv-col-right">' +
+            '<div class="awg-kv"><span class="awg-kv-label">Handshake</span><span class="awg-kv-value">' + hs + '</span></div>' +
+          '</div>' +
+        '</div>' +
+      '</div>' +
+      '<div class="awg-card-chart" onclick="openAwgChartModal(\'' + name + '\')" title="Открыть график трафика" role="button" tabindex="0">' +
+        sparkline +
+        '<div class="awg-traffic-rates">' +
+          '<span class="awg-traffic-rate rx">↓ ' + formatRate(currentRxRate) + '</span>' +
+          '<span class="awg-traffic-rate tx">↑ ' + formatRate(currentTxRate) + '</span>' +
+        '</div>' +
+      '</div>' +
+    '</div>';
   }
-  html += '</tbody></table>';
   list.innerHTML = html;
+  if (ifaces && ifaces.length) {
+    awgPingNonce++;
+    const nonce = awgPingNonce;
+    let started = false;
+    setTimeout(function() {
+      if (nonce !== awgPingNonce) return;
+      for (const iface of ifaces) {
+        if (iface.running !== 'true') continue;
+        const st = awgPingStatus[iface.name];
+        if (!st || !st.hasResult) {
+          if (!started) { started = true; }
+          scheduleAmneziaPing(iface.name, started ? 250 : 0);
+        }
+      }
+    }, 50);
+  }
 }
 
 async function manageAmneziaInterface(name, action) {
