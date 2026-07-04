@@ -101,11 +101,10 @@
   </section>
 
     <section class="card" id="tab-settings" style="display:none">
-      <h2 class="card-title">Настройки сервера</h2>
+      <h2 class="card-title">Настройки WG сервера</h2>
       <form id="serverForm" class="grid-form">
         <label>Интерфейс<input id="iInterface" value="wg0"></label>
         <label>Порт<input id="iPort" type="number" value="51820"></label>
-        <label>Порт веб-интерфейса<input id="iHttpPort" type="number" value="8080" min="1" max="65535"></label>
         <label>Endpoint<input id="iEndpoint" placeholder="AUTO"></label>
         <label>DNS<input id="iDns" value="1.1.1.1"></label>
         <label>Подсеть<input id="iSubnet" value="10.0.0.0/24" placeholder="10.0.0.0/24"></label>
@@ -128,6 +127,11 @@
           </label>
           <label>Домен (TLS Host)<input id="iTLSHost" placeholder="example.com"></label>
           <label>Папка кэша (TLS Cache)<input id="iTLSCache" placeholder="data/tls-cache"></label>
+        </div>
+
+        <div class="form-section">
+          <h3>Настройки сервера</h3>
+          <label>Порт веб-интерфейса<input id="iHttpPort" type="number" value="8080" min="1" max="65535"></label>
         </div>
 
         <div class="actions">
@@ -388,6 +392,6 @@ AllowedIPs = ..."></textarea>
   </div>
 </div>
 
-<script src="/static/js/app.js?v=2026070440"></script>
+<script src="/static/js/app.js?v=2026070441"></script>
 </body>
 </html>
