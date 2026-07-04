@@ -2460,7 +2460,7 @@ function renderAmneziaInterfaces(ifaces) {
         '</div>' +
       '</div>' +
       '<div class="awg-card-actions awg-card-actions--labeled">' +
-        '<button type="button" class="awg-action-btn awg-action-btn--primary" onclick="editAmneziaConfig(\'' + rawName + '\')" title="Изменить">' +
+        '<button type="button" class="awg-action-btn awg-action-btn--primary" onclick="openAwgEditModal(\'' + rawName + '\')" title="Изменить">' +
           '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><path d="m12 8 4 4-8 8H4v-4z"/></svg>' +
           'Изменить' +
         '</button>' +
@@ -2543,7 +2543,116 @@ async function testAmneziaInterface(name) {
 }
 
 function editAmneziaConfig(name) {
-  alert('Редактирование конфигурации ' + name + '\n\nФункция в разработке.');
+  openAwgEditModal(name);
+}
+
+let awgEditName = null;
+let awgEditWasRunning = false;
+
+async function openAwgEditModal(name) {
+  awgEditName = name;
+  const iface = (awgLastIfaces || []).find(i => i.name === name);
+  awgEditWasRunning = iface ? (iface.running === 'true') : false;
+
+  document.getElementById('awgEditName').textContent = name;
+  try {
+    const res = await xhr('GET', '/amnezia/interface/' + encodeURIComponent(name) + '/config');
+    if (!res.ok) {
+      alert('Ошибка загрузки конфига: ' + (await res.text()));
+      return;
+    }
+    const cfg = await res.json();
+    document.getElementById('awgName').value = cfg.name || name;
+    const addrParts = (cfg.address || '').split(',').map(s => s.trim());
+    document.getElementById('awgIPv4').value = addrParts.find(p => !p.includes(':')) || '';
+    document.getElementById('awgIPv6').value = addrParts.find(p => p.includes(':')) || '';
+    document.getElementById('awgMtu').value = cfg.mtu || 1420;
+    document.getElementById('awgDns').value = cfg.dns || '';
+    document.getElementById('awgEndpoint').value = cfg.endpoint || '';
+    document.getElementById('awgPubKey').value = cfg.publicKey || '';
+    document.getElementById('awgAllowedIPs').value = cfg.allowedIPs || '';
+    document.getElementById('awgKeepalive').value = cfg.keepalive || 25;
+    document.getElementById('awgJc').value = cfg.jc ?? 4;
+    document.getElementById('awgJmin').value = cfg.jmin ?? 40;
+    document.getElementById('awgJmax').value = cfg.jmax ?? 70;
+    document.getElementById('awgS1').value = cfg.s1 ?? 0;
+    document.getElementById('awgS2').value = cfg.s2 ?? 0;
+    document.getElementById('awgS3').value = cfg.s3 ?? 0;
+    document.getElementById('awgS4').value = cfg.s4 ?? 0;
+    document.getElementById('awgH1').value = cfg.h1 || '';
+    document.getElementById('awgH2').value = cfg.h2 || '';
+    document.getElementById('awgH3').value = cfg.h3 || '';
+    document.getElementById('awgH4').value = cfg.h4 || '';
+    document.getElementById('awgI1').value = cfg.i1 || '';
+    document.getElementById('awgI2').value = cfg.i2 || '';
+    document.getElementById('awgI3').value = cfg.i3 || '';
+    document.getElementById('awgI4').value = cfg.i4 || '';
+    document.getElementById('awgI5').value = cfg.i5 || '';
+    switchAwgTab('basic');
+    document.getElementById('awgEditModal').classList.add('show');
+  } catch (e) {
+    alert('Ошибка: ' + (e.message || e));
+  }
+}
+
+function closeAwgEditModal() {
+  document.getElementById('awgEditModal').classList.remove('show');
+  awgEditName = null;
+}
+
+function switchAwgTab(tab) {
+  document.querySelectorAll('.awg-edit-tab').forEach(t => {
+    t.classList.toggle('active', t.dataset.tab === tab);
+  });
+  document.getElementById('awgPanelBasic').style.display = tab === 'basic' ? '' : 'none';
+  document.getElementById('awgPanelObfs').style.display = tab === 'obfuscation' ? '' : 'none';
+}
+
+async function saveAwgConfig() {
+  if (!awgEditName) return;
+  const payload = {
+    name: document.getElementById('awgName').value,
+    address: document.getElementById('awgIPv4').value + (document.getElementById('awgIPv6').value ? ', ' + document.getElementById('awgIPv6').value : ''),
+    mtu: parseInt(document.getElementById('awgMtu').value) || 1420,
+    dns: document.getElementById('awgDns').value,
+    endpoint: document.getElementById('awgEndpoint').value,
+    publicKey: document.getElementById('awgPubKey').value,
+    allowedIPs: document.getElementById('awgAllowedIPs').value,
+    keepalive: parseInt(document.getElementById('awgKeepalive').value) || 25,
+    jc: parseInt(document.getElementById('awgJc').value) || 4,
+    jmin: parseInt(document.getElementById('awgJmin').value) || 40,
+    jmax: parseInt(document.getElementById('awgJmax').value) || 70,
+    s1: parseInt(document.getElementById('awgS1').value) || 0,
+    s2: parseInt(document.getElementById('awgS2').value) || 0,
+    s3: parseInt(document.getElementById('awgS3').value) || 0,
+    s4: parseInt(document.getElementById('awgS4').value) || 0,
+    h1: document.getElementById('awgH1').value,
+    h2: document.getElementById('awgH2').value,
+    h3: document.getElementById('awgH3').value,
+    h4: document.getElementById('awgH4').value,
+    i1: document.getElementById('awgI1').value,
+    i2: document.getElementById('awgI2').value,
+    i3: document.getElementById('awgI3').value,
+    i4: document.getElementById('awgI4').value,
+    i5: document.getElementById('awgI5').value,
+  };
+  const btn = document.getElementById('awgSaveBtn');
+  btn.disabled = true;
+  btn.textContent = 'Сохранение...';
+  try {
+    const res = await xhr('POST', '/amnezia/interface/' + encodeURIComponent(awgEditName) + '/config', payload);
+    if (res.ok) {
+      closeAwgEditModal();
+      loadAmneziaInterfaces();
+    } else {
+      alert('Ошибка: ' + (await res.text()));
+    }
+  } catch (e) {
+    alert('Ошибка: ' + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Сохранить';
+  }
 }
 
 async function installAmnezia() {

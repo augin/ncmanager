@@ -29,7 +29,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.11.4"
+const appVersion = "1.11.5"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
@@ -2467,6 +2467,16 @@ func (s *Server) handleAmneziaInterface(w http.ResponseWriter, r *http.Request) 
 		s.checkAmneziaPing(w, r)
 		return
 	}
+	if strings.HasSuffix(path, "/config") {
+		if r.Method == http.MethodGet {
+			s.getAmneziaInterfaceConfig(w, r)
+		} else if r.Method == http.MethodPost {
+			s.saveAmneziaInterfaceConfig(w, r)
+		} else {
+			http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		}
+		return
+	}
 	s.manageAmneziaInterface(w, r)
 }
 
@@ -2504,6 +2514,253 @@ func (s *Server) checkAmneziaPing(w http.ResponseWriter, r *http.Request) {
 		"latency":   latency,
 		"text":      text,
 	})
+}
+
+type amneziaConfigResponse struct {
+	Name         string `json:"name"`
+	Address      string `json:"address"`
+	MTU          int    `json:"mtu"`
+	DNS          string `json:"dns"`
+	Endpoint     string `json:"endpoint"`
+	PublicKey    string `json:"publicKey"`
+	AllowedIPs   string `json:"allowedIPs"`
+	Keepalive    int    `json:"keepalive"`
+	JC           int    `json:"jc"`
+	JMIN         int    `json:"jmin"`
+	JMAX         int    `json:"jmax"`
+	S1           int    `json:"s1"`
+	S2           int    `json:"s2"`
+	S3           int    `json:"s3"`
+	S4           int    `json:"s4"`
+	H1           string `json:"h1"`
+	H2           string `json:"h2"`
+	H3           string `json:"h3"`
+	H4           string `json:"h4"`
+	I1           string `json:"i1"`
+	I2           string `json:"i2"`
+	I3           string `json:"i3"`
+	I4           string `json:"i4"`
+	I5           string `json:"i5"`
+}
+
+func parseAmneziaConfig(content string) amneziaConfigResponse {
+	cfg := amneziaConfigResponse{
+		MTU:      1420,
+		Keepalive: 25,
+		JC:       4,
+		JMIN:     40,
+		JMAX:     70,
+	}
+	lines := strings.Split(content, "\n")
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") || strings.HasPrefix(line, "//") {
+			continue
+		}
+		parts := strings.SplitN(line, "=", 2)
+		if len(parts) < 2 {
+			continue
+		}
+		key := strings.TrimSpace(parts[0])
+		val := strings.TrimSpace(parts[1])
+		switch key {
+		case "Address":
+			cfg.Address = val
+		case "ListenPort":
+			// skip
+		case "PrivateKey":
+			// skip
+		case "PublicKey":
+			cfg.PublicKey = val
+		case "Endpoint":
+			cfg.Endpoint = val
+		case "AllowedIPs":
+			cfg.AllowedIPs = val
+		case "DNS":
+			cfg.DNS = val
+		case "PersistentKeepalive":
+			if n, err := strconv.Atoi(val); err == nil {
+				cfg.Keepalive = n
+			}
+		case "MTU":
+			if n, err := strconv.Atoi(val); err == nil {
+				cfg.MTU = n
+			}
+		case "JC":
+			if n, err := strconv.Atoi(val); err == nil {
+				cfg.JC = n
+			}
+		case "JMIN":
+			if n, err := strconv.Atoi(val); err == nil {
+				cfg.JMIN = n
+			}
+		case "JMAX":
+			if n, err := strconv.Atoi(val); err == nil {
+				cfg.JMAX = n
+			}
+		case "S1":
+			if n, err := strconv.Atoi(val); err == nil {
+				cfg.S1 = n
+			}
+		case "S2":
+			if n, err := strconv.Atoi(val); err == nil {
+				cfg.S2 = n
+			}
+		case "S3":
+			if n, err := strconv.Atoi(val); err == nil {
+				cfg.S3 = n
+			}
+		case "S4":
+			if n, err := strconv.Atoi(val); err == nil {
+				cfg.S4 = n
+			}
+		case "H1":
+			cfg.H1 = val
+		case "H2":
+			cfg.H2 = val
+		case "H3":
+			cfg.H3 = val
+		case "H4":
+			cfg.H4 = val
+		case "I1":
+			cfg.I1 = val
+		case "I2":
+			cfg.I2 = val
+		case "I3":
+			cfg.I3 = val
+		case "I4":
+			cfg.I4 = val
+		case "I5":
+			cfg.I5 = val
+		}
+	}
+	return cfg
+}
+
+func writeAmneziaConfig(cfg amneziaConfigResponse) string {
+	var b strings.Builder
+	b.WriteString("[Interface]\n")
+	b.WriteString(fmt.Sprintf("PrivateKey = <server_key_placeholder>\n"))
+	b.WriteString(fmt.Sprintf("Address = %s\n", cfg.Address))
+	b.WriteString(fmt.Sprintf("ListenPort = %d\n", 51820))
+	if cfg.DNS != "" {
+		b.WriteString(fmt.Sprintf("DNS = %s\n", cfg.DNS))
+	}
+	b.WriteString(fmt.Sprintf("MTU = %d\n", cfg.MTU))
+	b.WriteString(fmt.Sprintf("JC = %d\n", cfg.JC))
+	b.WriteString(fmt.Sprintf("JMIN = %d\n", cfg.JMIN))
+	b.WriteString(fmt.Sprintf("JMAX = %d\n", cfg.JMAX))
+	b.WriteString(fmt.Sprintf("S1 = %d\n", cfg.S1))
+	b.WriteString(fmt.Sprintf("S2 = %d\n", cfg.S2))
+	b.WriteString(fmt.Sprintf("S3 = %d\n", cfg.S3))
+	b.WriteString(fmt.Sprintf("S4 = %d\n", cfg.S4))
+	if cfg.H1 != "" {
+		b.WriteString(fmt.Sprintf("H1 = %s\n", cfg.H1))
+	}
+	if cfg.H2 != "" {
+		b.WriteString(fmt.Sprintf("H2 = %s\n", cfg.H2))
+	}
+	if cfg.H3 != "" {
+		b.WriteString(fmt.Sprintf("H3 = %s\n", cfg.H3))
+	}
+	if cfg.H4 != "" {
+		b.WriteString(fmt.Sprintf("H4 = %s\n", cfg.H4))
+	}
+	if cfg.I1 != "" {
+		b.WriteString(fmt.Sprintf("I1 = %s\n", cfg.I1))
+	}
+	if cfg.I2 != "" {
+		b.WriteString(fmt.Sprintf("I2 = %s\n", cfg.I2))
+	}
+	if cfg.I3 != "" {
+		b.WriteString(fmt.Sprintf("I3 = %s\n", cfg.I3))
+	}
+	if cfg.I4 != "" {
+		b.WriteString(fmt.Sprintf("I4 = %s\n", cfg.I4))
+	}
+	if cfg.I5 != "" {
+		b.WriteString(fmt.Sprintf("I5 = %s\n", cfg.I5))
+	}
+	b.WriteString("\n[Peer]\n")
+	b.WriteString(fmt.Sprintf("PublicKey = %s\n", cfg.PublicKey))
+	b.WriteString(fmt.Sprintf("AllowedIPs = %s\n", cfg.AllowedIPs))
+	b.WriteString(fmt.Sprintf("Endpoint = %s\n", cfg.Endpoint))
+	b.WriteString(fmt.Sprintf("PersistentKeepalive = %d\n", cfg.Keepalive))
+	return b.String()
+}
+
+func (s *Server) getAmneziaInterfaceConfig(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/amnezia/interface/")
+	name := strings.TrimSuffix(path, "/config")
+	if name == "" {
+		http.Error(w, "interface name required", http.StatusBadRequest)
+		return
+	}
+	confPath := fmt.Sprintf("/etc/amnezia/amneziawg/%s.conf", name)
+	content, err := os.ReadFile(confPath)
+	if err != nil {
+		http.Error(w, "failed to read config: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+	cfg := parseAmneziaConfig(string(content))
+	cfg.Name = name
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(cfg)
+}
+
+func (s *Server) saveAmneziaInterfaceConfig(w http.ResponseWriter, r *http.Request) {
+	path := strings.TrimPrefix(r.URL.Path, "/amnezia/interface/")
+	name := strings.TrimSuffix(path, "/config")
+	if name == "" {
+		http.Error(w, "interface name required", http.StatusBadRequest)
+		return
+	}
+
+	var req amneziaConfigResponse
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	req.Name = name
+
+	confPath := fmt.Sprintf("/etc/amnezia/amneziawg/%s.conf", name)
+	wasRunning := false
+	var err error
+	_, err = exec.Command("awg-quick", "show", name).CombinedOutput()
+	wasRunning = err == nil
+
+	if wasRunning {
+		exec.Command("awg-quick", "down", name).CombinedOutput()
+		exec.Command("systemctl", "disable", "--now", "awg-quick@"+name).CombinedOutput()
+	}
+
+	newConf := writeAmneziaConfig(req)
+	privKey := ""
+	if existing, err := os.ReadFile(confPath); err == nil {
+		lines := strings.Split(string(existing), "\n")
+		for _, line := range lines {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "PrivateKey = ") {
+				privKey = strings.TrimSpace(strings.TrimPrefix(line, "PrivateKey = "))
+				break
+			}
+		}
+	}
+	if privKey != "" {
+		newConf = strings.Replace(newConf, "<server_key_placeholder>", privKey, 1)
+	}
+	if err := os.WriteFile(confPath, []byte(newConf), 0600); err != nil {
+		http.Error(w, "failed to write config: "+err.Error(), http.StatusInternalServerError)
+		return
+	}
+
+	if wasRunning {
+		exec.Command("awg-quick", "up", name).CombinedOutput()
+		exec.Command("systemctl", "enable", "--now", "awg-quick@"+name).CombinedOutput()
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "name": name})
 }
 
 func (s *Server) manageAmneziaInterface(w http.ResponseWriter, r *http.Request) {
