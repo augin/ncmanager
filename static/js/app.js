@@ -1658,30 +1658,8 @@ async function createBackup() {
 function showRestoreModal() {
   closeAllModals();
   const modal = document.getElementById('restoreModal');
-  if (!modal) {
-    console.error('[restoreModal] element not found in DOM');
-    return;
-  }
-  const body = document.body;
-  const html = document.documentElement;
-  const app = document.getElementById('app');
-  console.log('[restoreModal] found, parent display:', 
-    modal.parentElement ? getComputedStyle(modal.parentElement).display : 'no parent',
-    'body display:', getComputedStyle(body).display,
-    'app display:', app ? getComputedStyle(app).display : 'no app');
-  
+  if (!modal) return;
   modal.classList.add('show');
-  const display = getComputedStyle(modal).display;
-  const bg = getComputedStyle(modal).background;
-  console.log('[restoreModal] classList after:', modal.className, 'display:', display, 'background:', bg);
-  
-  const content = modal.querySelector('.modal-content');
-  if (content) {
-    console.log('[restoreModal] modal-content display:', getComputedStyle(content).display, 
-      'visibility:', getComputedStyle(content).visibility,
-      'opacity:', getComputedStyle(content).opacity);
-  }
-  
   const input = document.getElementById('restoreFile');
   const log = document.getElementById('restoreLog');
   if (input) input.value = '';
