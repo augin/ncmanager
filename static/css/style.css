@@ -209,6 +209,12 @@ html.light .theme-icon--moon,
   padding: 0 0.625rem;
   font-size: 0.75rem;
 }
+.btn-icon-sm {
+  font-size: 0.75rem;
+  font-weight: 700;
+  padding: 4px 6px;
+  min-width: 38px;
+}
 
 .btn-primary {
   background: var(--color-accent);
