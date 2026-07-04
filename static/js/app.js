@@ -51,47 +51,46 @@ function initTheme() {
 	applyTheme(mode);
 }
 
-const AMNEZIA_TRAFFIC = new Map();
-const AMNEZIA_MAX_POINTS = 3600;
-const AMNEZIA_CARD_WINDOW = 360;
-const AMNEZIA_CARD_DISPLAY = 60;
-const AMNEZIA_POLL_INTERVAL = 30;
+const AMNEZIA_SPARKLINE_CACHE = new Map();
 
-function feedAmneziaTraffic(name, rxBytes, txBytes) {
-	const now = Date.now();
-	let entry = AMNEZIA_TRAFFIC.get(name);
-	if (!entry) {
-		entry = { lastRxBytes: 0, lastTxBytes: 0, lastTimestamp: 0, rxRates: [], txRates: [] };
-		AMNEZIA_TRAFFIC.set(name, entry);
-	}
-	if (entry.lastTimestamp > 0) {
-		const dtSec = (now - entry.lastTimestamp) / 1000;
-		if (dtSec > 0.5) {
-			const dRx = rxBytes - entry.lastRxBytes;
-			const dTx = txBytes - entry.lastTxBytes;
-			if (dRx >= 0 && dTx >= 0) {
-				entry.rxRates.push(dRx / dtSec);
-				entry.txRates.push(dTx / dtSec);
-				if (entry.rxRates.length > AMNEZIA_MAX_POINTS) {
-					entry.rxRates = entry.rxRates.slice(-AMNEZIA_MAX_POINTS);
-					entry.txRates = entry.txRates.slice(-AMNEZIA_MAX_POINTS);
-				}
-			}
+async function loadAmneziaSparkline(name) {
+	try {
+		const res = await xhr('GET', '/amnezia/interface/' + encodeURIComponent(name) + '/stats?period=5m');
+		if (!res.ok) return;
+		const data = await res.json();
+		if (!data || !data.points || data.points.length < 2) return;
+		const rx = [];
+		const tx = [];
+		for (const pt of data.points) {
+			rx.push(pt.rx || 0);
+			tx.push(pt.tx || 0);
 		}
+		AMNEZIA_SPARKLINE_CACHE.set(name, { rx, tx, ts: Date.now() });
+		const card = document.querySelector('.awg-card[data-name="' + name.replace(/"/g, '\\"') + '"]');
+		if (card) {
+			const sparkEl = card.querySelector('.awg-card-chart svg');
+			const rxEl = card.querySelector('.awg-traffic-rate.rx');
+			const txEl = card.querySelector('.awg-traffic-rate.tx');
+			const downsampledRx = downsampleMaxAmnezia(rx, 60);
+			const downsampledTx = downsampleMaxAmnezia(tx, 60);
+			const newSparkline = buildAmneziaSparkline(downsampledRx, downsampledTx);
+			if (sparkEl) sparkEl.outerHTML = newSparkline;
+			const curRx = downsampledRx.length ? downsampledRx[downsampledRx.length - 1] : 0;
+			const curTx = downsampledTx.length ? downsampledTx[downsampledTx.length - 1] : 0;
+			if (rxEl) rxEl.textContent = '↓ ' + formatRate(curRx);
+			if (txEl) txEl.textContent = '↑ ' + formatRate(curTx);
+		}
+	} catch (e) {
+		console.error('loadAmneziaSparkline failed:', e);
 	}
-	entry.lastRxBytes = rxBytes;
-	entry.lastTxBytes = txBytes;
-	entry.lastTimestamp = now;
 }
 
-function getAmneziaTrafficRates(name) {
-	const entry = AMNEZIA_TRAFFIC.get(name);
+function getAmneziaSparklineRates(name) {
+	const entry = AMNEZIA_SPARKLINE_CACHE.get(name);
 	if (!entry) return { rx: [], tx: [] };
-	const rxRaw = entry.rxRates.length > AMNEZIA_CARD_WINDOW ? entry.rxRates.slice(-AMNEZIA_CARD_WINDOW) : entry.rxRates;
-	const txRaw = entry.txRates.length > AMNEZIA_CARD_WINDOW ? entry.txRates.slice(-AMNEZIA_CARD_WINDOW) : entry.txRates;
 	return {
-		rx: downsampleMaxAmnezia(rxRaw, AMNEZIA_CARD_DISPLAY),
-		tx: downsampleMaxAmnezia(txRaw, AMNEZIA_CARD_DISPLAY)
+		rx: downsampleMaxAmnezia(entry.rx, 60),
+		tx: downsampleMaxAmnezia(entry.tx, 60)
 	};
 }
 
@@ -102,7 +101,7 @@ function downsampleMaxAmnezia(src, target) {
 	for (let i = 0; i < target; i++) {
 		const start = Math.floor(i * bucket);
 		const end = Math.min(src.length, Math.floor((i + 1) * bucket));
-		let m = src[start];
+		let m = src[start] || 0;
 		for (let j = start + 1; j < end; j++) {
 			if (src[j] > m) m = src[j];
 		}
@@ -115,22 +114,13 @@ async function loadAmneziaHistory(name, period) {
 	try {
 		const res = await xhr('GET', '/amnezia/interface/' + encodeURIComponent(name) + '/stats?period=' + encodeURIComponent(period || '1h'));
 		if (res.ok) {
-			const data = res.json();
+			const data = await res.json();
 			if (!data || !data.points) return;
-			let entry = AMNEZIA_TRAFFIC.get(name);
-			if (!entry) {
-				entry = { lastRxBytes: 0, lastTxBytes: 0, lastTimestamp: 0, rxRates: [], txRates: [] };
-				AMNEZIA_TRAFFIC.set(name, entry);
-			}
-			const stepSec = 30;
-			for (const pt of data.points) {
-				entry.rxRates.push(pt.rx);
-				entry.txRates.push(pt.tx);
-			}
-			if (entry.rxRates.length > AMNEZIA_MAX_POINTS) {
-				entry.rxRates = entry.rxRates.slice(-AMNEZIA_MAX_POINTS);
-				entry.txRates = entry.txRates.slice(-AMNEZIA_MAX_POINTS);
-			}
+			AMNEZIA_SPARKLINE_CACHE.set(name, {
+				rx: data.points.map(pt => pt.rx || 0),
+				tx: data.points.map(pt => pt.tx || 0),
+				ts: Date.now()
+			});
 		}
 	} catch (e) {
 		console.error('loadAmneziaHistory failed:', e);
@@ -1919,10 +1909,11 @@ async function loadAmneziaInterfaces() {
 
 function formatRate(bytesPerSec) {
   if (!isFinite(bytesPerSec) || bytesPerSec < 0) return '—';
-  const units = ['B/s', 'KB/s', 'MB/s', 'GB/s'];
+  const bits = bytesPerSec * 8;
+  const units = ['Kbit/s', 'Mbit/s', 'Gbit/s'];
   let u = 0;
-  let v = bytesPerSec;
-  while (v >= 1024 && u < units.length - 1) { v /= 1024; u++; }
+  let v = bits;
+  while (v >= 1000 && u < units.length - 1) { v /= 1000; u++; }
   return v.toFixed(u === 0 ? 0 : 1) + ' ' + units[u];
 }
 
@@ -2328,12 +2319,7 @@ function renderAmneziaInterfaces(ifaces) {
     const addr = escapeHtml(iface.address || '—');
     const endpoint = escapeHtml(iface.endpoint || '');
     const hs = escapeHtml(iface.handshake || '—');
-    const rxBytes = Number(iface.rxBytes || 0);
-    const txBytes = Number(iface.txBytes || 0);
-    if (running) {
-      feedAmneziaTraffic(iface.name, rxBytes, txBytes);
-    }
-    const rates = getAmneziaTrafficRates(iface.name);
+    const rates = getAmneziaSparklineRates(iface.name);
     const sparkline = buildAmneziaSparkline(rates.rx, rates.tx);
     const currentRxRate = rates.rx.length ? rates.rx[rates.rx.length - 1] : 0;
     const currentTxRate = rates.tx.length ? rates.tx[rates.tx.length - 1] : 0;
@@ -2375,7 +2361,7 @@ function renderAmneziaInterfaces(ifaces) {
       pingShowIcon = false;
     }
 
-    html += '<div class="awg-card view-dense">' +
+    html += '<div class="awg-card view-dense" data-name="' + rawName.replace(/"/g, '&quot;') + '">' +
       '<div class="awg-card-header">' +
         '<div class="awg-card-title-group">' +
           '<div class="awg-card-title-row">' +
@@ -2437,6 +2423,9 @@ function renderAmneziaInterfaces(ifaces) {
         }
       }
     }, 50);
+    for (const iface of ifaces) {
+      loadAmneziaSparkline(iface.name);
+    }
   }
 }
 

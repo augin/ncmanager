@@ -28,22 +28,23 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.10.2"
+const appVersion = "1.10.4"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
 const wgConfigFile = "/etc/wireguard/wg0.conf"
 
 var amneziaTrafficBuf = struct {
-	mu      sync.Mutex
+	mu      sync.RWMutex
 	entries map[string]*amneziaTrafficEntry
 }{entries: make(map[string]*amneziaTrafficEntry)}
 type amneziaTrafficEntry struct {
-	lastRxBytes   int64
-	lastTxBytes   int64
-	lastTimestamp int64
-	rxRates       []float64
-	txRates       []float64
+	points []amneziaTrafficSnapshot
+}
+type amneziaTrafficSnapshot struct {
+	TS int64 `json:"ts"`
+	Rx int64 `json:"rx"`
+	Tx int64 `json:"tx"`
 }
 const amneziaMaxTrafficPoints = 3600
 
@@ -55,76 +56,72 @@ func feedAmneziaTraffic(name string, rxBytes int64, txBytes int64) {
 		entry = &amneziaTrafficEntry{}
 		amneziaTrafficBuf.entries[name] = entry
 	}
-	if entry.lastTimestamp > 0 {
-		dt := now - entry.lastTimestamp
+	if len(entry.points) > 0 {
+		last := entry.points[len(entry.points)-1]
+		dt := now - last.TS
 		if dt > 0 {
-			var drx, dtx int64
-			if rxBytes >= entry.lastRxBytes {
-				drx = rxBytes - entry.lastRxBytes
-			}
-			if txBytes >= entry.lastTxBytes {
-				dtx = txBytes - entry.lastTxBytes
-			}
-			if drx >= 0 && dtx >= 0 {
-				rxRate := float64(drx) / float64(dt)
-				txRate := float64(dtx) / float64(dt)
-				entry.rxRates = append(entry.rxRates, rxRate)
-				entry.txRates = append(entry.txRates, txRate)
-				if len(entry.rxRates) > amneziaMaxTrafficPoints {
-					entry.rxRates = entry.rxRates[len(entry.rxRates)-amneziaMaxTrafficPoints:]
-					entry.txRates = entry.txRates[len(entry.txRates)-amneziaMaxTrafficPoints:]
-				}
-			}
+			entry.points = append(entry.points, amneziaTrafficSnapshot{TS: now, Rx: rxBytes, Tx: txBytes})
 		}
+	} else {
+		entry.points = append(entry.points, amneziaTrafficSnapshot{TS: now, Rx: rxBytes, Tx: txBytes})
 	}
-	entry.lastRxBytes = rxBytes
-	entry.lastTxBytes = txBytes
-	entry.lastTimestamp = now
+	if len(entry.points) > amneziaMaxTrafficPoints {
+		entry.points = entry.points[len(entry.points)-amneziaMaxTrafficPoints:]
+	}
 	amneziaTrafficBuf.mu.Unlock()
 }
 
-func getAmneziaTrafficRates(name string, maxPoints int) ([]float64, []float64) {
-	amneziaTrafficBuf.mu.Lock()
-	defer amneziaTrafficBuf.mu.Unlock()
+func getAmneziaTrafficPoints(name string, durationSec int64) ([]amneziaTrafficSnapshot, amneziaTrafficStats) {
+	amneziaTrafficBuf.mu.RLock()
 	entry, ok := amneziaTrafficBuf.entries[name]
-	if !ok || entry == nil {
-		return []float64{}, []float64{}
+	amneziaTrafficBuf.mu.RUnlock()
+	if !ok || entry == nil || len(entry.points) == 0 {
+		return []amneziaTrafficSnapshot{}, amneziaTrafficStats{}
 	}
-	rx := make([]float64, len(entry.rxRates))
-	tx := make([]float64, len(entry.txRates))
-	copy(rx, entry.rxRates)
-	copy(tx, entry.txRates)
-	n := len(rx)
-	if n == 0 {
-		return rx, tx
-	}
-	if n <= maxPoints {
-		return rx, tx
-	}
-	return downsampleMaxTraffic(rx, maxPoints), downsampleMaxTraffic(tx, maxPoints)
-}
-
-func downsampleMaxTraffic(src []float64, target int) []float64 {
-	if len(src) <= target {
-		return src
-	}
-	bucket := float64(len(src)) / float64(target)
-	out := make([]float64, target)
-	for i := 0; i < target; i++ {
-		start := int(float64(i) * bucket)
-		end := int(float64(i+1) * bucket)
-		if end > len(src) {
-			end = len(src)
+	cutoff := time.Now().Unix() - durationSec
+	filtered := make([]amneziaTrafficSnapshot, 0, len(entry.points))
+	for i := range entry.points {
+		if entry.points[i].TS >= cutoff {
+			filtered = append(filtered, entry.points[i])
 		}
-		m := src[start]
-		for j := start + 1; j < end; j++ {
-			if src[j] > m {
-				m = src[j]
-			}
-		}
-		out[i] = m
 	}
-	return out
+	if len(filtered) == 0 {
+		return []amneziaTrafficSnapshot{}, amneziaTrafficStats{}
+	}
+	out := make([]amneziaTrafficSnapshot, len(filtered))
+	copy(out, filtered)
+	n := len(out)
+	stats := amneziaTrafficStats{Points: int64(n)}
+	for i := 1; i < n; i++ {
+		dt := out[i].TS - out[i-1].TS
+		if dt <= 0 {
+			continue
+		}
+		drx := out[i].Rx - out[i-1].Rx
+		dtx := out[i].Tx - out[i-1].Tx
+		if drx < 0 || dtx < 0 {
+			continue
+		}
+		rxRate := float64(drx) / float64(dt)
+		txRate := float64(dtx) / float64(dt)
+		if stats.Points == int64(n) {
+			stats.CurrentRx = rxRate
+			stats.CurrentTx = txRate
+		}
+		if rxRate > stats.PeakRate {
+			stats.PeakRate = rxRate
+		}
+		if txRate > stats.PeakRate {
+			stats.PeakRate = txRate
+		}
+		stats.AvgRx += rxRate
+		stats.AvgTx += txRate
+	}
+	if n > 1 {
+		stats.AvgRx /= float64(n - 1)
+		stats.AvgTx /= float64(n - 1)
+	}
+	return out, stats
 }
 
 type PeersConfig struct {
@@ -320,10 +317,57 @@ func main() {
 		log.Fatalf("HTTPS server error: %v", server.ListenAndServeTLS("", ""))
 	}
 
+	go startAmneziaTrafficPoller()
+	go startAmneziaTrafficCleanup()
+
 	log.Printf("WireGuard Manager starting on :8080")
 	log.Printf("Endpoint: %s", server.endpoint)
 	log.Printf("Version: %s", appVersion)
 	log.Fatal(http.ListenAndServe(":8080", nil))
+}
+
+func startAmneziaTrafficPoller() {
+	if err := exec.Command("sh", "-c", "ls /etc/amnezia/amneziawg/*.conf >/dev/null 2>&1").Run(); err != nil {
+		return
+	}
+	ticker := time.NewTicker(10 * time.Second)
+	defer ticker.Stop()
+	for range ticker.C {
+		entries, err := os.ReadDir("/etc/amnezia/amneziawg")
+		if err != nil {
+			continue
+		}
+		for _, entry := range entries {
+			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".conf") {
+				continue
+			}
+			name := strings.TrimSuffix(entry.Name(), ".conf")
+			running := isAmneziaRunning(name)
+			if !running {
+				continue
+			}
+			rxBytes, txBytes := getAmneziaRawBytes(name)
+			feedAmneziaTraffic(name, rxBytes, txBytes)
+		}
+	}
+}
+
+func startAmneziaTrafficCleanup() {
+	ticker := time.NewTicker(5 * time.Minute)
+	defer ticker.Stop()
+	for range ticker.C {
+		cutoff := time.Now().Unix() - 86400
+		amneziaTrafficBuf.mu.Lock()
+		for name, entry := range amneziaTrafficBuf.entries {
+			for len(entry.points) > 0 && entry.points[0].TS < cutoff {
+				entry.points = entry.points[1:]
+			}
+			if len(entry.points) == 0 {
+				delete(amneziaTrafficBuf.entries, name)
+			}
+		}
+		amneziaTrafficBuf.mu.Unlock()
+	}
 }
 
 func initLogger() {
@@ -2130,7 +2174,6 @@ var result []map[string]interface{}
 			handshake = getAmneziaHandshake(name)
 			rx, tx = getAmneziaTransfer(name)
 			rxBytes, txBytes = getAmneziaRawBytes(name)
-			feedAmneziaTraffic(name, rxBytes, txBytes)
 		}
 		result = append(result, map[string]interface{}{
 			"name":      name,
@@ -2151,14 +2194,15 @@ var result []map[string]interface{}
 	json.NewEncoder(w).Encode(result)
 }
 
-type amneziaTrafficStatsResponse struct {
-	Points []amneziaTrafficPoint `json:"points"`
-	Stats  amneziaTrafficStats   `json:"stats"`
-}
 type amneziaTrafficPoint struct {
 	TS int64   `json:"ts"`
 	Rx float64 `json:"rx"`
 	Tx float64 `json:"tx"`
+}
+
+type amneziaTrafficStatsResponse struct {
+	Points []amneziaTrafficPoint `json:"points"`
+	Stats  amneziaTrafficStats   `json:"stats"`
 }
 type amneziaTrafficStats struct {
 	Points    int64   `json:"points"`
@@ -2188,58 +2232,34 @@ func (s *Server) getAmneziaInterfaceStats(w http.ResponseWriter, r *http.Request
 	case "24h":
 		durationSec = 24 * 3600
 	}
-	cutoff := time.Now().Unix() - durationSec
-	amneziaTrafficBuf.mu.Lock()
-	entry, ok := amneziaTrafficBuf.entries[name]
-	if !ok {
-		entry = &amneziaTrafficEntry{}
-	}
-	rxRates := make([]float64, 0, len(entry.rxRates))
-	txRates := make([]float64, 0, len(entry.txRates))
-	for i := 0; i < len(entry.rxRates); i++ {
-		pt := entry.lastTimestamp - int64(len(entry.rxRates)-1-i)*30
-		if pt >= cutoff {
-			rxRates = append(rxRates, entry.rxRates[i])
-			txRates = append(txRates, entry.txRates[i])
-		}
-	}
-	amneziaTrafficBuf.mu.Unlock()
-	n := len(rxRates)
-	if n > len(txRates) {
-		n = len(txRates)
+	snaps, stats := getAmneziaTrafficPoints(name, durationSec)
+	n := len(snaps)
+	if n < 2 {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(amneziaTrafficStatsResponse{
+			Points: []amneziaTrafficPoint{},
+			Stats:  amneziaTrafficStats{},
+		})
+		return
 	}
 	points := make([]amneziaTrafficPoint, n)
-	now := time.Now().Unix()
-	step := int64(30)
-	if n > 0 {
-		startTS := now - int64(n)*step
-		for i := 0; i < n; i++ {
-			points[i] = amneziaTrafficPoint{
-				TS: startTS + int64(i)*step,
-				Rx: rxRates[i],
-				Tx: txRates[i],
-			}
+	points[0] = amneziaTrafficPoint{TS: snaps[0].TS, Rx: 0, Tx: 0}
+	for i := 1; i < n; i++ {
+		dt := snaps[i].TS - snaps[i-1].TS
+		if dt <= 0 {
+			points[i] = amneziaTrafficPoint{TS: snaps[i].TS, Rx: 0, Tx: 0}
+			continue
 		}
-	}
-	stats := amneziaTrafficStats{Points: int64(n)}
-	if n > 0 {
-		stats.CurrentRx = rxRates[n-1]
-		stats.CurrentTx = txRates[n-1]
-		var peak float64
-		var sumRx, sumTx float64
-		for i := 0; i < n; i++ {
-			if rxRates[i] > peak {
-				peak = rxRates[i]
-			}
-			if txRates[i] > peak {
-				peak = txRates[i]
-			}
-			sumRx += rxRates[i]
-			sumTx += txRates[i]
+		drx := snaps[i].Rx - snaps[i-1].Rx
+		dtx := snaps[i].Tx - snaps[i-1].Tx
+		var rxRate, txRate float64
+		if drx >= 0 {
+			rxRate = float64(drx) / float64(dt)
 		}
-		stats.PeakRate = peak
-		stats.AvgRx = sumRx / float64(n)
-		stats.AvgTx = sumTx / float64(n)
+		if dtx >= 0 {
+			txRate = float64(dtx) / float64(dt)
+		}
+		points[i] = amneziaTrafficPoint{TS: snaps[i].TS, Rx: rxRate, Tx: txRate}
 	}
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(amneziaTrafficStatsResponse{
