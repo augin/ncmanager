@@ -807,22 +807,28 @@ func (s *Server) updatePeer(w http.ResponseWriter, r *http.Request) {
 	found := false
 	for i := range peersCfg.Peers {
 		if peersCfg.Peers[i].ID == req.ID {
-			peersCfg.Peers[i].RouterDomain = req.RouterDomain
-			peersCfg.Peers[i].RouterLogin = req.RouterLogin
+			if req.RouterDomain != "" {
+				peersCfg.Peers[i].RouterDomain = req.RouterDomain
+			}
+			if req.RouterLogin != "" {
+				peersCfg.Peers[i].RouterLogin = req.RouterLogin
+			}
 			if req.RouterPassword != "" {
 				peersCfg.Peers[i].RouterPassword = req.RouterPassword
 			}
-		peersCfg.Peers[i].Description = req.Description
-		peersCfg.Peers[i].Paid = req.Paid
-		if req.CreatedAt != "" {
-			if t, err := time.Parse(time.RFC3339, req.CreatedAt); err == nil {
-				peersCfg.Peers[i].CreatedAt = t
-			} else {
-				http.Error(w, "invalid createdAt format, expected RFC3339", http.StatusBadRequest)
-				return
+			if req.Description != "" {
+				peersCfg.Peers[i].Description = req.Description
 			}
-		}
-		found = true
+			peersCfg.Peers[i].Paid = req.Paid
+			if req.CreatedAt != "" {
+				if t, err := time.Parse(time.RFC3339, req.CreatedAt); err == nil {
+					peersCfg.Peers[i].CreatedAt = t
+				} else {
+					http.Error(w, "invalid createdAt format, expected RFC3339", http.StatusBadRequest)
+					return
+				}
+			}
+			found = true
 			break
 		}
 	}
