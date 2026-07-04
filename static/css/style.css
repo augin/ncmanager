@@ -617,7 +617,7 @@ code {
   overflow-y: auto;
   cursor: pointer;
 }
-.modal.show { display: flex; }
+.modal.show { display: flex !important; }
 
 .modal-content {
   background: var(--color-bg-secondary);

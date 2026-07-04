@@ -1657,9 +1657,8 @@ async function createBackup() {
 
 function showRestoreModal() {
   closeAllModals();
-  const modal = document.getElementById('restoreModal');
-  if (!modal) return;
-  modal.classList.add('show');
+  const m = document.getElementById('restoreModal');
+  if (m) m.classList.add('show');
   const input = document.getElementById('restoreFile');
   const log = document.getElementById('restoreLog');
   if (input) input.value = '';
@@ -1670,9 +1669,9 @@ function closeAllModals() {
   document.querySelectorAll('.modal.show').forEach(function(m) { m.classList.remove('show'); });
 }
 
-function hideRestoreModal() {
-  const modal = document.getElementById('restoreModal');
-  if (modal) modal.classList.remove('show');
+function closeRestoreModal() {
+  const m = document.getElementById('restoreModal');
+  if (m) m.classList.remove('show');
 }
 
 async function restoreBackup() {
@@ -1695,7 +1694,7 @@ async function restoreBackup() {
     if (res.ok && data.status === 'ok') {
       alert('Восстановлено файлов: ' + data.restored.length);
       if (log) log.textContent = 'Восстановлено: ' + data.restored.join('\n');
-      hideRestoreModal();
+      closeRestoreModal();
     } else {
       alert('Ошибка восстановления: ' + (data.error || JSON.stringify(data)));
     }
