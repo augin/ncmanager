@@ -2786,9 +2786,9 @@ func (s *Server) manageAmneziaInterface(w http.ResponseWriter, r *http.Request) 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "name": name})
 	case "up":
-		_, err := exec.Command("awg-quick", "up", name).CombinedOutput()
+		out, err := exec.Command("awg-quick", "up", name).CombinedOutput()
 		if err != nil {
-			http.Error(w, "awg-quick up failed", http.StatusInternalServerError)
+			http.Error(w, "awg-quick up failed: "+string(out), http.StatusInternalServerError)
 			return
 		}
 		exec.Command("systemctl", "enable", "--now", "awg-quick@"+name).CombinedOutput()
