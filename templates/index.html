@@ -158,11 +158,15 @@
         <button id="amneziaInstallBtn" onclick="installAmnezia()" class="btn-qr" style="display:none">Установить Amnezia WG</button>
 
         <div class="modal" id="amneziaInstallModal">
-          <div class="modal-content" style="max-width:640px;text-align:left">
-            <button class="modal-close" onclick="closeAmneziaModal()">✕</button>
-            <h3>Установка Amnezia WG</h3>
-      <textarea id="amneziaInstallLog" readonly class="code-block" style="width:100%;height:300px;resize:vertical"></textarea>
-            <p id="amneziaInstallStatus" style="margin-top:8px;color:#64748b"></p>
+          <div class="modal-content max-w-lg">
+            <div class="modal-header">
+              <h3>Установка Amnezia WG</h3>
+              <button class="modal-close" onclick="closeAmneziaModal()">✕</button>
+            </div>
+            <div class="modal-body">
+              <textarea id="amneziaInstallLog" readonly class="code-block" style="width:100%;height:300px;resize:vertical"></textarea>
+              <p id="amneziaInstallStatus" style="margin-top:8px;color:#64748b"></p>
+            </div>
           </div>
         </div>
       </div>
@@ -172,16 +176,19 @@
         <p id="importStatus" class="card-subtitle"></p>
 
         <div class="modal" id="amneziaImportModal">
-          <div class="modal-content" style="max-width:640px;text-align:left">
-            <button class="modal-close" onclick="closeImportModal()">✕</button>
-            <h3>Импорт конфигурации Amnezia WG</h3>
-            <div class="form-group">
-              <label>Имя интерфейса</label>
-              <input type="text" id="amneziaInterfaceName" placeholder="Например: awg0" style="width:100%;padding:8px;border-radius:6px;background:var(--color-bg-primary);color:var(--color-text-primary);border:1px solid var(--color-border);font-family:monospace;font-size:0.85rem">
+          <div class="modal-content max-w-lg">
+            <div class="modal-header">
+              <h3>Импорт конфигурации Amnezia WG</h3>
+              <button class="modal-close" onclick="closeImportModal()">✕</button>
             </div>
-            <div class="form-group" style="margin-top:12px">
-              <label>Конфигурация</label>
-              <textarea id="amneziaConfigText" rows="8" style="width:100%;padding:8px;border-radius:6px;background:var(--color-bg-primary);color:var(--color-text-primary);border:1px solid var(--color-border);font-family:monospace;font-size:0.85rem" placeholder="[Interface]
+            <div class="modal-body">
+              <div class="form-group">
+                <label>Имя интерфейса</label>
+                <input type="text" id="amneziaInterfaceName" placeholder="Например: awg0" style="width:100%;padding:8px;border-radius:6px;background:var(--color-bg-primary);color:var(--color-text-primary);border:1px solid var(--color-border);font-family:monospace;font-size:0.85rem">
+              </div>
+              <div class="form-group" style="margin-top:12px">
+                <label>Конфигурация</label>
+                <textarea id="amneziaConfigText" rows="8" style="width:100%;padding:8px;border-radius:6px;background:var(--color-bg-primary);color:var(--color-text-primary);border:1px solid var(--color-border);font-family:monospace;font-size:0.85rem" placeholder="[Interface]
 PrivateKey = ...
 Address = ...
 ...
@@ -189,9 +196,10 @@ Address = ...
 PublicKey = ...
 Endpoint = ...
 AllowedIPs = ..."></textarea>
-            </div>
-            <div class="actions" style="margin-top:16px">
-              <button onclick="importAmneziaConfig()" class="btn-dl">Импортировать</button>
+              </div>
+              <div class="actions" style="margin-top:16px">
+                <button onclick="importAmneziaConfig()" class="btn-dl">Импортировать</button>
+              </div>
             </div>
           </div>
         </div>
@@ -229,32 +237,44 @@ AllowedIPs = ..."></textarea>
   </main>
 
   <div class="modal" id="qrModal">
-    <div class="modal-content">
-      <button class="modal-close" onclick="closeQR()">✕</button>
-      <h3>QR-код пира</h3>
-      <p id="qrPeerName" style="margin-bottom:12px;color:#64748b"></p>
-      <img id="qrImage" src="" alt="QR Code">
+    <div class="modal-content max-w-sm">
+      <div class="modal-header">
+        <h3>QR-код пира</h3>
+        <button class="modal-close" onclick="closeQR()">✕</button>
+      </div>
+      <div class="modal-body" style="text-align:center">
+        <p id="qrPeerName" style="margin-bottom:12px;color:#64748b"></p>
+        <img id="qrImage" src="" alt="QR Code">
+      </div>
     </div>
   </div>
 
   <div class="modal" id="textModal">
-    <div class="modal-content" style="max-width:600px;text-align:left">
-      <button class="modal-close" onclick="closeText()">✕</button>
-      <h3>Конфиг пира</h3>
-      <p id="textPeerName" style="margin-bottom:12px;color:#64748b"></p>
-      <pre id="textOutput" class="code-block"></pre>
-      <button onclick="copyText(this)" class="btn-dl" style="margin-top:12px">Скопировать</button>
+    <div class="modal-content max-w-md">
+      <div class="modal-header">
+        <h3>Конфиг пира</h3>
+        <button class="modal-close" onclick="closeText()">✕</button>
+      </div>
+      <div class="modal-body">
+        <p id="textPeerName" style="margin-bottom:12px;color:#64748b"></p>
+        <pre id="textOutput" class="code-block"></pre>
+        <button onclick="copyText(this)" class="btn-dl" style="margin-top:12px">Скопировать</button>
+      </div>
     </div>
   </div>
 
   <div class="modal" id="routerModal">
-    <div class="modal-content" style="max-width:520px">
-      <button class="modal-close" onclick="closeRouterModal()">✕</button>
-      <h3>Импорт в Keenetic</h3>
-      <div id="routerLog" style="background:var(--color-bg-tertiary);color:var(--color-text-primary);padding:12px;border-radius:4px;overflow:auto;max-height:60vh;font-size:0.8rem;white-space:pre-wrap;word-break:break-all;margin-bottom:12px;"></div>
-      <div style="display:flex;gap:8px;justify-content:flex-end">
-        <button id="keeneticDownloadBtn" onclick="keeneticDownload()" class="btn-dl" style="display:none">⬇ Скачать конфиг (ручной импорт)</button>
-        <button id="routerCloseBtn" onclick="closeRouterModal()" class="btn-dl" style="display:none">Закрыть</button>
+    <div class="modal-content max-w-md">
+      <div class="modal-header">
+        <h3>Импорт в Keenetic</h3>
+        <button class="modal-close" onclick="closeRouterModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="routerLog" style="background:var(--color-bg-tertiary);color:var(--color-text-primary);padding:12px;border-radius:4px;overflow:auto;max-height:60vh;font-size:0.8rem;white-space:pre-wrap;word-break:break-all;margin-bottom:12px;"></div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button id="keeneticDownloadBtn" onclick="keeneticDownload()" class="btn-dl" style="display:none">⬇ Скачать конфиг (ручной импорт)</button>
+          <button id="routerCloseBtn" onclick="closeRouterModal()" class="btn-dl" style="display:none">Закрыть</button>
+        </div>
       </div>
     </div>
   </div>
@@ -287,9 +307,12 @@ AllowedIPs = ..."></textarea>
   </div>
 
   <div class="modal" id="awgChartModal">
-    <div class="modal-content" style="max-width:960px">
-      <button class="modal-close" onclick="closeAwgChartModal()">✕</button>
-      <h3 id="awgChartTitle">Трафик</h3>
+    <div class="modal-content max-w-wide">
+      <div class="modal-header">
+        <h3 id="awgChartTitle">Трафик</h3>
+        <button class="modal-close" onclick="closeAwgChartModal()">✕</button>
+      </div>
+      <div class="modal-body">
       <div class="awg-chart-meta-row">
         <div class="awg-chart-meta-pills">
           <span class="awg-pill" id="awgChartNamePill"></span>
@@ -346,19 +369,23 @@ AllowedIPs = ..."></textarea>
   </div>
 
   <div class="modal" id="restoreModal">
-    <div class="modal-content" style="max-width:480px">
-      <button class="modal-close" onclick="hideRestoreModal()">✕</button>
-      <h3>Восстановление из резервной копии</h3>
-      <p style="color:#ff6b6b;margin-bottom:12px">Внимание: текущие настройки и пиры будут заменены содержимым архива. Убедитесь, что вы сделали бэкап перед восстановлением.</p>
-      <div class="form-group">
-        <label>Файл бэкапа (.zip)</label>
-        <input type="file" id="restoreFile" accept=".zip" style="padding:8px;background:var(--color-bg-primary);color:var(--color-text-primary);border:1px solid var(--color-border);border-radius:4px">
+    <div class="modal-content max-w-sm">
+      <div class="modal-header">
+        <h3>Восстановление из резервной копии</h3>
+        <button class="modal-close" onclick="hideRestoreModal()">✕</button>
       </div>
-      <div class="actions">
-        <button class="btn-dl" onclick="hideRestoreModal()">Отмена</button>
-        <button onclick="restoreBackup()" class="btn-qr">Восстановить</button>
+      <div class="modal-body">
+        <p style="color:#ff6b6b;margin-bottom:12px">Внимание: текущие настройки и пиры будут заменены содержимым архива. Убедитесь, что вы сделали бэкап перед восстановлением.</p>
+        <div class="form-group">
+          <label>Файл бэкапа (.zip)</label>
+          <input type="file" id="restoreFile" accept=".zip" style="padding:8px;background:var(--color-bg-primary);color:var(--color-text-primary);border:1px solid var(--color-border);border-radius:4px">
+        </div>
+        <div class="actions">
+          <button class="btn-dl" onclick="hideRestoreModal()">Отмена</button>
+          <button onclick="restoreBackup()" class="btn-qr">Восстановить</button>
+        </div>
+        <pre id="restoreLog" class="code-block" style="max-height:40vh;margin-top:12px;display:none"></pre>
       </div>
-      <pre id="restoreLog" class="code-block" style="max-height:40vh;margin-top:12px;display:none"></pre>
     </div>
   </div>
 </div>
