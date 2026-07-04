@@ -29,7 +29,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.10.23"
+const appVersion = "1.10.24"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
@@ -201,6 +201,11 @@ func main() {
 		}
 	}
 	server.endpoint = resolveEndpoint(cfg.Endpoint)
+
+	if cfg.HttpPort == 0 {
+		cfg.HttpPort = 8080
+		_ = saveConfig(dataFile, cfg)
+	}
 
 	if cfg.WanInterface == "" {
 		cfg.WanInterface = detectDefaultWan()
