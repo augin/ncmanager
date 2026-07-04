@@ -2459,6 +2459,17 @@ function renderAmneziaInterfaces(ifaces) {
           '<span class="awg-traffic-rate tx">↑ ' + formatRate(currentTxRate) + '</span>' +
         '</div>' +
       '</div>' +
+      '<div class="awg-card-actions">' +
+        '<button type="button" class="awg-action-btn awg-action-btn--primary" onclick="editAmneziaConfig(\'' + rawName + '\')" title="Изменить">' +
+          '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>' +
+        '</button>' +
+        '<button type="button" class="awg-action-btn awg-action-btn--test" onclick="testAmneziaInterface(\'' + rawName + '\')" title="Тест">' +
+          '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="6 3 20 12 6 21 6 3"/></svg>' +
+        '</button>' +
+        '<button type="button" class="awg-action-btn awg-action-btn--danger" onclick="deleteAmneziaInterface(\'' + rawName + '\')" title="Удалить">' +
+          '<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>' +
+        '</button>' +
+      '</div>' +
     '</div>';
   }
   list.innerHTML = html;
@@ -2494,6 +2505,42 @@ async function manageAmneziaInterface(name, action) {
   } catch (e) {
     alert('Ошибка: ' + e.message);
   }
+}
+
+async function deleteAmneziaInterface(name) {
+  if (!confirm('Удалить интерфейс ' + name + '?')) return;
+  try {
+    const res = await xhr('POST', '/amnezia/interface/' + encodeURIComponent(name) + '/delete', {});
+    if (res.ok) {
+      loadAmneziaInterfaces();
+    } else {
+      alert('Ошибка удаления: ' + (await res.text()));
+    }
+  } catch (e) {
+    alert('Ошибка: ' + e.message);
+  }
+}
+
+async function testAmneziaInterface(name) {
+  try {
+    const res = await xhr('GET', '/amnezia/interface/' + encodeURIComponent(name) + '/ping');
+    if (res.ok) {
+      const data = await res.json();
+      if (data.connected) {
+        alert('Связь есть\nЗадержка: ' + data.latency + ' ms\nВремя: ' + data.text);
+      } else {
+        alert('Нет связи\n' + data.text);
+      }
+    } else {
+      alert('Ошибка теста: ' + (await res.text()));
+    }
+  } catch (e) {
+    alert('Ошибка: ' + e.message);
+  }
+}
+
+function editAmneziaConfig(name) {
+  alert('Редактирование конфигурации ' + name + '\n\nФункция в разработке.');
 }
 
 async function installAmnezia() {
