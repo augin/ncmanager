@@ -198,6 +198,36 @@ function onPeerSearchChange(value) {
 	loadPeers().then(renderPeers);
 }
 
+function editCreatedAt(peerId, cell) {
+	const current = cell.textContent.trim();
+	const parts = current.split('.');
+	const input = document.createElement('input');
+	input.type = 'date';
+	input.value = parts.length === 3 ? `${parts[2]}-${parts[1]}-${parts[0]}` : '';
+	input.style.cssText = 'background:var(--color-bg-primary);color:var(--color-text-primary);border:1px solid var(--color-accent);border-radius:var(--radius-sm);padding:4px 6px;font-family:var(--font-sans);font-size:0.85rem;width:100%;box-sizing:border-box';
+	cell.textContent = '';
+	cell.appendChild(input);
+	input.focus();
+	input.select();
+
+	function save() {
+		if (!input.value) {
+			loadPeers();
+			return;
+		}
+		const iso = input.value + 'T00:00:00Z';
+		xhr('POST', '/peers/update', { id: peerId, createdAt: iso })
+			.then(() => loadPeers())
+			.catch(() => loadPeers());
+	}
+
+	input.addEventListener('blur', save);
+	input.addEventListener('keydown', function(e) {
+		if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+		if (e.key === 'Escape') { loadPeers(); }
+	});
+}
+
 function renderPeers(peers) {
 	const query = peerSearch.trim().toLowerCase();
 	const filtered = query ? peers.filter(p => (p.name || '').toLowerCase().includes(query)) : peers;
@@ -222,7 +252,7 @@ function renderPeers(peers) {
 			<td style="width:20px;padding:8px 4px"><span class="led led-gray" id="router-led-${p.id}" title="Проверка доступности роутера..."></span></td>
 			<td><span class="peer-name-toggle" onclick="togglePeerDetails('${p.id}', event)" style="cursor:pointer;color:#38bdf8">${escapeHtml(p.name)}</span></td>
 			<td><code>${escapeHtml(p.allowedIPs)}</code></td>
-			<td>${created}</td>
+			<td><span class="created-at-editable" ondblclick="editCreatedAt('${p.id}', this)" title="Двойной клик для редактирования">${created}</span></td>
 			<td><span class="peer-age ${status.class}" data-field="handshake" title="${p.lastHandshake && new Date(p.lastHandshake).getTime() >= MIN_REASONABLE_DATE ? new Date(p.lastHandshake).toLocaleString('ru-RU') : 'никогда'}">${status.text} · ${hs}</span></td>
 			<td><code>${escapeHtml(endpoint)}</code></td>
 			<td data-field="traffic"><span title="↑ ${tx}">↑ ${tx}</span> / <span title="↓ ${rx}">↓ ${rx}</span></td>

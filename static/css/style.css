@@ -864,3 +864,14 @@ code {
 #tab-waniface select {
   min-width: 200px;
 }
+
+.created-at-editable {
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: var(--radius-sm);
+  display: inline-block;
+  min-width: 80px;
+}
+.created-at-editable:hover {
+  background: var(--color-bg-hover);
+}

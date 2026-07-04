@@ -788,6 +788,7 @@ func (s *Server) updatePeer(w http.ResponseWriter, r *http.Request) {
 		RouterPassword string `json:"routerPassword"`
 		Description    string `json:"description"`
 		Paid           bool   `json:"paid"`
+		CreatedAt      string `json:"createdAt"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
@@ -811,9 +812,17 @@ func (s *Server) updatePeer(w http.ResponseWriter, r *http.Request) {
 			if req.RouterPassword != "" {
 				peersCfg.Peers[i].RouterPassword = req.RouterPassword
 			}
-			peersCfg.Peers[i].Description = req.Description
-			peersCfg.Peers[i].Paid = req.Paid
-			found = true
+		peersCfg.Peers[i].Description = req.Description
+		peersCfg.Peers[i].Paid = req.Paid
+		if req.CreatedAt != "" {
+			if t, err := time.Parse(time.RFC3339, req.CreatedAt); err == nil {
+				peersCfg.Peers[i].CreatedAt = t
+			} else {
+				http.Error(w, "invalid createdAt format, expected RFC3339", http.StatusBadRequest)
+				return
+			}
+		}
+		found = true
 			break
 		}
 	}
