@@ -2000,6 +2000,7 @@ let awgChartName = '';
 let awgChartPoints = [];
 let awgChartRxRates = [];
 let awgChartTxRates = [];
+let awgChartTimer = null;
 const AWG_CHART_W = 840;
 
 let awgPingStatus = {}; // name -> {checking, hasResult, connected, latency, text}
@@ -2123,12 +2124,18 @@ function openAwgChartModal(name) {
     btn.classList.toggle('active', btn.dataset.period === '1h');
   });
   renderAwgChart(name, '1h');
+  if (awgChartTimer) clearInterval(awgChartTimer);
+  awgChartTimer = setInterval(function() {
+    if (awgChartName) renderAwgChart(awgChartName, awgChartPeriod);
+  }, 10000);
 }
 
 function closeAwgChartModal() {
   const modal = document.getElementById('awgChartModal');
   if (modal) modal.classList.remove('show');
   awgChartName = '';
+  if (awgChartTimer) clearInterval(awgChartTimer);
+  awgChartTimer = null;
 }
 
 const PERIOD_LABELS = { '1h': 'последний час', '3h': 'последние 3 часа', '24h': 'последние сутки' };
