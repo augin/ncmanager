@@ -318,6 +318,7 @@ function renderPeers(peers) {
 		const hs = humanTimeAgo(p.lastHandshake);
 		const age = getPeerAge(p.lastHandshake);
 		const status = getPeerStatus(age);
+		const ledClass = getPeerLedClass(age);
 		const rx = formatBytes(p.transferRx || 0);
 		const tx = formatBytes(p.transferTx || 0);
 		const created = new Date(p.createdAt).toLocaleDateString('ru-RU');
@@ -330,7 +331,7 @@ function renderPeers(peers) {
 			<td><span class="peer-name-toggle" onclick="togglePeerDetails('${p.id}', event)" style="cursor:pointer;color:#38bdf8">${escapeHtml(p.name)}</span></td>
 			<td><code>${escapeHtml(p.allowedIPs)}</code></td>
 			<td><span class="created-at-editable" ondblclick="editCreatedAt('${p.id}', this)" title="Двойной клик для редактирования">${created}</span></td>
-			<td><span class="peer-age ${status.class}" data-field="handshake" title="${p.lastHandshake && new Date(p.lastHandshake).getTime() >= MIN_REASONABLE_DATE ? new Date(p.lastHandshake).toLocaleString('ru-RU') : 'никогда'}">${status.text} · ${hs}</span></td>
+			<td><span style="display:inline-flex;align-items:center;gap:6px"><span class="led ${ledClass}" title="${status.text}"></span><span class="peer-age" data-field="handshake" title="${p.lastHandshake && new Date(p.lastHandshake).getTime() >= MIN_REASONABLE_DATE ? new Date(p.lastHandshake).toLocaleString('ru-RU') : 'никогда'}">${hs}</span></span></td>
 			<td><code>${escapeHtml(endpoint)}</code></td>
 			<td data-field="traffic"><span title="↑ ${tx}">↑ ${tx}</span> / <span title="↓ ${rx}">↓ ${rx}</span></td>
 			<td><span class="paid-indicator-row ${p.paid ? 'paid-indicator-row--on' : 'paid-indicator-row--off'}" title="${p.paid ? 'Оплачено' : 'Не оплачено'}">${p.paid ? '$' : '$'}</span></td>
@@ -386,15 +387,16 @@ function updatePeerStats(peers) {
 		if (!row) continue;
 		const age = getPeerAge(p.lastHandshake);
 		const status = getPeerStatus(age);
+		const ledClass = getPeerLedClass(age);
 		const rx = formatBytes(p.transferRx || 0);
 		const tx = formatBytes(p.transferTx || 0);
 		const hs = humanTimeAgo(p.lastHandshake);
 		row.className = status.class === 'offline' ? 'peer-row-offline' : '';
 		const handshakeEl = row.querySelector('[data-field="handshake"]');
 		if (handshakeEl) {
-			handshakeEl.className = 'peer-age ' + status.class;
+			handshakeEl.className = 'peer-age';
 			handshakeEl.title = p.lastHandshake && new Date(p.lastHandshake).getTime() >= MIN_REASONABLE_DATE ? new Date(p.lastHandshake).toLocaleString('ru-RU') : 'никогда';
-			handshakeEl.innerHTML = status.text + ' · ' + hs;
+			handshakeEl.innerHTML = '<span class="led ' + ledClass + '" title="' + status.text + '"></span> ' + hs;
 		}
 		const trafficEl = row.querySelector('[data-field="traffic"]');
 		if (trafficEl) {
@@ -620,6 +622,12 @@ function getPeerStatus(ageSec) {
 	if (ageSec < 3 * 60 * 1000) return { text: 'Онлайн', class: 'online' };
 	if (ageSec < 10 * 60 * 1000) return { text: 'Недавно', class: 'recent' };
 	return { text: 'Оффлайн', class: 'offline' };
+}
+
+function getPeerLedClass(ageSec) {
+	if (ageSec === Infinity || ageSec >= 10 * 60 * 1000) return 'led-gray';
+	if (ageSec < 3 * 60 * 1000) return 'led-green';
+	return 'led-amber';
 }
 
 function formatBytes(b) {

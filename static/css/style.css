@@ -687,6 +687,7 @@ code {
 .dns-btn.danger:hover { color: var(--color-error); border-color: var(--color-error); }
 .led { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; display: inline-block; }
 .led-green { background: var(--color-success); box-shadow: 0 0 6px var(--color-success); }
+.led-amber { background: var(--color-warning); box-shadow: 0 0 6px var(--color-warning); }
 .led-gray { background: var(--color-text-muted); }
 
 .paid-input {
