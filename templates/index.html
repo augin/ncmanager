@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>NC Manager</title>
-<link rel="stylesheet" href="/static/css/style.css?v=2026070426">
+<link rel="stylesheet" href="/static/css/style.css?v=2026070435">
 </head>
 <body>
 <div id="app">
@@ -43,7 +43,7 @@
           <svg class="theme-icon theme-icon--sun" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2"/><path d="M12 21v2"/><path d="M4.22 4.22l1.42 1.42"/><path d="M18.36 18.36l1.42 1.42"/><path d="M1 12h2"/><path d="M21 12h2"/><path d="M4.22 19.78l1.42-1.42"/><path d="M18.36 5.64l1.42-1.42"/></svg>
           <svg class="theme-icon theme-icon--moon" xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
         </button>
-        <button onclick="logout()" class="btn-sm btn-icon" aria-label="Выход">✕</button>
+        <button onclick="logout()" class="btn btn-icon size-sm" aria-label="Выход">✕</button>
         <button class="hamburger" onclick="toggleMobileMenu()" aria-label="Menu">☰</button>
       </div>
     </div>
@@ -72,7 +72,7 @@
       </div>
       <div class="add-peer">
         <input type="text" id="peerName" class="peer-search" placeholder="Поиск или имя пира" oninput="onPeerSearchChange(this.value)">
-        <button onclick="addPeer()" class="btn-sm btn-primary">+ Добавить</button>
+        <button onclick="addPeer()" class="btn btn-primary size-sm">+ Добавить</button>
       </div>
       <div id="peersTable"></div>
     </section>
@@ -81,9 +81,8 @@
       <div class="card-header-row">
         <h2 class="card-title">DNS маршрутизация</h2>
         <div class="dns-actions">
-          <button onclick="showAddDnsRoute()" class="btn-qr">+ Новый маршрут</button>
-          <button onclick="applyDnsRoutes()" class="btn-dl">Настроить DNS</button>
-          <button onclick="loadDnsRoutes()" class="btn-dl">Обновить</button>
+          <button onclick="showAddDnsRoute()" class="btn btn-outline-primary">+ Новый маршрут</button>
+          <button onclick="applyDnsRoutes()" class="btn btn-secondary">Настроить DNS на всех роутерах</button>
         </div>
       </div>
       <div class="dns-section">
@@ -131,7 +130,7 @@
         </div>
 
         <div class="actions">
-          <button type="submit" id="saveConfigBtn">Сохранить</button>
+          <button type="submit" id="saveConfigBtn" class="btn btn-primary">Сохранить</button>
         </div>
       </form>
     </section>
@@ -146,7 +145,7 @@
         <select id="wanInterface" class="form-control">
           <option value="">— загрузка —</option>
         </select>
-        <button onclick="saveWanInterface()" class="btn-dl">Сохранить</button>
+        <button onclick="saveWanInterface()" class="btn btn-secondary">Сохранить</button>
       </div>
       <p id="wanStatus" class="card-subtitle"></p>
 
@@ -155,7 +154,7 @@
       <div class="form-section">
         <h3>Amnezia WireGuard</h3>
         <p id="amneziaStatus" class="card-subtitle">Проверка...</p>
-        <button id="amneziaInstallBtn" onclick="installAmnezia()" class="btn-qr" style="display:none">Установить Amnezia WG</button>
+        <button id="amneziaInstallBtn" onclick="installAmnezia()" class="btn btn-primary" style="display:none">Установить Amnezia WG</button>
 
         <div class="modal" id="amneziaInstallModal">
           <div class="modal-content max-w-lg">
@@ -172,7 +171,7 @@
       </div>
 
       <div class="form-section">
-        <button onclick="showImportModal()" class="btn-dl">Импортировать конфиг</button>
+        <button onclick="showImportModal()" class="btn btn-secondary">Импортировать конфиг</button>
         <p id="importStatus" class="card-subtitle"></p>
 
         <div class="modal" id="amneziaImportModal">
@@ -198,7 +197,7 @@ Endpoint = ...
 AllowedIPs = ..."></textarea>
               </div>
               <div class="actions" style="margin-top:16px">
-                <button onclick="importAmneziaConfig()" class="btn-dl">Импортировать</button>
+                <button onclick="importAmneziaConfig()" class="btn btn-primary">Импортировать</button>
               </div>
             </div>
           </div>
@@ -218,7 +217,6 @@ AllowedIPs = ..."></textarea>
     <section class="card" id="tab-logs" style="display:none">
       <div class="card-header-row">
         <h2 class="card-title">Логи</h2>
-        <button onclick="loadLogs()" class="btn-dl">Обновить</button>
       </div>
       <pre id="logOutput" class="log-output">Загрузка...</pre>
     </section>
@@ -227,8 +225,8 @@ AllowedIPs = ..."></textarea>
       <h2 class="card-title">Резервное копирование</h2>
       <p class="card-subtitle">Архив содержит настройки, пиры, ключи, конфиги WireGuard и AmneziaWG, веб-интерфейс и systemd-юнит. Восстановление на другом сервере перенесёт всё состояние.</p>
       <div class="card-actions">
-        <button onclick="createBackup()" class="btn-dl">⬇ Скачать резервную копию</button>
-        <button onclick="showRestoreModal()" class="btn-dl">⬆ Восстановить из файла</button>
+        <button onclick="createBackup()" class="btn btn-outline-primary">⬇ Скачать резервную копию</button>
+        <button onclick="showRestoreModal()" class="btn btn-secondary">⬆ Восстановить из файла</button>
       </div>
       <p id="backupStatus" class="card-subtitle"></p>
     </section>
@@ -258,7 +256,7 @@ AllowedIPs = ..."></textarea>
       <div class="modal-body">
         <p id="textPeerName" style="margin-bottom:12px;color:#64748b"></p>
         <pre id="textOutput" class="code-block"></pre>
-        <button onclick="copyText(this)" class="btn-dl" style="margin-top:12px">Скопировать</button>
+        <button onclick="copyText(this)" class="btn btn-secondary" style="margin-top:12px">Скопировать</button>
       </div>
     </div>
   </div>
@@ -272,8 +270,8 @@ AllowedIPs = ..."></textarea>
       <div class="modal-body">
         <div id="routerLog" style="background:var(--color-bg-tertiary);color:var(--color-text-primary);padding:12px;border-radius:4px;overflow:auto;max-height:60vh;font-size:0.8rem;white-space:pre-wrap;word-break:break-all;margin-bottom:12px;"></div>
         <div style="display:flex;gap:8px;justify-content:flex-end">
-          <button id="keeneticDownloadBtn" onclick="keeneticDownload()" class="btn-dl" style="display:none">⬇ Скачать конфиг (ручной импорт)</button>
-          <button id="routerCloseBtn" onclick="closeRouterModal()" class="btn-dl" style="display:none">Закрыть</button>
+          <button id="keeneticDownloadBtn" onclick="keeneticDownload()" class="btn btn-outline-primary" style="display:none">⬇ Скачать конфиг (ручной импорт)</button>
+          <button id="routerCloseBtn" onclick="closeRouterModal()" class="btn btn-secondary" style="display:none">Закрыть</button>
         </div>
       </div>
     </div>
@@ -300,8 +298,8 @@ AllowedIPs = ..."></textarea>
         <div class="domain-hint">Опционально: IP-диапазоны для маршрутизации</div>
       </div>
       <div class="actions">
-        <button class="btn-dl" onclick="hideDnsRouteModal()">Отмена</button>
-        <button class="btn-qr" onclick="saveDnsRouteModal()">Сохранить</button>
+        <button class="btn btn-secondary" onclick="hideDnsRouteModal()">Отмена</button>
+        <button class="btn btn-primary" onclick="saveDnsRouteModal()">Сохранить</button>
       </div>
     </div>
   </div>
@@ -319,8 +317,8 @@ AllowedIPs = ..."></textarea>
           <input type="file" id="restoreFile" accept=".zip" style="padding:8px;background:var(--color-bg-primary);color:var(--color-text-primary);border:1px solid var(--color-border);border-radius:4px">
         </div>
         <div class="actions">
-          <button class="btn-dl" onclick="closeRestoreModal()">Отмена</button>
-          <button onclick="restoreBackup()" class="btn-qr">Восстановить</button>
+          <button class="btn btn-secondary" onclick="closeRestoreModal()">Отмена</button>
+          <button onclick="restoreBackup()" class="btn btn-primary">Восстановить</button>
         </div>
         <pre id="restoreLog" class="code-block" style="max-height:40vh;margin-top:12px;display:none"></pre>
       </div>
@@ -390,6 +388,6 @@ AllowedIPs = ..."></textarea>
   </div>
 </div>
 
-<script src="/static/js/app.js?v=2026070430"></script>
+<script src="/static/js/app.js?v=2026070435"></script>
 </body>
 </html>

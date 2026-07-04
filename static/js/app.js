@@ -336,12 +336,12 @@ function renderPeers(peers) {
 			<td data-field="traffic"><span title="↑ ${tx}">↑ ${tx}</span> / <span title="↓ ${rx}">↓ ${rx}</span></td>
 			<td><span class="paid-indicator-row ${p.paid ? 'paid-indicator-row--on' : 'paid-indicator-row--off'}" title="${p.paid ? 'Оплачено' : 'Не оплачено'}">${p.paid ? '$' : '$'}</span></td>
 			<td class="peer-actions">
-				<button class="btn-qr" onclick="showQR('${p.id}','${escapeHtml(p.name)}')">QR</button>
-				<button class="btn-qr" onclick="showText('${p.id}','${escapeHtml(p.name)}')" title="Конфиг пира" style="font-size:0.75rem;font-weight:700;padding:4px 6px;min-width:38px">TXT</button>
-				<button class="btn-dl" onclick="downloadConf('${p.id}')">⬇</button>
-  			<button class="btn-qr" onclick="configureRouter('${p.id}')" title="Настроить VPN на роутере Keenetic" style="font-size:0.75rem;font-weight:700;padding:4px 6px;min-width:38px">VPN</button>
-  			<button class="btn-qr" onclick="configureDnsRouter('${p.id}')" title="Настроить DNS на роутере Keenetic" style="font-size:0.75rem;font-weight:700;padding:4px 6px;min-width:38px">DNS</button>
-				<button class="btn-del" onclick="removePeer('${p.id}')">✕</button>
+				<button class="btn btn-outline-primary" onclick="showQR('${p.id}','${escapeHtml(p.name)}')">QR</button>
+				<button class="btn btn-outline-primary" onclick="showText('${p.id}','${escapeHtml(p.name)}')" title="Конфиг пира" style="font-size:0.75rem;font-weight:700;padding:4px 6px;min-width:38px">TXT</button>
+				<button class="btn btn-outline-primary" onclick="downloadConf('${p.id}')">⬇</button>
+   			<button class="btn btn-outline-primary" onclick="configureRouter('${p.id}')" title="Настроить VPN на роутере Keenetic" style="font-size:0.75rem;font-weight:700;padding:4px 6px;min-width:38px">VPN</button>
+   			<button class="btn btn-outline-primary" onclick="configureDnsRouter('${p.id}')" title="Настроить DNS на роутере Keenetic" style="font-size:0.75rem;font-weight:700;padding:4px 6px;min-width:38px">DNS</button>
+				<button class="btn btn-danger" onclick="removePeer('${p.id}')">✕</button>
 			</td>
 			<td style="text-align:right;width:30px"><span class="peer-arrow" onclick="togglePeerDetails('${p.id}', event)" style="cursor:pointer;color:#64748b">${arrow}</span></td>
 		</tr>
@@ -357,11 +357,11 @@ function renderPeers(peers) {
  						<p id="routerStatus-${p.id}" style="grid-column:1/-1;color:#059669;font-size:0.85rem"></p>
   						<label style="grid-column:1/-1">Описание<textarea id='rdesc-${p.id}' rows="4" style="width:100%;padding:6px;border-radius:4px;background:var(--color-bg-primary);color:var(--color-text-primary);border:1px solid var(--color-border);font-family:var(--font-sans);font-size:0.85rem;resize:vertical;min-height:100px" placeholder='Комментарий'>${escapeHtml(p.description || '')}</textarea></label>
   					</div>
-  					<button id="saveRouterBtn-${p.id}" onclick="savePeerRouter('${p.id}')" class="btn-dl" style="margin-top:8px">Сохранить</button>
-  					<button onclick="configureRouter('${p.id}')" class="btn-qr" style="margin-top:8px;margin-left:8px">Настроить VPN</button>
-  					<button onclick="configureDnsRouter('${p.id}')" class="btn-qr" style="margin-top:8px;margin-left:8px">Настроить DNS</button>
-  					<button onclick="configureDnsRoutes('${p.id}')" class="btn-qr" style="margin-top:8px;margin-left:8px">Настроить DNS-маршрутизацию</button>
-  					<button onclick="configureComponents('${p.id}')" class="btn-qr" style="margin-top:8px;margin-left:8px">Настроить компоненты</button>
+   					<button id="saveRouterBtn-${p.id}" onclick="savePeerRouter('${p.id}')" class="btn btn-secondary" style="margin-top:8px">Сохранить</button>
+   					<button onclick="configureRouter('${p.id}')" class="btn btn-outline-primary" style="margin-top:8px;margin-left:8px">Настроить VPN</button>
+   					<button onclick="configureDnsRouter('${p.id}')" class="btn btn-outline-primary" style="margin-top:8px;margin-left:8px">Настроить DNS</button>
+   					<button onclick="configureDnsRoutes('${p.id}')" class="btn btn-outline-primary" style="margin-top:8px;margin-left:8px">Настроить DNS-маршрутизацию</button>
+   					<button onclick="configureComponents('${p.id}')" class="btn btn-outline-primary" style="margin-top:8px;margin-left:8px">Настроить компоненты</button>
   				</div>
   			</td>
   		</tr>`;
