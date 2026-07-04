@@ -2323,6 +2323,7 @@ function renderAmneziaInterfaces(ifaces) {
   for (const iface of ifaces) {
     const running = iface.running === 'true';
     const ledClass = running ? 'led-green' : 'led-gray';
+    const rawName = iface.name;
     const name = escapeHtml(iface.name);
     const addr = escapeHtml(iface.address || '—');
     const endpoint = escapeHtml(iface.endpoint || '');
@@ -2388,12 +2389,12 @@ function renderAmneziaInterfaces(ifaces) {
         '<div class="awg-card-toolbar">' +
           '<div class="awg-toolbar-row">' +
             '<label class="toggle-switch" title="' + (running ? 'Остановить' : 'Запустить') + '">' +
-              '<input type="checkbox" ' + (running ? 'checked' : '') + ' onchange="manageAmneziaInterface(\'' + name + '\',' + (running ? '\'down\'' : '\'up\'') + ')">' +
+              '<input type="checkbox" ' + (running ? 'checked' : '') + ' onchange="manageAmneziaInterface(\'' + rawName + '\',' + (running ? '\'down\'' : '\'up\'') + ')">' +
               '<span class="toggle-slider"></span>' +
             '</label>' +
           '</div>' +
           (running ?
-            '<button type="button" class="ping-btn ' + pingTierClass + (pingSpinning ? ' spinning' : '') + ' force-border" onclick="checkAmneziaPing(\'' + name + '\')" title="' + pingTitle + '" ' + (pingDisabled ? 'disabled' : '') + '>' +
+            '<button type="button" class="ping-btn ' + pingTierClass + (pingSpinning ? ' spinning' : '') + ' force-border" onclick="checkAmneziaPing(\'' + rawName + '\')" title="' + pingTitle + '" ' + (pingDisabled ? 'disabled' : '') + '>' +
               pingLabel +
               (pingShowIcon ? '<span class="refresh-icon" aria-hidden="true"><svg xmlns="http://www.w3.org/2000/svg" width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"/><path d="M16 16h5v5"/></svg></span>' : '') +
             '</button>'
@@ -2411,7 +2412,7 @@ function renderAmneziaInterfaces(ifaces) {
           '</div>' +
         '</div>' +
       '</div>' +
-      '<div class="awg-card-chart" onclick="openAwgChartModal(\'' + name + '\')" title="Открыть график трафика" role="button" tabindex="0">' +
+      '<div class="awg-card-chart" onclick="openAwgChartModal(\'' + rawName + '\')" title="Открыть график трафика" role="button" tabindex="0">' +
         sparkline +
         '<div class="awg-traffic-rates">' +
           '<span class="awg-traffic-rate rx">↓ ' + formatRate(currentRxRate) + '</span>' +
