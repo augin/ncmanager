@@ -1591,7 +1591,7 @@ async function saveConfig(e) {
 	try {
 	const cfg = {
 		interface: document.getElementById('iInterface').value,
-		port: parseInt(document.getElementById('iPort').value),
+		wgPort: parseInt(document.getElementById('iPort').value),
 		httpPort: parseInt(document.getElementById('iHttpPort').value),
 		endpoint: document.getElementById('iEndpoint').value,
 		dns: document.getElementById('iDns').value,
@@ -1738,7 +1738,7 @@ async function init() {
 		const ip = cfg.interfaceIP || '';
 		interfaceIPEl.textContent = ip ? '(' + ip + ')' : '';
 	}
-	document.getElementById('iPort').value = cfg.port || 51820;
+	document.getElementById('iPort').value = cfg.wgPort || 51820;
 	document.getElementById('iHttpPort').value = cfg.httpPort || 8080;
 	originalHttpPort = cfg.httpPort || 8080;
 	document.getElementById('iEndpoint').value = cfg.endpoint || '';

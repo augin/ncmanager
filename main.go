@@ -29,7 +29,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.11.1"
+const appVersion = "1.11.2"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
@@ -131,7 +131,7 @@ type PeersConfig struct {
 
 type Server struct {
 	mu         sync.Mutex
-	port       int
+	wgPort     int
 	iface      string
 	publicKey  string
 	endpoint   string
@@ -158,18 +158,18 @@ type Peer struct {
 }
 
 type Config struct {
-	Port         int    `json:"port"`
-	HttpPort     int    `json:"httpPort"`
-	Interface    string `json:"interface"`
-	WanInterface string `json:"wanInterface"`
-	Endpoint     string `json:"endpoint"`
-	DNS          string `json:"dns"`
-	Subnet       string `json:"subnet"`
-	PostUp       string `json:"postUp,omitempty"`
-	PostDown     string `json:"postDown,omitempty"`
-	TLSEnabled   bool   `json:"tlsEnabled,omitempty"`
-	TLSHost      string `json:"tlsHost,omitempty"`
-	TLSCache     string `json:"tlsCache,omitempty"`
+	WGPort        int    `json:"wgPort"`
+	HttpPort      int    `json:"httpPort"`
+	Interface     string `json:"interface"`
+	WanInterface  string `json:"wanInterface"`
+	Endpoint      string `json:"endpoint"`
+	DNS           string `json:"dns"`
+	Subnet        string `json:"subnet"`
+	PostUp        string `json:"postUp,omitempty"`
+	PostDown      string `json:"postDown,omitempty"`
+	TLSEnabled    bool   `json:"tlsEnabled,omitempty"`
+	TLSHost       string `json:"tlsHost,omitempty"`
+	TLSCache      string `json:"tlsCache,omitempty"`
 }
 
 var passwordHash string
@@ -183,7 +183,7 @@ func main() {
 	initLogger()
 
 	server := &Server{
-		port:       51820,
+		wgPort:     51820,
 		iface:      "wg0",
 		endpoint:   getPublicIP(),
 		configPath: absPath(wgConfigFile),
@@ -507,7 +507,7 @@ func createDefaultConfig() (*Config, error) {
 		return nil, fmt.Errorf("failed to generate server key pair: %w", err)
 	}
 	cfg := &Config{
-		Port:      51820,
+		WGPort:    51820,
 		HttpPort:  8080,
 		Interface: "wg0",
 		Endpoint:  getPublicIP(),
@@ -712,18 +712,18 @@ func (s *Server) getConfig(w http.ResponseWriter, r *http.Request) {
 	routes, _ := loadDnsRoutes()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"port":         cfg.Port,
-		"httpPort":     cfg.HttpPort,
-		"interface":    cfg.Interface,
+		"wgPort":     cfg.WGPort,
+		"httpPort":   cfg.HttpPort,
+		"interface":  cfg.Interface,
 		"wanInterface": cfg.WanInterface,
-		"endpoint":     cfg.Endpoint,
-		"dns":          cfg.DNS,
-		"subnet":       cfg.Subnet,
-		"interfaceIP":  getInterfaceIP(cfg.Subnet),
-		"postUp":       cfg.PostUp,
-		"postDown":     cfg.PostDown,
-		"peers":        peersCfg.Peers,
-		"dnsRoutes":    routes,
+		"endpoint":   cfg.Endpoint,
+		"dns":        cfg.DNS,
+		"subnet":     cfg.Subnet,
+		"interfaceIP": getInterfaceIP(cfg.Subnet),
+		"postUp":     cfg.PostUp,
+		"postDown":   cfg.PostDown,
+		"peers":      peersCfg.Peers,
+		"dnsRoutes":  routes,
 	})
 }
 
@@ -740,8 +740,8 @@ func (s *Server) saveConfig(w http.ResponseWriter, r *http.Request) {
 	if cfg == nil {
 		cfg = &Config{}
 	}
-	if v, ok := req["port"].(float64); ok {
-		cfg.Port = int(v)
+	if v, ok := req["wgPort"].(float64); ok {
+		cfg.WGPort = int(v)
 	}
 	if v, ok := req["httpPort"].(float64); ok {
 		p := int(v)
@@ -783,7 +783,7 @@ func (s *Server) saveConfig(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	s.port = cfg.Port
+	s.wgPort = cfg.WGPort
 	s.iface = cfg.Interface
 	s.endpoint = cfg.Endpoint
 	s.mu.Unlock()
@@ -1020,7 +1020,7 @@ func (s *Server) getPeerQR(w http.ResponseWriter, r *http.Request) {
 				serverPrivBytes, _ := loadPrivateKey("data/server_private.key")
 				serverPub, _ = getPublicKeyFromPrivate(serverPrivBytes)
 			}
-			peerConf := generatePeerConfig(peer, serverPub, s.iface, s.endpoint, s.port, globalCfg.DNS)
+			peerConf := generatePeerConfig(peer, serverPub, s.iface, s.endpoint, s.wgPort, globalCfg.DNS)
 			qr, err := qrcode.Encode(peerConf, qrcode.Medium, 256)
 			if err != nil {
 				http.Error(w, err.Error(), http.StatusInternalServerError)
@@ -1052,7 +1052,7 @@ func (s *Server) getPeerConfigText(w http.ResponseWriter, r *http.Request) {
 				serverPrivBytes, _ := loadPrivateKey("data/server_private.key")
 				serverPub, _ = getPublicKeyFromPrivate(serverPrivBytes)
 			}
-			peerConf := generatePeerConfig(peer, serverPub, s.iface, s.endpoint, s.port, globalCfg.DNS)
+			peerConf := generatePeerConfig(peer, serverPub, s.iface, s.endpoint, s.wgPort, globalCfg.DNS)
 			w.Header().Set("Content-Type", "text/plain; charset=utf-8")
 			w.Write([]byte(peerConf))
 			return
@@ -1079,7 +1079,7 @@ func (s *Server) downloadPeerConfig(w http.ResponseWriter, r *http.Request) {
 				serverPrivBytes, _ := loadPrivateKey("data/server_private.key")
 				serverPub, _ = getPublicKeyFromPrivate(serverPrivBytes)
 			}
-			peerConf := generatePeerConfig(peer, serverPub, s.iface, s.endpoint, s.port, globalCfg.DNS)
+			peerConf := generatePeerConfig(peer, serverPub, s.iface, s.endpoint, s.wgPort, globalCfg.DNS)
 			w.Header().Set("Content-Type", "application/octet-stream")
 			w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.conf\"", sanitizeFilename(peer.Name)))
 			w.Write([]byte(peerConf))
@@ -1113,7 +1113,7 @@ func sanitizeFilename(s string) string {
 	return out
 }
 
-func generateKeeneticServerConfig(peer *Peer, serverPub, iface, endpoint string, port int, subnet, wanIface string) string {
+func generateKeeneticServerConfig(peer *Peer, serverPub, iface, endpoint string, wgPort int, subnet, wanIface string) string {
 	_, ipnet, err := net.ParseCIDR(subnet)
 	if err != nil || ipnet == nil {
 		ipnet = &net.IPNet{IP: net.ParseIP("10.0.0.0").To4(), Mask: net.CIDRMask(24, 32)}
@@ -1128,10 +1128,10 @@ func generateKeeneticServerConfig(peer *Peer, serverPub, iface, endpoint string,
 	var b strings.Builder
 	b.WriteString("[Interface]\n")
 	b.WriteString(fmt.Sprintf("Address = %s\n", serverAddr))
-	b.WriteString(fmt.Sprintf("ListenPort = %d\n", port))
+	b.WriteString(fmt.Sprintf("ListenPort = %d\n", wgPort))
 	b.WriteString(fmt.Sprintf("PrivateKey = %s\n", strings.TrimSpace(serverPub)))
-	b.WriteString(fmt.Sprintf("PostUp = iptables -A INPUT -p udp --dport %d -j ACCEPT || true; iptables -A FORWARD -i %s -o %%i -j ACCEPT || true; iptables -A FORWARD -i %%i -j ACCEPT || true; iptables -t nat -A POSTROUTING -o %s -j MASQUERADE || true; ip route add default dev %s table 110 || true; ip rule add iif %%i table 110 || true;\n", port, wanIface, wanIface, wanIface))
-	b.WriteString(fmt.Sprintf("PostDown = iptables -D INPUT -p udp --dport %d -j ACCEPT || true; iptables -D FORWARD -i %s -o %%i -j ACCEPT || true; iptables -D FORWARD -i %%i -j ACCEPT || true; iptables -t nat -D POSTROUTING -o %s -j MASQUERADE || true; ip route del default dev %s table 110 || true; ip rule del iif %%i table 110 || true;\n", port, wanIface, wanIface, wanIface))
+	b.WriteString(fmt.Sprintf("PostUp = iptables -A INPUT -p udp --dport %d -j ACCEPT || true; iptables -A FORWARD -i %s -o %%i -j ACCEPT || true; iptables -A FORWARD -i %%i -j ACCEPT || true; iptables -t nat -A POSTROUTING -o %s -j MASQUERADE || true; ip route add default dev %s table 110 || true; ip rule add iif %%i table 110 || true;\n", wgPort, wanIface, wanIface, wanIface))
+	b.WriteString(fmt.Sprintf("PostDown = iptables -D INPUT -p udp --dport %d -j ACCEPT || true; iptables -D FORWARD -i %s -o %%i -j ACCEPT || true; iptables -D FORWARD -i %%i -j ACCEPT || true; iptables -t nat -D POSTROUTING -o %s -j MASQUERADE || true; ip route del default dev %s table 110 || true; ip rule del iif %%i table 110 || true;\n", wgPort, wanIface, wanIface, wanIface))
 	b.WriteString(fmt.Sprintf("SaveConfig = true\n"))
 
 	b.WriteString("\n[Peer]\n")
@@ -1179,7 +1179,7 @@ func (s *Server) importPeerToKeenetic(w http.ResponseWriter, r *http.Request) {
 		serverPrivBytes, _ := loadPrivateKey("data/server_private.key")
 		serverPub, _ = getPublicKeyFromPrivate(serverPrivBytes)
 	}
-	confContent := generatePeerConfig(peer, serverPub, s.iface, s.endpoint, s.port, globalCfg.DNS)
+	confContent := generatePeerConfig(peer, serverPub, s.iface, s.endpoint, s.wgPort, globalCfg.DNS)
 
 	if peer.RouterDomain == "" || peer.RouterLogin == "" || peer.RouterPassword == "" {
 		http.Error(w, "router credentials not configured for this peer", http.StatusBadRequest)
@@ -1195,7 +1195,7 @@ func (s *Server) importPeerToKeenetic(w http.ResponseWriter, r *http.Request) {
 		peer.AllowedIPs,
 		"0.0.0.0/0",
 		s.endpoint,
-		s.port,
+		s.wgPort,
 	)
 	if err != nil {
 		log.Printf("keenetic import failed for %s: %v", peer.Name, err)
@@ -1239,7 +1239,7 @@ func (s *Server) downloadPeerKeeneticConfig(w http.ResponseWriter, r *http.Reque
 				serverPrivBytes, _ := loadPrivateKey("data/server_private.key")
 				serverPub, _ = getPublicKeyFromPrivate(serverPrivBytes)
 			}
-			peerConf := generatePeerConfig(peer, serverPub, s.iface, s.endpoint, s.port, globalCfg.DNS)
+			peerConf := generatePeerConfig(peer, serverPub, s.iface, s.endpoint, s.wgPort, globalCfg.DNS)
 			w.Header().Set("Content-Type", "application/octet-stream")
 			w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=\"%s.conf\"", sanitizeFilename(peer.Name)))
 			w.Write([]byte(peerConf))
@@ -1319,7 +1319,7 @@ func (s *Server) configurePeerComponents(w http.ResponseWriter, r *http.Request)
 			serverPub, _ = getPublicKeyFromPrivate(serverPrivBytes)
 		}
 
-		res := configureRouterComponents(httpClient, baseURL, &peer, serverPub, s.endpoint, s.port, globalCfg.WanInterface)
+		res := configureRouterComponents(httpClient, baseURL, &peer, serverPub, s.endpoint, s.wgPort, globalCfg.WanInterface)
 
 		var status string
 		if res.Status == "error" {
@@ -1779,17 +1779,17 @@ func generateWgConfig(cfg *Config, peers []Peer) error {
 	var b strings.Builder
 	b.WriteString("[Interface]\n")
 	b.WriteString(fmt.Sprintf("Address = %s\n", serverAddr))
-	b.WriteString(fmt.Sprintf("ListenPort = %d\n", cfg.Port))
+	b.WriteString(fmt.Sprintf("ListenPort = %d\n", cfg.WGPort))
 	b.WriteString(fmt.Sprintf("PrivateKey = %s\n", serverPriv))
 	if cfg.PostUp != "" {
 		b.WriteString(fmt.Sprintf("PostUp = %s\n", cfg.PostUp))
 	} else {
-		b.WriteString(fmt.Sprintf("PostUp = iptables -A INPUT -p udp --dport %d -j ACCEPT || true; iptables -A FORWARD -i %s -o %%i -j ACCEPT || true; iptables -A FORWARD -i %%i -j ACCEPT || true; iptables -t nat -A POSTROUTING -o %s -j MASQUERADE || true; ip route add default dev %s table 110 || true; ip rule add iif %%i table 110 || true;\n", cfg.Port, wanIface, wanIface, wanIface))
+		b.WriteString(fmt.Sprintf("PostUp = iptables -A INPUT -p udp --dport %d -j ACCEPT || true; iptables -A FORWARD -i %s -o %%i -j ACCEPT || true; iptables -A FORWARD -i %%i -j ACCEPT || true; iptables -t nat -A POSTROUTING -o %s -j MASQUERADE || true; ip route add default dev %s table 110 || true; ip rule add iif %%i table 110 || true;\n", cfg.WGPort, wanIface, wanIface, wanIface))
 	}
 	if cfg.PostDown != "" {
 		b.WriteString(fmt.Sprintf("PostDown = %s\n", cfg.PostDown))
 	} else {
-		b.WriteString(fmt.Sprintf("PostDown = iptables -D INPUT -p udp --dport %d -j ACCEPT || true; iptables -D FORWARD -i %s -o %%i -j ACCEPT || true; iptables -D FORWARD -i %%i -j ACCEPT || true; iptables -t nat -D POSTROUTING -o %s -j MASQUERADE || true; ip route del default dev %s table 110 || true; ip rule del iif %%i table 110 || true;\n", cfg.Port, wanIface, wanIface, wanIface))
+		b.WriteString(fmt.Sprintf("PostDown = iptables -D INPUT -p udp --dport %d -j ACCEPT || true; iptables -D FORWARD -i %s -o %%i -j ACCEPT || true; iptables -D FORWARD -i %%i -j ACCEPT || true; iptables -t nat -D POSTROUTING -o %s -j MASQUERADE || true; ip route del default dev %s table 110 || true; ip rule del iif %%i table 110 || true;\n", cfg.WGPort, wanIface, wanIface, wanIface))
 	}
 	for _, p := range peers {
 		b.WriteString("\n[Peer]\n")
@@ -1820,7 +1820,7 @@ func writeFileAtomic(path string, data []byte) error {
 	return os.Rename(tmpName, path)
 }
 
-func generatePeerConfig(peer *Peer, serverPub, iface, endpoint string, port int, dns string) string {
+func generatePeerConfig(peer *Peer, serverPub, iface, endpoint string, wgPort int, dns string) string {
 	peerPriv := peer.PrivateKey
 	if peerPriv == "" {
 		peerPriv, _, _ = generateKeyPair()
@@ -1835,7 +1835,7 @@ func generatePeerConfig(peer *Peer, serverPub, iface, endpoint string, port int,
 	}
 	b.WriteString("\n[Peer]\n")
 	b.WriteString(fmt.Sprintf("PublicKey = %s\n", strings.TrimSpace(string(serverPub))))
-	b.WriteString(fmt.Sprintf("Endpoint = %s:%d\n", endpoint, port))
+	b.WriteString(fmt.Sprintf("Endpoint = %s:%d\n", endpoint, wgPort))
 	b.WriteString("AllowedIPs = 0.0.0.0/0, ::/0\n")
 	b.WriteString("PersistentKeepalive = 25\n")
 	return b.String()

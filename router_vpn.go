@@ -118,7 +118,7 @@ func keeneticRemovePeer(httpClient *http.Client, baseURL, ifaceName, serverPubKe
 	return nil
 }
 
-func importWireGuardConfigToRouter(baseURL, login, password string, confData []byte, filename string, interfaceIP string, peerAllowedIPs string, endpoint string, port int) (keeneticImportResult, error) {
+func importWireGuardConfigToRouter(baseURL, login, password string, confData []byte, filename string, interfaceIP string, peerAllowedIPs string, endpoint string, wgPort int) (keeneticImportResult, error) {
 	domain := strings.TrimPrefix(strings.TrimPrefix(baseURL, "http://"), "https://")
 	client, workingURL, err := keeneticSetupClient(domain, login, password)
 	if err != nil {
@@ -246,7 +246,7 @@ func importWireGuardConfigToRouter(baseURL, login, password string, confData []b
 			}
 		}
 		if serverPub != "" {
-			peerEndpoint := fmt.Sprintf("%s:%d", endpoint, port)
+			peerEndpoint := fmt.Sprintf("%s:%d", endpoint, wgPort)
 			if err := keeneticRemovePeer(httpClient, baseURL, ifaceName, serverPub); err != nil {
 				result.Messages = append(result.Messages, "⚠️ удаление старого peer: "+err.Error())
 			} else {
