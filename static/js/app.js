@@ -1909,12 +1909,12 @@ async function loadAmneziaInterfaces() {
 
 function formatRate(bytesPerSec) {
   if (!isFinite(bytesPerSec) || bytesPerSec < 0) return '—';
-  const bits = bytesPerSec * 8;
+  const v = bytesPerSec * 8 / 1000;
   const units = ['Kbit/s', 'Mbit/s', 'Gbit/s'];
   let u = 0;
-  let v = bits;
-  while (v >= 1000 && u < units.length - 1) { v /= 1000; u++; }
-  return v.toFixed(u === 0 ? 0 : 1) + ' ' + units[u];
+  let val = v;
+  while (val >= 1000 && u < units.length - 1) { val /= 1000; u++; }
+  return val.toFixed(u === 0 ? 0 : 1) + ' ' + units[u];
 }
 
 function formatBytesStatic(v) {
