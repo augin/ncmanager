@@ -29,7 +29,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.10.24"
+const appVersion = "1.11.0"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
@@ -321,7 +321,7 @@ func main() {
 		tlsConfig := certManager.TLSConfig()
 		server := &http.Server{Addr: ":https", Handler: http.Handler(nil)}
 		server.TLSConfig = tlsConfig
-		log.Printf("WireGuard Manager starting on https://%s", cfg.TLSHost)
+		log.Printf("NC Manager starting on https://%s", cfg.TLSHost)
 		log.Fatalf("HTTPS server error: %v", server.ListenAndServeTLS("", ""))
 	}
 
@@ -329,7 +329,7 @@ func main() {
 	go startAmneziaTrafficCleanup()
 
 	addr := fmt.Sprintf(":%d", cfg.HttpPort)
-	log.Printf("WireGuard Manager starting on %s", addr)
+	log.Printf("NC Manager starting on %s", addr)
 	log.Printf("Endpoint: %s", server.endpoint)
 	log.Printf("Version: %s", appVersion)
 	log.Fatal(http.ListenAndServe(addr, nil))
