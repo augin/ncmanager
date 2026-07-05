@@ -28,7 +28,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.12.9"
+const appVersion = "1.12.10"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
@@ -968,11 +968,13 @@ func (s *Server) removePeer(w http.ResponseWriter, r *http.Request) {
 	peersCfg.Peers = filtered
 
 	_ = savePeers(peersCfg)
-	if err := removePeerWireGuard(peerToRemove.PublicKey); err != nil {
-		log.Printf("removePeer wg set failed: %v", err)
-	}
 	cfg, _ := loadConfig(dataFile)
 	_ = generateWgConfig(cfg, peersCfg.Peers)
+
+	confPath := s.configPath
+	if out, err := exec.Command("wg", "syncconf", "wg0", confPath).CombinedOutput(); err != nil {
+		log.Printf("removePeer: wg syncconf failed: %v, output: %s", err, string(out))
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
@@ -1743,15 +1745,6 @@ func parseInt64(s string) int64 {
 
 func addPeerWireGuard(p Peer) error {
 	cmd := exec.Command("wg", "set", "wg0", "peer", p.PublicKey, "allowed-ips", p.AllowedIPs)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("%s: %w", string(out), err)
-	}
-	return nil
-}
-
-func removePeerWireGuard(pubKey string) error {
-	cmd := exec.Command("wg", "set", "wg0", "peer", pubKey, "remove")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("%s: %w", string(out), err)
