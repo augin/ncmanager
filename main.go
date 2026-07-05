@@ -28,7 +28,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.12.12"
+const appVersion = "1.12.13"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
@@ -1766,6 +1766,76 @@ func syncPeersWithWireGuard(cfg *Config, peers []Peer) error {
 			peers[i].TransferTx = p.TransferTx
 			peers[i].Endpoint = p.Endpoint
 		}
+	}
+	return nil
+}
+
+func parsePublicKey(line string) string {
+	for _, prefix := range []string{"PublicKey = ", "PublicKey="} {
+		if strings.HasPrefix(line, prefix) {
+			return strings.TrimSpace(strings.TrimPrefix(line, prefix))
+		}
+	}
+	return ""
+}
+
+func syncconfRemovePeer(publicKey string) error {
+	out, err := exec.Command("wg", "showconf", "wg0").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("wg showconf failed: %w, output: %s", err, string(out))
+	}
+
+	var buf strings.Builder
+	scanner := bufio.NewScanner(bytes.NewReader(out))
+	inPeer := false
+	skipPeer := false
+	var peerLines []string
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		trimmed := strings.TrimSpace(line)
+
+		if strings.HasPrefix(trimmed, "[Peer]") {
+			if inPeer && !skipPeer {
+				buf.WriteString(strings.Join(peerLines, "\n") + "\n")
+			}
+			inPeer = true
+			skipPeer = false
+			peerLines = []string{line}
+			continue
+		}
+
+		if inPeer {
+			peerLines = append(peerLines, line)
+			if pk := parsePublicKey(trimmed); pk != "" {
+				skipPeer = (pk == publicKey)
+			}
+			continue
+		}
+
+		buf.WriteString(line + "\n")
+	}
+
+	if inPeer && !skipPeer {
+		buf.WriteString(strings.Join(peerLines, "\n") + "\n")
+	}
+
+	tmp, err := os.CreateTemp("", "wg-sync-*.conf")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+
+	if _, err := tmp.WriteString(buf.String()); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+
+	if out, err := exec.Command("wg", "syncconf", "wg0", tmp.Name()).CombinedOutput(); err != nil {
+		return fmt.Errorf("wg syncconf failed: %v, output: %s", err, string(out))
 	}
 	return nil
 }

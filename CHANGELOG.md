@@ -1,5 +1,8 @@
 # Changelog
 
+## v1.12.13
+- **fix**: `wg syncconf` для удаления пира теперь строится из `wg showconf` (формат `wg show`, без `Address`/`PostUp`/`PostDown`), исключает ошибку парсинга `Address=...`
+
 ## v1.12.12
 - **fix**: добавление пира снова использует `wg set peer allowed-ips` — `wg syncconf` ненадёжно добавляет новых пиров на некоторых версиях WireGuard
 
