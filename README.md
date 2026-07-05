@@ -2,6 +2,12 @@
 
 Управление WireGuard-пирами на роутерах Keenetic через веб-интерфейс и RCI API.
 
+**Текущая версия:** v1.11.11
+
+## Changelog
+
+См. [CHANGELOG.md](CHANGELOG.md).
+
 ## Возможности
 
 - Создание/удаление пиров WireGuard
