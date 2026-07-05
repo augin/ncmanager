@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -62,7 +63,7 @@ type routeApply struct {
 	Enabled bool
 }
 
-func keeneticApplyDnsRoutes(httpClient *http.Client, baseURL, wgIface string, routes []routeApply) error {
+func keeneticApplyDnsRoutes(httpClient *http.Client, baseURL, wgIface string, routes []routeApply, logFn func(string)) error {
 	existingGroups, err := keeneticGetObjectGroups(httpClient, baseURL)
 	if err != nil {
 		return fmt.Errorf("read existing groups: %w", err)
@@ -87,6 +88,9 @@ func keeneticApplyDnsRoutes(httpClient *http.Client, baseURL, wgIface string, ro
 		}
 		if !activeSlugs[slug] {
 			log.Printf("cleaning orphaned group: %s (slug=%s)", g, slug)
+			if logFn != nil {
+				logFn("🗑️ Удаление устаревшей группы: " + g + "\n")
+			}
 			delPayload := map[string]any{
 				"object-group": map[string]any{
 					"fqdn": map[string]any{g: map[string]any{"no": true}},
@@ -129,6 +133,9 @@ func keeneticApplyDnsRoutes(httpClient *http.Client, baseURL, wgIface string, ro
 		}
 
 		if len(oldNames) > 0 {
+			if logFn != nil {
+				logFn("🗑️ Удаление старых списков для: " + route.Name + " (" + strings.Join(oldNames, ", ") + ")\n")
+			}
 			delPayload := map[string]any{
 				"object-group": map[string]any{
 					"fqdn": func() map[string]any {
@@ -170,6 +177,9 @@ func keeneticApplyDnsRoutes(httpClient *http.Client, baseURL, wgIface string, ro
 		items = append(items, route.Domains...)
 		items = append(items, route.Subnets...)
 		if len(items) == 0 {
+			if logFn != nil {
+				logFn("⏭️ Маршрут пустой, пропуск: " + route.Name + "\n")
+			}
 			continue
 		}
 
@@ -207,6 +217,9 @@ func keeneticApplyDnsRoutes(httpClient *http.Client, baseURL, wgIface string, ro
 			if status != http.StatusOK {
 				log.Printf("create group %s: HTTP %d (skipping)", groupName, status)
 			}
+			if logFn != nil {
+				logFn("📋 Создан список: " + groupName + " (" + strconv.Itoa(len(chunk)) + " элементов)\n")
+			}
 			time.Sleep(50 * time.Millisecond)
 
 			if route.Enabled {
@@ -227,6 +240,9 @@ func keeneticApplyDnsRoutes(httpClient *http.Client, baseURL, wgIface string, ro
 				}
 				if status != http.StatusOK {
 					log.Printf("create route for %s: HTTP %d (skipping)", groupName, status)
+				}
+				if logFn != nil {
+					logFn("  ➜ Маршрут: " + groupName + " → " + wgIface + "\n")
 				}
 				time.Sleep(50 * time.Millisecond)
 			}
@@ -397,7 +413,7 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 
 			if len(applyPayload) > 0 {
 				appendLog(fmt.Sprintf("📡 Применение %d маршрутов на %s (%s)...\n", len(applyPayload), peer.Name, peer.RouterDomain))
-				if err := keeneticApplyDnsRoutes(httpClient, baseURL, wgIface, applyPayload); err != nil {
+				if err := keeneticApplyDnsRoutes(httpClient, baseURL, wgIface, applyPayload, appendLog); err != nil {
 					log.Printf("dns-routes apply failed for %s: %v", peer.Name, err)
 					appendLog(fmt.Sprintf("❌ Ошибка применения на %s: %v\n", peer.Name, err))
 					results = append(results, applyResult{
