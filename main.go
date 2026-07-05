@@ -28,7 +28,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.12.11"
+const appVersion = "1.12.12"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
@@ -927,9 +927,9 @@ func (s *Server) addPeer(w http.ResponseWriter, r *http.Request) {
 
 	_ = generateWgConfig(cfg, peersCfg.Peers)
 
-	confPath := s.configPath
-	if out, err := exec.Command("wg", "syncconf", "wg0", confPath).CombinedOutput(); err != nil {
-		log.Printf("addPeer: wg syncconf failed: %v, output: %s", err, string(out))
+	cmd := exec.Command("wg", "set", "wg0", "peer", peer.PublicKey, "allowed-ips", peer.AllowedIPs)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		log.Printf("addPeer: wg set failed: %v, output: %s", err, string(out))
 	}
 
 	w.Header().Set("Content-Type", "application/json")
