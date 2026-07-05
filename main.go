@@ -2642,7 +2642,9 @@ func writeAmneziaConfig(cfg amneziaConfigResponse) string {
 	b.WriteString("[Interface]\n")
 	b.WriteString(fmt.Sprintf("PrivateKey = <server_key_placeholder>\n"))
 	b.WriteString(fmt.Sprintf("Address = %s\n", cfg.Address))
-	b.WriteString(fmt.Sprintf("ListenPort = %d\n", 51820))
+	if cfg.Endpoint == "" {
+		b.WriteString(fmt.Sprintf("ListenPort = %d\n", 51820))
+	}
 	if cfg.DNS != "" {
 		b.WriteString(fmt.Sprintf("DNS = %s\n", cfg.DNS))
 	}
