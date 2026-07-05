@@ -615,6 +615,9 @@ main { max-width: 1366px; margin: 0 auto; padding: 24px; }
 table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
 th, td { text-align: left; padding: 10px; border-bottom: 1px solid var(--color-border); }
 th { color: var(--color-text-muted); font-weight: 500; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.05em; }
+th[onclick] { cursor: pointer; }
+th[onclick]:hover { color: var(--color-text-primary); }
+.sort-indicator { font-size: 0.65rem; margin-left: 4px; opacity: 0.7; }
 tr:last-child td { border-bottom: none; }
 tr:hover td { background: rgba(122,162,247,0.03); }
 

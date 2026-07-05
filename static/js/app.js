@@ -6,6 +6,8 @@ let previousPeerIds = new Set();
 let refreshTimer = null;
 let expandedPeers = new Set();
 let peerSearch = '';
+let sortField = 'createdAt';
+let sortDir = 'asc';
 let expandedInputs = {};
 let activeElementId = null;
 let activeElementCursorStart = null;
@@ -276,6 +278,50 @@ function onPeerSearchChange(value) {
 	loadPeers().then(renderPeers);
 }
 
+function applySort(arr) {
+	if (!sortField) return arr;
+	const sorted = [...arr];
+	sorted.sort((a, b) => {
+		let va, vb;
+		if (sortField === 'name') {
+			va = (a.name || '').toLowerCase();
+			vb = (b.name || '').toLowerCase();
+		} else if (sortField === 'createdAt') {
+			va = new Date(a.createdAt).getTime();
+			vb = new Date(b.createdAt).getTime();
+		} else if (sortField === 'traffic') {
+			va = (a.transferRx || 0) + (a.transferTx || 0);
+			vb = (b.transferRx || 0) + (b.transferTx || 0);
+		}
+		if (va < vb) return sortDir === 'asc' ? -1 : 1;
+		if (va > vb) return sortDir === 'asc' ? 1 : -1;
+		return 0;
+	});
+	return sorted;
+}
+
+function handleSort(field) {
+	if (sortField === field) {
+		if (sortDir === 'asc') sortDir = 'desc';
+		else { sortField = ''; sortDir = 'asc'; }
+	} else {
+		sortField = field;
+		sortDir = 'asc';
+	}
+	loadPeers().then(renderPeers);
+}
+
+function updateSortIndicators() {
+	document.querySelectorAll('.sort-indicator').forEach(el => {
+		const f = el.getAttribute('data-field');
+		if (f === sortField) {
+			el.textContent = sortDir === 'asc' ? '▲' : '▼';
+		} else {
+			el.textContent = '';
+		}
+	});
+}
+
 function editCreatedAt(peerId, cell) {
 	const current = cell.textContent.trim();
 	const parts = current.split('.');
@@ -309,13 +355,14 @@ function editCreatedAt(peerId, cell) {
 function renderPeers(peers) {
 	const query = peerSearch.trim().toLowerCase();
 	const filtered = query ? peers.filter(p => (p.name || '').toLowerCase().includes(query)) : peers;
+	const displayList = applySort(filtered);
 	const tbody = document.getElementById('peersTable');
-	if (!filtered.length) {
+	if (!displayList.length) {
 		tbody.innerHTML = query ? '<p style="color:#64748b;padding:12px">Нет совпадений</p>' : '<p style="color:#64748b;padding:12px">Нет пиров</p>';
 		return;
 	}
-	let html = '<table><thead><tr><th></th><th>Имя</th><th>IP</th><th>Создан</th><th>Handshake</th><th>Endpoint</th><th>Трафик</th><th>Оплата</th><th>Действия</th><th></th></tr></thead><tbody>';
-	for (const p of peers) {
+	let html = '<table><thead><tr><th></th><th onclick="handleSort(\'name\')" style="cursor:pointer">Имя <span class="sort-indicator" data-field="name"></span></th><th>IP</th><th onclick="handleSort(\'createdAt\')" style="cursor:pointer">Создан <span class="sort-indicator" data-field="createdAt"></span></th><th>Handshake</th><th>Endpoint</th><th onclick="handleSort(\'traffic\')" style="cursor:pointer">Трафик <span class="sort-indicator" data-field="traffic"></span></th><th>Оплата</th><th>Действия</th><th></th></tr></thead><tbody>';
+	for (const p of displayList) {
 		const hs = humanTimeAgo(p.lastHandshake);
 		const age = getPeerAge(p.lastHandshake);
 		const status = getPeerStatus(age);
@@ -372,6 +419,7 @@ function renderPeers(peers) {
 	}
 	html += '</tbody></table>';
 	tbody.innerHTML = html;
+	updateSortIndicators();
 	const countEl = document.getElementById('peerMetaCount');
 	const unpaidEl = document.getElementById('peerMetaUnpaid');
 	if (countEl && unpaidEl) {
