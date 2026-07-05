@@ -29,7 +29,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.11.9"
+const appVersion = "1.11.10"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
@@ -2645,9 +2645,7 @@ func writeAmneziaConfig(cfg amneziaConfigResponse) string {
 	b.WriteString("[Interface]\n")
 	b.WriteString(fmt.Sprintf("PrivateKey = <server_key_placeholder>\n"))
 	b.WriteString(fmt.Sprintf("Address = %s\n", cfg.Address))
-	if cfg.Table != "" {
-		b.WriteString(fmt.Sprintf("Table = %s\n", cfg.Table))
-	}
+	b.WriteString("Table = off\n")
 	if cfg.Endpoint == "" {
 		b.WriteString(fmt.Sprintf("ListenPort = %d\n", 51820))
 	}
