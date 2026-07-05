@@ -1,5 +1,8 @@
 # Changelog
 
+## v1.12.15
+- **fix**: `removePeer` использует `syncconfRemovePeer` (build из `wg showconf`), исключает ошибку парсинга `Address=...`
+
 ## v1.12.14
 - **fix**: добавление пира переведено на `wg syncconf` (build из `wg showconf`), исключает кратковременный просад трафика
 
