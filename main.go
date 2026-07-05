@@ -29,7 +29,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.11.10"
+const appVersion = "1.11.11"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
@@ -2731,8 +2731,7 @@ func (s *Server) saveAmneziaInterfaceConfig(w http.ResponseWriter, r *http.Reque
 
 	confPath := fmt.Sprintf("/etc/amnezia/amneziawg/%s.conf", name)
 	wasRunning := false
-	var err error
-	_, err = exec.Command("awg-quick", "show", name).CombinedOutput()
+	_, err := exec.Command("ip", "link", "show", "dev", name).CombinedOutput()
 	wasRunning = err == nil
 
 	if wasRunning {
@@ -2761,7 +2760,10 @@ func (s *Server) saveAmneziaInterfaceConfig(w http.ResponseWriter, r *http.Reque
 	}
 
 	if wasRunning {
-		exec.Command("awg-quick", "up", name).CombinedOutput()
+		if upOut, upErr := exec.Command("awg-quick", "up", name).CombinedOutput(); upErr != nil {
+			http.Error(w, "awg-quick up failed: "+string(upOut), http.StatusInternalServerError)
+			return
+		}
 		exec.Command("systemctl", "enable", "--now", "awg-quick@"+name).CombinedOutput()
 	}
 
