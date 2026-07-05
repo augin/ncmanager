@@ -29,7 +29,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.12.5"
+const appVersion = "1.12.6"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
@@ -827,8 +827,32 @@ func (s *Server) saveConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("saveConfig: wg restarted subnet=%s", cfg.Subnet)
 
+	if err := configureUfwRoutes(cfg); err != nil {
+		log.Printf("saveConfig: ufw routes: %v", err)
+	}
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "interfaceIP": getInterfaceIP(cfg.Subnet)})
+}
+
+func configureUfwRoutes(cfg *Config) error {
+	if cfg.WanInterface == "" {
+		return nil
+	}
+	vpnIface := cfg.Interface
+	if vpnIface == "" {
+		vpnIface = "wg0"
+	}
+	cmds := [][]string{
+		{"ufw", "route", "allow", "in", "on", vpnIface, "out", "on", cfg.WanInterface},
+		{"ufw", "route", "allow", "in", "on", cfg.WanInterface, "out", "on", vpnIface},
+	}
+	for _, args := range cmds {
+		if out, err := exec.Command(args[0], args[1:]...).CombinedOutput(); err != nil {
+			return fmt.Errorf("ufw %s: %w (%s)", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
+		}
+	}
+	return nil
 }
 
 func (s *Server) listPeers(w http.ResponseWriter, r *http.Request) {
