@@ -1,5 +1,8 @@
 # Changelog
 
+## v1.12.14
+- **fix**: добавление пира переведено на `wg syncconf` (build из `wg showconf`), исключает кратковременный просад трафика
+
 ## v1.12.13
 - **fix**: `wg syncconf` для удаления пира теперь строится из `wg showconf` (формат `wg show`, без `Address`/`PostUp`/`PostDown`), исключает ошибку парсинга `Address=...`
 

@@ -28,7 +28,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.12.13"
+const appVersion = "1.12.14"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
@@ -927,9 +927,8 @@ func (s *Server) addPeer(w http.ResponseWriter, r *http.Request) {
 
 	_ = generateWgConfig(cfg, peersCfg.Peers)
 
-	cmd := exec.Command("wg", "set", "wg0", "peer", peer.PublicKey, "allowed-ips", peer.AllowedIPs)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		log.Printf("addPeer: wg set failed: %v, output: %s", err, string(out))
+	if err := syncconfAddPeer(peer); err != nil {
+		log.Printf("addPeer: syncconf failed: %v", err)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1827,6 +1826,38 @@ func syncconfRemovePeer(publicKey string) error {
 	defer os.Remove(tmp.Name())
 
 	if _, err := tmp.WriteString(buf.String()); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+
+	if out, err := exec.Command("wg", "syncconf", "wg0", tmp.Name()).CombinedOutput(); err != nil {
+		return fmt.Errorf("wg syncconf failed: %v, output: %s", err, string(out))
+	}
+	return nil
+}
+
+func syncconfAddPeer(peer Peer) error {
+	out, err := exec.Command("wg", "showconf", "wg0").CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("wg showconf failed: %w, output: %s", err, string(out))
+	}
+
+	peerBlock := fmt.Sprintf("\n[Peer]\n# %s\nPublicKey = %s\nAllowedIPs = %s\n", peer.Name, peer.PublicKey, peer.AllowedIPs)
+
+	tmp, err := os.CreateTemp("", "wg-sync-*.conf")
+	if err != nil {
+		return err
+	}
+	defer os.Remove(tmp.Name())
+
+	if _, err := tmp.WriteString(string(out)); err != nil {
+		tmp.Close()
+		return err
+	}
+	if _, err := tmp.WriteString(peerBlock); err != nil {
 		tmp.Close()
 		return err
 	}
