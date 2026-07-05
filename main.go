@@ -28,7 +28,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.12.10"
+const appVersion = "1.12.11"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
@@ -925,8 +925,12 @@ func (s *Server) addPeer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_ = addPeerWireGuard(peer)
 	_ = generateWgConfig(cfg, peersCfg.Peers)
+
+	confPath := s.configPath
+	if out, err := exec.Command("wg", "syncconf", "wg0", confPath).CombinedOutput(); err != nil {
+		log.Printf("addPeer: wg syncconf failed: %v, output: %s", err, string(out))
+	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
@@ -1741,15 +1745,6 @@ func isBase64(s string) bool {
 func parseInt64(s string) int64 {
 	v, _ := strconv.ParseInt(s, 10, 64)
 	return v
-}
-
-func addPeerWireGuard(p Peer) error {
-	cmd := exec.Command("wg", "set", "wg0", "peer", p.PublicKey, "allowed-ips", p.AllowedIPs)
-	out, err := cmd.CombinedOutput()
-	if err != nil {
-		return fmt.Errorf("%s: %w", string(out), err)
-	}
-	return nil
 }
 
 func syncPeersWithWireGuard(cfg *Config, peers []Peer) error {
