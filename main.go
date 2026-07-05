@@ -29,7 +29,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.12.6"
+const appVersion = "1.12.7"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
@@ -181,6 +181,7 @@ var authSecret []byte
 func main() {
 	initAuth()
 	initAuthSecret()
+	InitEncryptionKey()
 	initLogger()
 
 	server := &Server{
@@ -566,6 +567,13 @@ func loadPeers() (*PeersConfig, error) {
 	if pc.Peers == nil {
 		pc.Peers = []Peer{}
 	}
+	for i := range pc.Peers {
+		if pc.Peers[i].RouterPassword != "" {
+			if plain, ok := DecryptPassword(pc.Peers[i].RouterPassword); ok {
+				pc.Peers[i].RouterPassword = plain
+			}
+		}
+	}
 	if _, hasDns := raw["dnsRoutes"]; hasDns {
 		delete(raw, "dnsRoutes")
 		_ = savePeers(&pc)
@@ -582,6 +590,11 @@ func savePeers(pc *PeersConfig) error {
 		return err
 	}
 	defer f.Close()
+	for i := range pc.Peers {
+		if pc.Peers[i].RouterPassword != "" {
+			pc.Peers[i].RouterPassword = EncryptPassword(pc.Peers[i].RouterPassword)
+		}
+	}
 	return json.NewEncoder(f).Encode(pc)
 }
 
@@ -2883,6 +2896,7 @@ func (s *Server) createBackup(w http.ResponseWriter, r *http.Request) {
 		"data/server_private.key",
 		"data/.auth",
 		"data/.secret",
+		"data/.key",
 		"presets/dns-routes.json",
 	}
 	for _, rel := range files {
