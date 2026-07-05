@@ -339,7 +339,7 @@ function renderPeers(peers) {
 			<td data-field="traffic"><span title="↑ ${tx}">↑ ${tx}</span> / <span title="↓ ${rx}">↓ ${rx}</span></td>
 			<td><span class="paid-indicator-row ${p.paid ? 'paid-indicator-row--on' : 'paid-indicator-row--off'}" title="${p.paid ? 'Оплачено' : 'Не оплачено'}">${p.paid ? '$' : '$'}</span></td>
 			<td class="peer-actions">
-				<label class="toggle-switch peer-vpn-toggle" title="${canToggle ? (vpnActive ? 'Остановить VPN' : 'Запустить VPN') : 'Нет credentials'}">
+				<label class="toggle-switch peer-vpn-toggle" title="${canToggle ? (vpnActive ? 'Отключить VPN' : 'Включить VPN') : 'Нет данных роутера'}">
 				  <input type="checkbox" ${vpnActive ? 'checked' : ''} ${canToggle ? '' : 'disabled'} onchange="managePeerVpn('${p.id}', this.checked ? 'up' : 'down')">
 				  <span class="toggle-slider"></span>
 				</label>
