@@ -29,7 +29,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.11.11"
+const appVersion = "1.12.2"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
@@ -155,6 +155,7 @@ type Peer struct {
 	Description    string    `json:"description,omitempty"`
 	RouterIfName   string    `json:"routerIfName,omitempty"`
 	Paid           bool      `json:"paid,omitempty"`
+	VPNActive      bool      `json:"vpnActive,omitempty"`
 }
 
 type Config struct {
@@ -276,6 +277,9 @@ func main() {
 	api.HandleFunc("/peers/keenetic-dns/", withAuth(server.configurePeerDns))
 	api.HandleFunc("/peers/keenetic-dns-routes/", withAuth(server.configurePeerDnsRoutes))
 	api.HandleFunc("/peers/keenetic-components/", withAuth(server.configurePeerComponents))
+	api.HandleFunc("/peers/keenetic-apply/", withAuth(server.applyPeerVpn))
+	api.HandleFunc("/peers/keenetic-remove/", withAuth(server.removePeerVpn))
+	api.HandleFunc("/peers/keenetic-status/", withAuth(server.getPeerVpnStatus))
 	api.HandleFunc("/components/apply", withAuth(server.configurePeerComponents))
 	api.HandleFunc("/components/apply/status", withAuth(server.getComponentsApplyStatus))
 	api.HandleFunc("/dns/routes", withAuth(server.listDnsRoutes))
@@ -3057,7 +3061,218 @@ func (s *Server) restoreBackup(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"status":   "ok",
-		"restored": restored,
+		"status": "ok",
+	})
+}
+
+func (s *Server) applyPeerVpn(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 4 || parts[3] == "" {
+		http.Error(w, "peer id required", http.StatusBadRequest)
+		return
+	}
+	id := parts[3]
+
+	peersCfg, err := loadPeers()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	peerIdx := -1
+	for i := range peersCfg.Peers {
+		if peersCfg.Peers[i].ID == id {
+			peerIdx = i
+			break
+		}
+	}
+	if peerIdx < 0 {
+		http.Error(w, "peer not found", http.StatusNotFound)
+		return
+	}
+	peer := &peersCfg.Peers[peerIdx]
+
+	if peer.RouterDomain == "" || peer.RouterLogin == "" || peer.RouterPassword == "" {
+		http.Error(w, "router credentials not configured", http.StatusBadRequest)
+		return
+	}
+
+	statusFile := fmt.Sprintf("/tmp/peer-vpn-%s.status", id)
+	logFile := fmt.Sprintf("/tmp/peer-vpn-%s.log", id)
+	os.WriteFile(statusFile, []byte("running"), 0644)
+	os.WriteFile(logFile, []byte(""), 0644)
+
+	go func(p *Peer) {
+		serverPub := getActualServerPublicKey()
+		if serverPub == "" {
+			serverPrivBytes, _ := loadPrivateKey("data/server_private.key")
+			serverPub, _ = getPublicKeyFromPrivate(serverPrivBytes)
+		}
+		confContent := generatePeerConfig(p, serverPub, "", s.endpoint, s.wgPort, "")
+		logText := ""
+		appendLog := func(line string) {
+			logText += line + "\n"
+			os.WriteFile(logFile, []byte(logText), 0644)
+		}
+
+		appendLog("Подключение к " + p.RouterDomain + "...")
+		_, baseURL, err := keeneticSetupClient(p.RouterDomain, p.RouterLogin, p.RouterPassword)
+		if err != nil {
+			appendLog("❌ Ошибка подключения: " + err.Error())
+			os.WriteFile(statusFile, []byte("failed"), 0644)
+			return
+		}
+
+		result, err := importWireGuardConfigToRouter(
+			baseURL, p.RouterLogin, p.RouterPassword,
+			[]byte(confContent),
+			sanitizeFilename(p.Name)+".conf",
+			p.AllowedIPs, "0.0.0.0/0", s.endpoint, s.wgPort,
+		)
+		if err != nil {
+			appendLog("❌ Ошибка импорта: " + err.Error())
+			os.WriteFile(statusFile, []byte("failed"), 0644)
+			return
+		}
+
+		for _, msg := range result.Messages {
+			appendLog("   ↳ " + msg)
+		}
+
+		ifName := result.Created
+		if ifName == "" {
+			ifName = result.Intersects
+		}
+		if ifName == "" {
+			appendLog("❌ Интерфейс не создан")
+			os.WriteFile(statusFile, []byte("failed"), 0644)
+			return
+		}
+
+		appendLog("✅ Интерфейс создан: " + ifName)
+
+		peersCfg, _ := loadPeers()
+		for i := range peersCfg.Peers {
+			if peersCfg.Peers[i].ID == p.ID {
+				peersCfg.Peers[i].RouterIfName = ifName
+				peersCfg.Peers[i].VPNActive = true
+				_ = savePeers(peersCfg)
+				break
+			}
+		}
+		os.WriteFile(statusFile, []byte("completed"), 0644)
+	}(peer)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "started"})
+}
+
+func (s *Server) removePeerVpn(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 4 || parts[3] == "" {
+		http.Error(w, "peer id required", http.StatusBadRequest)
+		return
+	}
+	id := parts[3]
+
+	peersCfg, err := loadPeers()
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	peerIdx := -1
+	for i := range peersCfg.Peers {
+		if peersCfg.Peers[i].ID == id {
+			peerIdx = i
+			break
+		}
+	}
+	if peerIdx < 0 {
+		http.Error(w, "peer not found", http.StatusNotFound)
+		return
+	}
+	peer := &peersCfg.Peers[peerIdx]
+
+	if peer.RouterIfName == "" {
+		http.Error(w, "no router interface configured", http.StatusBadRequest)
+		return
+	}
+
+	statusFile := fmt.Sprintf("/tmp/peer-vpn-%s.status", id)
+	logFile := fmt.Sprintf("/tmp/peer-vpn-%s.log", id)
+	os.WriteFile(statusFile, []byte("running"), 0644)
+	os.WriteFile(logFile, []byte(""), 0644)
+
+	go func(p *Peer) {
+		logText := ""
+		appendLog := func(line string) {
+			logText += line + "\n"
+			os.WriteFile(logFile, []byte(logText), 0644)
+		}
+
+		appendLog("Подключение к " + p.RouterDomain + "...")
+		client, baseURL, err := keeneticSetupClient(p.RouterDomain, p.RouterLogin, p.RouterPassword)
+		if err != nil {
+			appendLog("❌ Ошибка подключения: " + err.Error())
+			os.WriteFile(statusFile, []byte("failed"), 0644)
+			return
+		}
+
+		appendLog("Удаление интерфейса " + p.RouterIfName + "...")
+		if err := keeneticRemoveInterface(client, baseURL, p.RouterIfName); err != nil {
+			appendLog("❌ Ошибка удаления: " + err.Error())
+			os.WriteFile(statusFile, []byte("failed"), 0644)
+			return
+		}
+
+		appendLog("✅ Интерфейс удалён")
+
+		peersCfg, _ := loadPeers()
+		for i := range peersCfg.Peers {
+			if peersCfg.Peers[i].ID == p.ID {
+				peersCfg.Peers[i].RouterIfName = ""
+				peersCfg.Peers[i].VPNActive = false
+				_ = savePeers(peersCfg)
+				break
+			}
+		}
+		os.WriteFile(statusFile, []byte("completed"), 0644)
+	}(peer)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "started"})
+}
+
+func (s *Server) getPeerVpnStatus(w http.ResponseWriter, r *http.Request) {
+	parts := strings.Split(r.URL.Path, "/")
+	if len(parts) < 4 || parts[3] == "" {
+		http.Error(w, "peer id required", http.StatusBadRequest)
+		return
+	}
+	id := parts[3]
+
+	statusFile := fmt.Sprintf("/tmp/peer-vpn-%s.status", id)
+	logFile := fmt.Sprintf("/tmp/peer-vpn-%s.log", id)
+
+	status := "idle"
+	stBytes, _ := os.ReadFile(statusFile)
+	if string(stBytes) != "" {
+		status = strings.TrimSpace(string(stBytes))
+	}
+
+	logBytes, _ := os.ReadFile(logFile)
+	logText := string(logBytes)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"status": status,
+		"log":    logText,
 	})
 }

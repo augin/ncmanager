@@ -390,6 +390,21 @@ html.light .theme-icon--moon,
 .toggle-switch input:checked + .toggle-slider::before {
   transform: translateX(16px);
 }
+.peer-vpn-toggle {
+  width: 30px;
+  height: 17px;
+  margin: 0 6px;
+  vertical-align: middle;
+}
+.peer-vpn-toggle .toggle-slider::before {
+  height: 13px;
+  width: 13px;
+  left: 2px;
+  bottom: 2px;
+}
+.peer-vpn-toggle input:checked + .toggle-slider::before {
+  transform: translateX(13px);
+}
 .peer-meta {
   font-size: 12px;
   color: var(--color-text-muted);

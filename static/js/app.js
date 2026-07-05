@@ -327,6 +327,8 @@ function renderPeers(peers) {
 		const rowClass = status.class === 'offline' ? 'peer-row-offline' : '';
 		const isExpanded = expandedPeers.has(p.id);
 		const arrow = isExpanded ? '▼' : '▶';
+		const canToggle = !!(p.routerDomain && p.routerLogin && p.routerPassword);
+		const vpnActive = !!(p.vpnActive && p.routerIfName);
 		html += `<tr class="${rowClass}" data-peer-id="${p.id}">
 			<td style="width:20px;padding:8px 4px"><span class="led led-gray" id="router-led-${p.id}" title="Проверка доступности роутера..."></span></td>
 			<td><span class="peer-name-toggle" onclick="togglePeerDetails('${p.id}', event)" style="cursor:pointer;color:#38bdf8">${escapeHtml(p.name)}</span></td>
@@ -337,14 +339,13 @@ function renderPeers(peers) {
 			<td data-field="traffic"><span title="↑ ${tx}">↑ ${tx}</span> / <span title="↓ ${rx}">↓ ${rx}</span></td>
 			<td><span class="paid-indicator-row ${p.paid ? 'paid-indicator-row--on' : 'paid-indicator-row--off'}" title="${p.paid ? 'Оплачено' : 'Не оплачено'}">${p.paid ? '$' : '$'}</span></td>
 			<td class="peer-actions">
+				<label class="toggle-switch peer-vpn-toggle" title="${canToggle ? (vpnActive ? 'Остановить VPN' : 'Запустить VPN') : 'Нет credentials'}">
+				  <input type="checkbox" ${vpnActive ? 'checked' : ''} ${canToggle ? '' : 'disabled'} onchange="managePeerVpn('${p.id}', this.checked ? 'up' : 'down')">
+				  <span class="toggle-slider"></span>
+				</label>
 				<button class="btn btn-outline-primary" onclick="showQR('${p.id}','${escapeHtml(p.name)}')">QR</button>
 				<button class="btn btn-outline-primary btn-icon-sm" onclick="showText('${p.id}','${escapeHtml(p.name)}')" title="Конфиг пира">TXT</button>
 				<button class="btn btn-outline-primary" onclick="downloadConf('${p.id}')">⬇</button>
-    			<button class="btn btn-outline-primary btn-icon-sm" onclick="configureRouter('${p.id}')" title="Настроить VPN на роутере Keenetic">VPN</button>
-    			<button class="btn btn-outline-primary btn-icon-sm" onclick="configureDnsRouter('${p.id}')" title="Настроить DNS на роутере Keenetic">DNS</button>
-				<button class="btn btn-outline-danger btn-icon-sm" onclick="removePeer('${p.id}')">
-					<svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/><line x1="10" x2="10" y1="11" y2="17"/><line x1="14" x2="14" y1="11" y2="17"/></svg>
-				</button>
 			</td>
 			<td style="text-align:right;width:30px"><span class="peer-arrow" onclick="togglePeerDetails('${p.id}', event)" style="cursor:pointer;color:#64748b">${arrow}</span></td>
 		</tr>
@@ -360,12 +361,12 @@ function renderPeers(peers) {
  						<p id="routerStatus-${p.id}" style="grid-column:1/-1;color:#059669;font-size:0.85rem"></p>
   						<label style="grid-column:1/-1">Описание<textarea id='rdesc-${p.id}' rows="4" style="width:100%;padding:6px;border-radius:4px;background:var(--color-bg-primary);color:var(--color-text-primary);border:1px solid var(--color-border);font-family:var(--font-sans);font-size:0.85rem;resize:vertical;min-height:100px" placeholder='Комментарий'>${escapeHtml(p.description || '')}</textarea></label>
   					</div>
-   					<button id="saveRouterBtn-${p.id}" onclick="savePeerRouter('${p.id}')" class="btn btn-secondary" style="margin-top:8px">Сохранить</button>
-   					<button onclick="configureRouter('${p.id}')" class="btn btn-outline-primary" style="margin-top:8px;margin-left:8px">Настроить VPN</button>
-   					<button onclick="configureDnsRouter('${p.id}')" class="btn btn-outline-primary" style="margin-top:8px;margin-left:8px">Настроить DNS</button>
-   					<button onclick="configureDnsRoutes('${p.id}')" class="btn btn-outline-primary" style="margin-top:8px;margin-left:8px">Настроить DNS-маршрутизацию</button>
-   					<button onclick="configureComponents('${p.id}')" class="btn btn-outline-primary" style="margin-top:8px;margin-left:8px">Настроить компоненты</button>
-  				</div>
+    					<button id="saveRouterBtn-${p.id}" onclick="savePeerRouter('${p.id}')" class="btn btn-secondary" style="margin-top:8px">Сохранить</button>
+    					<button onclick="configureRouter('${p.id}')" class="btn btn-outline-primary" style="margin-top:8px;margin-left:8px">Настроить VPN</button>
+    					<button onclick="configureDnsRoutes('${p.id}')" class="btn btn-outline-primary" style="margin-top:8px;margin-left:8px">Настроить DNS-маршрутизацию</button>
+    					<button onclick="configureComponents('${p.id}')" class="btn btn-outline-primary" style="margin-top:8px;margin-left:8px">Настроить компоненты</button>
+    					<button onclick="configureDnsRouter('${p.id}')" class="btn btn-outline-primary" style="margin-top:8px;margin-left:8px">Настроить DNS</button>
+   				</div>
   			</td>
   		</tr>`;
 	}
@@ -812,8 +813,125 @@ async function configureRouter(id) {
 		if (dlBtn) dlBtn.style.display = '';
 	}
 
- 	if (closeBtn) closeBtn.style.display = '';
- }
+  	if (closeBtn) closeBtn.style.display = '';
+  }
+
+  async function managePeerVpn(id, action) {
+    const endpoint = action === 'up'
+      ? `/peers/keenetic-apply/${encodeURIComponent(id)}/`
+      : `/peers/keenetic-remove/${encodeURIComponent(id)}/`;
+
+    const log = document.getElementById('vpnToggleLog');
+    const closeBtn = document.getElementById('vpnToggleCloseBtn');
+    if (log) {
+      log.textContent = (action === 'up' ? 'Запуск VPN...' : 'Остановка VPN...') + '\n';
+      log.scrollTop = log.scrollHeight;
+      log.style.display = '';
+    }
+    if (closeBtn) closeBtn.style.display = 'none';
+    closeAllModals();
+    const modal = document.getElementById('vpnToggleModal');
+    if (modal) modal.classList.add('show');
+
+    try {
+      await xhr('POST', endpoint, {});
+      let pollCount = 0;
+      const poll = setInterval(async () => {
+        pollCount++;
+        try {
+          const statusRes = await xhr('GET', `/peers/keenetic-status/${encodeURIComponent(id)}/`);
+          if (statusRes.ok) {
+            const data = await statusRes.json();
+            if (log && data.log) {
+              log.textContent = data.log;
+              log.scrollTop = log.scrollHeight;
+            }
+            if (data.status === 'completed') {
+              clearInterval(poll);
+              if (closeBtn) closeBtn.style.display = '';
+              await loadPeers();
+              if (action === 'up') await applyDnsRoutesSequential(id, log, closeBtn);
+            } else if (data.status === 'failed') {
+              clearInterval(poll);
+              if (log) log.textContent += '\n❌ Завершено с ошибками\n';
+              if (closeBtn) closeBtn.style.display = '';
+              alert('Ошибка. См. лог.');
+              await loadPeers();
+            }
+          }
+        } catch (e) {
+          console.error('poll error:', e);
+        }
+        if (pollCount > 120) {
+          clearInterval(poll);
+          if (log) log.textContent += '\n⏰ Таймаут\n';
+          if (closeBtn) closeBtn.style.display = '';
+          loadPeers();
+        }
+      }, 500);
+    } catch (e) {
+      if (log) log.textContent += '❌ Ошибка запуска: ' + e.message + '\n';
+      if (closeBtn) closeBtn.style.display = '';
+      loadPeers();
+    }
+  }
+
+  async function applyDnsRoutesSequential(id, log, closeBtn) {
+    if (!log) return;
+    const modal = document.getElementById('vpnToggleModal');
+    if (modal) modal.classList.add('show');
+    let poll = null;
+    try {
+      log.textContent += '⚙️ Применение DNS-маршрутов...\n';
+      log.scrollTop = log.scrollHeight;
+      const startRes = await xhr('POST', '/dns/routes/apply', { peerId: id });
+        if (!startRes.ok) {
+          log.textContent += '❌ Ошибка запуска DNS: ' + (await startRes.text()) + '\n';
+          if (closeBtn) closeBtn.style.display = '';
+          return;
+        }
+
+      let pollCount = 0;
+      let lastKnownDnsLogLength = 0;
+      poll = setInterval(async () => {
+        pollCount++;
+        try {
+          const statusRes = await xhr('GET', '/dns/apply/status');
+          if (statusRes.ok) {
+            const data = await statusRes.json();
+            if (data.log) {
+              const newPart = data.log.slice(lastKnownDnsLogLength);
+              if (newPart) {
+                log.textContent += newPart;
+                log.scrollTop = log.scrollHeight;
+              }
+              lastKnownDnsLogLength = data.log.length;
+            }
+            if (data.status === 'completed' || data.status === 'failed') {
+              clearInterval(poll);
+              if (closeBtn) closeBtn.style.display = '';
+            }
+          }
+        } catch (e) {
+          console.error('dns poll error:', e);
+        }
+        if (pollCount > 120) {
+          clearInterval(poll);
+          log.textContent += '\n⏰ Таймаут ожидания DNS\n';
+          if (closeBtn) closeBtn.style.display = '';
+        }
+      }, 500);
+    } catch (e) {
+      if (poll) clearInterval(poll);
+      log.textContent += '❌ Ошибка настройки DNS-маршрутизации: ' + e.message + '\n';
+      if (closeBtn) closeBtn.style.display = '';
+    }
+  }
+
+  function closeVpnToggleModal() {
+    const m = document.getElementById('vpnToggleModal');
+    if (m) m.classList.remove('show');
+  }
 
   async function configureComponents(id) {
   	const routerDomain = document.getElementById('rd-' + id).value.trim();
@@ -1689,6 +1807,10 @@ function showRestoreModal() {
 
 function closeAllModals() {
   document.querySelectorAll('.modal.show').forEach(function(m) { m.classList.remove('show'); });
+  const dnsOverlay = document.getElementById('dnsRouteModalOverlay');
+  if (dnsOverlay) dnsOverlay.style.display = 'none';
+  const vpnToggleModal = document.getElementById('vpnToggleModal');
+  if (vpnToggleModal) vpnToggleModal.classList.remove('show');
 }
 
 function closeRestoreModal() {
