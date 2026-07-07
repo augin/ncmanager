@@ -28,7 +28,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.12.19"
+const appVersion = "1.12.20"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
@@ -1897,7 +1897,11 @@ func syncconfAddPeer(peer Peer) error {
 }
 
 func wgSyncTempFile(content string) (string, error) {
-	tmp, err := os.CreateTemp("", "wg-sync-*.conf")
+	dir := filepath.Dir(wgConfigFile)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return "", err
+	}
+	tmp, err := os.CreateTemp(dir, "wg0.syncconf-*.conf")
 	if err != nil {
 		return "", err
 	}
@@ -1911,7 +1915,7 @@ func wgSyncTempFile(content string) (string, error) {
 		os.Remove(name)
 		return "", err
 	}
-	if err := os.Chmod(name, 0644); err != nil {
+	if err := os.Chmod(name, 0600); err != nil {
 		os.Remove(name)
 		return "", err
 	}
