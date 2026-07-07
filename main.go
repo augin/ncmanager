@@ -28,7 +28,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.12.16"
+const appVersion = "1.12.17"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
@@ -252,7 +252,20 @@ func main() {
 				log.Printf("wg0 started on startup")
 			}
 		} else {
-			log.Printf("wg0 already running, config regenerated but interface kept")
+			if getActualServerPrivateKey() == "" {
+				privBytes, perr := loadPrivateKey("data/server_private.key")
+				if perr == nil && len(strings.TrimSpace(string(privBytes))) == 44 {
+					if kerr := applyServerPrivateKey(strings.TrimSpace(string(privBytes))); kerr != nil {
+						log.Printf("wg0 running but keyless, re-apply failed: %v", kerr)
+					} else {
+						log.Printf("wg0 running but keyless, private key re-applied")
+					}
+				} else {
+					log.Printf("wg0 running but keyless, no stored key to re-apply")
+				}
+			} else {
+				log.Printf("wg0 already running, config regenerated but interface kept")
+			}
 		}
 	}
 

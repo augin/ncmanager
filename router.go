@@ -12,6 +12,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/cookiejar"
+	"os"
 	"os/exec"
 	"strconv"
 	"strings"
@@ -232,11 +233,36 @@ func getActualServerPublicKey() string {
 		return ""
 	}
 	pub := strings.TrimSpace(string(out))
-	if pub != "" && pub != "(hidden)" {
+	if pub != "" && pub != "(hidden)" && pub != "(none)" && len(pub) == 44 {
 		return pub
 	}
-	log.Printf("getActualServerPublicKey: empty")
+	log.Printf("getActualServerPublicKey: empty/invalid (%q)", pub)
 	return ""
+}
+
+func applyServerPrivateKey(priv string) error {
+	tmp, err := os.CreateTemp("", "wg-priv-*.key")
+	if err != nil {
+		return err
+	}
+	tmpName := tmp.Name()
+	defer os.Remove(tmpName)
+	if _, err := tmp.WriteString(priv); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Chmod(0644); err != nil {
+		tmp.Close()
+		return err
+	}
+	if err := tmp.Close(); err != nil {
+		return err
+	}
+	out, err := exec.Command("wg", "set", "wg0", "private-key", tmpName).CombinedOutput()
+	if err != nil {
+		return fmt.Errorf("wg set private-key failed: %v, output: %s", err, string(out))
+	}
+	return nil
 }
 
 func getActualServerPrivateKey() string {
@@ -246,11 +272,13 @@ func getActualServerPrivateKey() string {
 		return ""
 	}
 	priv := strings.TrimSpace(string(out))
-	if priv != "" && priv != "(hidden)" {
-		log.Printf("getActualServerPrivateKey: synced (starts %s)", priv[:8])
+	if priv != "" && priv != "(hidden)" && priv != "(none)" && len(priv) == 44 {
+		if len(priv) >= 8 {
+			log.Printf("getActualServerPrivateKey: synced (starts %s)", priv[:8])
+		}
 		return priv
 	}
-	log.Printf("getActualServerPrivateKey: empty")
+	log.Printf("getActualServerPrivateKey: empty/invalid (%q)", priv)
 	return ""
 }
 
@@ -265,7 +293,11 @@ func syncServerKeyFromRunning() {
 		return
 	}
 	actualPub := getActualServerPublicKey()
-	log.Printf("syncServerKey: synced pubkey=%s", actualPub[:12]+"...")
+	pubLog := actualPub
+	if len(pubLog) > 12 {
+		pubLog = pubLog[:12]
+	}
+	log.Printf("syncServerKey: synced pubkey=%s...", pubLog)
 }
 
 func parseCIDRToMask(cidr string) (string, string) {
