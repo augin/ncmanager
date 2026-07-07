@@ -1,5 +1,8 @@
 # Changelog
 
+## v1.12.21
+- **refactor**: убран fallback на per-peer `wg set` при стартовой ресинхронизации — `wg syncconf` из `/etc/wireguard/` теперь единственный механизм
+
 ## v1.12.20
 - **fix**: `wg syncconf` временный конфиг создаётся в `/etc/wireguard/` (каноническая директория), а не в `/tmp` — устранён `fopen: Permission denied` при чтении `wg` из-за ограничений окружения; права `0600`
 

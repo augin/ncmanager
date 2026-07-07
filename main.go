@@ -28,7 +28,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.12.20"
+const appVersion = "1.12.21"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
@@ -264,41 +264,19 @@ func main() {
 					log.Printf("wg0 running but keyless, no stored key to re-apply")
 				}
 			}
-			if cfgBytes, rerr := os.ReadFile(wgConfigFile); rerr == nil {
-				synced := false
-				if tmpName, terr := wgSyncTempFile(toSyncconfConfig(string(cfgBytes))); terr == nil {
-					out, serr := exec.Command("wg", "syncconf", "wg0", tmpName).CombinedOutput()
-					if serr != nil {
-						log.Printf("wg0 running, peer resync via syncconf failed: %v, output: %s", serr, string(out))
-					} else {
-						log.Printf("wg0 running, peers synced from config")
-						synced = true
-					}
-					os.Remove(tmpName)
+		if cfgBytes, rerr := os.ReadFile(wgConfigFile); rerr == nil {
+			if tmpName, terr := wgSyncTempFile(toSyncconfConfig(string(cfgBytes))); terr == nil {
+				out, serr := exec.Command("wg", "syncconf", "wg0", tmpName).CombinedOutput()
+				if serr != nil {
+					log.Printf("wg0 running, peer resync failed: %v, output: %s", serr, string(out))
+				} else {
+					log.Printf("wg0 running, peers synced from config")
 				}
-				if !synced {
-					// Fallback: apply peers individually so an env-specific
-					// syncconf failure does not leave the interface out of sync.
-					n := 0
-					for i := range peersCfg.Peers {
-						p := &peersCfg.Peers[i]
-						if p.PublicKey == "" || p.AllowedIPs == "" {
-							continue
-						}
-						out, serr := exec.Command("wg", "set", "wg0", "peer", p.PublicKey, "allowed-ips", p.AllowedIPs).CombinedOutput()
-						if serr != nil {
-							log.Printf("wg0 peer resync (fallback) failed for %s: %v, output: %s", p.Name, serr, string(out))
-						} else {
-							n++
-						}
-					}
-					if n > 0 {
-						log.Printf("wg0 running, %d peer(s) synced from config (fallback)", n)
-					}
-				}
-			} else {
-				log.Printf("wg0 already running, config regenerated but interface kept")
+				os.Remove(tmpName)
 			}
+		} else {
+			log.Printf("wg0 already running, config regenerated but interface kept")
+		}
 		}
 	}
 
