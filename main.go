@@ -28,7 +28,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.12.17"
+const appVersion = "1.12.18"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
@@ -262,6 +262,16 @@ func main() {
 					}
 				} else {
 					log.Printf("wg0 running but keyless, no stored key to re-apply")
+				}
+			}
+			if cfgBytes, rerr := os.ReadFile(wgConfigFile); rerr == nil {
+				if tmpName, terr := wgSyncTempFile(toSyncconfConfig(string(cfgBytes))); terr == nil {
+					if _, serr := exec.Command("wg", "syncconf", "wg0", tmpName).CombinedOutput(); serr != nil {
+						log.Printf("wg0 running, peer resync failed: %v", serr)
+					} else {
+						log.Printf("wg0 running, peers synced from config")
+					}
+					os.Remove(tmpName)
 				}
 			} else {
 				log.Printf("wg0 already running, config regenerated but interface kept")
@@ -1831,21 +1841,13 @@ func syncconfRemovePeer(publicKey string) error {
 		buf.WriteString(strings.Join(peerLines, "\n") + "\n")
 	}
 
-	tmp, err := os.CreateTemp("", "wg-sync-*.conf")
+	tmpName, err := wgSyncTempFile(buf.String())
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmp.Name())
+	defer os.Remove(tmpName)
 
-	if _, err := tmp.WriteString(buf.String()); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-
-	if out, err := exec.Command("wg", "syncconf", "wg0", tmp.Name()).CombinedOutput(); err != nil {
+	if out, err := exec.Command("wg", "syncconf", "wg0", tmpName).CombinedOutput(); err != nil {
 		return fmt.Errorf("wg syncconf failed: %v, output: %s", err, string(out))
 	}
 	return nil
@@ -1859,28 +1861,74 @@ func syncconfAddPeer(peer Peer) error {
 
 	peerBlock := fmt.Sprintf("\n[Peer]\n# %s\nPublicKey = %s\nAllowedIPs = %s\n", peer.Name, peer.PublicKey, peer.AllowedIPs)
 
-	tmp, err := os.CreateTemp("", "wg-sync-*.conf")
+	tmpName, err := wgSyncTempFile(string(out) + peerBlock)
 	if err != nil {
 		return err
 	}
-	defer os.Remove(tmp.Name())
+	defer os.Remove(tmpName)
 
-	if _, err := tmp.WriteString(string(out)); err != nil {
-		tmp.Close()
-		return err
-	}
-	if _, err := tmp.WriteString(peerBlock); err != nil {
-		tmp.Close()
-		return err
-	}
-	if err := tmp.Close(); err != nil {
-		return err
-	}
-
-	if out, err := exec.Command("wg", "syncconf", "wg0", tmp.Name()).CombinedOutput(); err != nil {
+	if out, err := exec.Command("wg", "syncconf", "wg0", tmpName).CombinedOutput(); err != nil {
 		return fmt.Errorf("wg syncconf failed: %v, output: %s", err, string(out))
 	}
 	return nil
+}
+
+func wgSyncTempFile(content string) (string, error) {
+	tmp, err := os.CreateTemp("", "wg-sync-*.conf")
+	if err != nil {
+		return "", err
+	}
+	name := tmp.Name()
+	if _, err := tmp.WriteString(content); err != nil {
+		tmp.Close()
+		os.Remove(name)
+		return "", err
+	}
+	if err := tmp.Close(); err != nil {
+		os.Remove(name)
+		return "", err
+	}
+	if err := os.Chmod(name, 0644); err != nil {
+		os.Remove(name)
+		return "", err
+	}
+	return name, nil
+}
+
+// toSyncconfConfig strips wg-quick-only directives (Address, DNS, PostUp, PostDown,
+// MTU, Table, SaveConfig) so a wg-quick-style config can be fed to `wg syncconf`,
+// which only understands wireguard-native settings.
+func toSyncconfConfig(cfg string) string {
+	keepIface := map[string]bool{"PrivateKey": true, "ListenPort": true, "FwMark": true}
+	keepPeer := map[string]bool{"PublicKey": true, "PresharedKey": true, "AllowedIPs": true, "Endpoint": true, "PersistentKeepalive": true}
+	var b strings.Builder
+	section := ""
+	sc := bufio.NewScanner(strings.NewReader(cfg))
+	for sc.Scan() {
+		line := sc.Text()
+		trimmed := strings.TrimSpace(line)
+		switch trimmed {
+		case "[Interface]":
+			section = "iface"
+			b.WriteString(line + "\n")
+			continue
+		case "[Peer]":
+			section = "peer"
+			b.WriteString(line + "\n")
+			continue
+		}
+		if trimmed == "" {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "#") {
+			continue
+		}
+		key := strings.TrimSpace(strings.SplitN(trimmed, "=", 2)[0])
+		if (section == "iface" && keepIface[key]) || (section == "peer" && keepPeer[key]) {
+			b.WriteString(line + "\n")
+		}
+	}
+	return b.String()
 }
 
 func generateWgConfig(cfg *Config, peers []Peer) error {
