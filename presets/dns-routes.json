@@ -1718,6 +1718,18 @@
     "catLabel": "Игры"
   },
   {
+    "name": "BrawlStars",
+    "domains": [
+      "brawlstarsgame.com",
+      "game.brawlstarsgame.com",
+      "cdn.id.supercell.com",
+      "o315582.ingest.sentry.io"
+    ],
+    "subnets": [],
+    "cat": "gaming",
+    "catLabel": "Игры"
+  },
+  {
     "name": "Все игры",
     "domains": [
       "blizzard.nefficient.co.kr",
@@ -2068,7 +2080,11 @@
       "xboxplayanywhere.com",
       "xboxservices.com",
       "xboxstudios.com",
-      "xbx.lv"
+      "xbx.lv",
+      "brawlstarsgame.com",
+      "game.brawlstarsgame.com",
+      "cdn.id.supercell.com",
+      "o315582.ingest.sentry.io"
     ],
     "subnets": [
       "2.16.16.0/22",

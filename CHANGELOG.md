@@ -1,5 +1,8 @@
 # Changelog
 
+## v1.12.23
+- **feat**: добавлен пресет DNS-маршрутов BrawlStars (`brawlstarsgame.com`, `game.brawlstarsgame.com`, `cdn.id.supercell.com`, `o315582.ingest.sentry.io`) в категорию «Игры», включён в «Все игры»
+
 ## v1.12.22
 - **fix**: все логи вынесены в `/var/log/ncmanager/` (`ncmanager.log`, `peer-vpn-*.log`, `components-apply.log`, `dns-apply.log`, `amnezia-install.log`), директория создаётся автоматически при старте
 
