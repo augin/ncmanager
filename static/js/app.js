@@ -3,6 +3,7 @@ const TOKEN_KEY = 'wg_token';
 let currentTab = 'peers';
 let originalHttpPort = null;
 let previousPeerIds = new Set();
+let previousPeerSigs = new Map();
 let refreshTimer = null;
 let expandedPeers = new Set();
 let peerSearch = '';
@@ -589,6 +590,10 @@ async function savePeerRouter(id, silent) {
 					btn.classList.remove('copied');
 				}, 2000);
 			}
+			loadPeers().then(peers => {
+				renderPeers(peers);
+				setTimeout(checkAllRouters, 100);
+			});
 			if (routerDomain && routerLogin && routerPassword) {
 				fetchRouterInfo(id);
 			}
@@ -1666,17 +1671,34 @@ function addPresetDomains() {
   select.value = '';
 }
 
+function peerSignature(p) {
+	return [
+		p.name, p.allowedIPs, p.endpoint, p.createdAt, p.paid,
+		p.routerDomain, p.routerLogin, p.routerPassword,
+		p.routerIfName, p.vpnActive, p.description,
+	].join('|');
+}
+
 async function refresh() {
 	try {
 		const peers = await loadPeers();
 		const status = await loadStatus();
 		const currentIds = new Set(peers.map(p => p.id));
 		let peersChanged = currentIds.size !== previousPeerIds.size || [...currentIds].some(id => !previousPeerIds.has(id));
+		if (!peersChanged) {
+			for (const p of peers) {
+				if (previousPeerSigs.get(p.id) !== peerSignature(p)) {
+					peersChanged = true;
+					break;
+				}
+			}
+		}
 		if (peersChanged) {
 			saveExpandedInputs();
 			renderPeers(peers);
 			restoreExpandedInputs();
 			previousPeerIds = currentIds;
+			previousPeerSigs = new Map(peers.map(p => [p.id, peerSignature(p)]));
 			setTimeout(checkAllRouters, 100);
 		} else {
 			updatePeerStats(peers);
