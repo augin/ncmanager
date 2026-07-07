@@ -75,6 +75,8 @@ jobs:
           echo 'net.ipv4.ip_forward=1' > /etc/sysctl.d/99-ncmanager.conf
           sysctl -p /etc/sysctl.d/99-ncmanager.conf || true
           chown -R root:root /var/lib/ncmanager
+          mkdir -p /var/log/ncmanager
+          chown -R root:root /var/log/ncmanager
           systemctl daemon-reload || true
           systemctl enable --now ncmanager || true
           exit 0

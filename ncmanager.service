@@ -9,6 +9,7 @@ WorkingDirectory=/var/lib/ncmanager
 ExecStart=/usr/local/bin/ncmanager
 Restart=on-failure
 RestartSec=5
+LogsDirectory=ncmanager
 
 [Install]
 WantedBy=multi-user.target

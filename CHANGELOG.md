@@ -1,5 +1,8 @@
 # Changelog
 
+## v1.12.22
+- **fix**: все логи вынесены в `/var/log/ncmanager/` (`ncmanager.log`, `peer-vpn-*.log`, `components-apply.log`, `dns-apply.log`, `amnezia-install.log`), директория создаётся автоматически при старте
+
 ## v1.12.21
 - **refactor**: убран fallback на per-peer `wg set` при стартовой ресинхронизации — `wg syncconf` из `/etc/wireguard/` теперь единственный механизм
 

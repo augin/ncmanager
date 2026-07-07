@@ -62,6 +62,7 @@ sudo systemctl restart ncmanager
 - Пиры: `/var/lib/ncmanager/data/peers.json`
 - DNS-маршруты: `/var/lib/ncmanager/data/dns-routes.json`
 - Конфигурация WG: `/etc/wireguard/wg0.conf`
+- Логи: `/var/log/ncmanager/` (`ncmanager.log`, `peer-vpn-*.log`, `components-apply.log`, `dns-apply.log`, `amnezia-install.log`)
 
 
 ## Первый запуск

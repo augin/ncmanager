@@ -28,11 +28,12 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.12.21"
+const appVersion = "1.12.22"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
 const wgConfigFile = "/etc/wireguard/wg0.conf"
+const logDir = "/var/log/ncmanager"
 
 var amneziaTrafficBuf = struct {
 	mu      sync.RWMutex
@@ -182,6 +183,9 @@ func main() {
 	initAuthSecret()
 	InitEncryptionKey()
 	initLogger()
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		log.Printf("Warning: could not create log dir %s: %v", logDir, err)
+	}
 
 	server := &Server{
 		wgPort:     51820,
@@ -409,7 +413,7 @@ func startAmneziaTrafficCleanup() {
 
 func initLogger() {
 	os.MkdirAll("data", 0700)
-	f, err := os.OpenFile("data/app.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(filepath.Join(logDir, "ncmanager.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		log.Printf("failed to open log file: %v", err)
 		return
@@ -1370,14 +1374,14 @@ func (s *Server) configurePeerComponents(w http.ResponseWriter, r *http.Request)
 
 	globalCfg, _ := loadConfig(dataFile)
 
-	os.WriteFile("/tmp/components-apply.status", []byte("running"), 0644)
-	os.WriteFile("/tmp/components-apply.log", []byte("Запуск настройки компонентов...\n"), 0644)
+	os.WriteFile(filepath.Join(logDir, "components-apply.status"), []byte("running"), 0644)
+	os.WriteFile(filepath.Join(logDir, "components-apply.log"), []byte("Запуск настройки компонентов...\n"), 0644)
 
 	go func() {
 		httpClient, baseURL, err := keeneticSetupClient(peer.RouterDomain, peer.RouterLogin, peer.RouterPassword)
 		if err != nil {
 			componentsAppendLog(fmt.Sprintf("❌ Ошибка подключения к %s: %v\n", peer.RouterDomain, err))
-			os.WriteFile("/tmp/components-apply.status", []byte("failed"), 0644)
+			os.WriteFile(filepath.Join(logDir, "components-apply.status"), []byte("failed"), 0644)
 			return
 		}
 
@@ -1395,7 +1399,7 @@ func (s *Server) configurePeerComponents(w http.ResponseWriter, r *http.Request)
 		} else {
 			status = "completed"
 		}
-		os.WriteFile("/tmp/components-apply.status", []byte(status), 0644)
+		os.WriteFile(filepath.Join(logDir, "components-apply.status"), []byte(status), 0644)
 	}()
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1404,10 +1408,10 @@ func (s *Server) configurePeerComponents(w http.ResponseWriter, r *http.Request)
 
 func (s *Server) getComponentsApplyStatus(w http.ResponseWriter, r *http.Request) {
 	status := "idle"
-	stBytes, _ := os.ReadFile("/tmp/components-apply.status")
+	stBytes, _ := os.ReadFile(filepath.Join(logDir, "components-apply.status"))
 	status = strings.TrimSpace(string(stBytes))
 
-	logBytes, _ := os.ReadFile("/tmp/components-apply.log")
+	logBytes, _ := os.ReadFile(filepath.Join(logDir, "components-apply.log"))
 	logText := string(logBytes)
 
 	w.Header().Set("Content-Type", "application/json")
@@ -1431,7 +1435,7 @@ func generateKeys(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) getLogs(w http.ResponseWriter, r *http.Request) {
-	data, err := os.ReadFile("data/app.log")
+	data, err := os.ReadFile(filepath.Join(logDir, "ncmanager.log"))
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
@@ -2177,10 +2181,10 @@ func (s *Server) getAmneziaStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	status := "idle"
-	logBytes, _ := os.ReadFile("/tmp/amnezia-install.log")
+	logBytes, _ := os.ReadFile(filepath.Join(logDir, "amnezia-install.log"))
 	logText := string(logBytes)
 
-	stBytes, _ := os.ReadFile("/tmp/amnezia-install.status")
+	stBytes, _ := os.ReadFile(filepath.Join(logDir, "amnezia-install.status"))
 	status = strings.TrimSpace(string(stBytes))
 	if status == "" && installed {
 		status = "completed"
@@ -2200,8 +2204,8 @@ func (s *Server) installAmnezia(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	os.WriteFile("/tmp/amnezia-install.status", []byte("running"), 0644)
-	os.WriteFile("/tmp/amnezia-install.log", []byte(""), 0644)
+	os.WriteFile(filepath.Join(logDir, "amnezia-install.status"), []byte("running"), 0644)
+	os.WriteFile(filepath.Join(logDir, "amnezia-install.log"), []byte(""), 0644)
 	go func() {
 		script := `set -euo pipefail
 export DEBIAN_FRONTEND=noninteractive
@@ -2273,12 +2277,12 @@ echo "Done"
 		stdout, err := cmd.StdoutPipe()
 		if err != nil {
 			log.Printf("amnezia install: stdout pipe error: %v", err)
-			os.WriteFile("/tmp/amnezia-install.status", []byte("failed"), 0644)
+			os.WriteFile(filepath.Join(logDir, "amnezia-install.status"), []byte("failed"), 0644)
 			return
 		}
 		if err := cmd.Start(); err != nil {
 			log.Printf("amnezia install: start error: %v", err)
-			os.WriteFile("/tmp/amnezia-install.status", []byte("failed"), 0644)
+			os.WriteFile(filepath.Join(logDir, "amnezia-install.status"), []byte("failed"), 0644)
 			return
 		}
 		var logBuf bytes.Buffer
@@ -2286,14 +2290,14 @@ echo "Done"
 		for scanner.Scan() {
 			line := scanner.Text() + "\n"
 			logBuf.WriteString(line)
-			os.WriteFile("/tmp/amnezia-install.log", []byte(logBuf.String()), 0644)
+			os.WriteFile(filepath.Join(logDir, "amnezia-install.log"), []byte(logBuf.String()), 0644)
 		}
 		if err := cmd.Wait(); err != nil {
 			logBuf.WriteString("\n[ERROR] " + err.Error() + "\n")
-			os.WriteFile("/tmp/amnezia-install.log", []byte(logBuf.String()), 0644)
-			os.WriteFile("/tmp/amnezia-install.status", []byte("failed"), 0644)
+			os.WriteFile(filepath.Join(logDir, "amnezia-install.log"), []byte(logBuf.String()), 0644)
+			os.WriteFile(filepath.Join(logDir, "amnezia-install.status"), []byte("failed"), 0644)
 		} else {
-			os.WriteFile("/tmp/amnezia-install.status", []byte("completed"), 0644)
+			os.WriteFile(filepath.Join(logDir, "amnezia-install.status"), []byte("completed"), 0644)
 		}
 	}()
 	w.Header().Set("Content-Type", "application/json")
@@ -3009,10 +3013,10 @@ func (s *Server) manageAmneziaInterface(w http.ResponseWriter, r *http.Request) 
 
 func (s *Server) getDnsApplyStatus(w http.ResponseWriter, r *http.Request) {
 	status := "idle"
-	stBytes, _ := os.ReadFile("/tmp/dns-apply.status")
+	stBytes, _ := os.ReadFile(filepath.Join(logDir, "dns-apply.status"))
 	status = strings.TrimSpace(string(stBytes))
 
-	logBytes, _ := os.ReadFile("/tmp/dns-apply.log")
+	logBytes, _ := os.ReadFile(filepath.Join(logDir, "dns-apply.log"))
 	logText := string(logBytes)
 
 	w.Header().Set("Content-Type", "application/json")
@@ -3062,8 +3066,8 @@ func (s *Server) applyPeerVpn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	statusFile := fmt.Sprintf("/tmp/peer-vpn-%s.status", id)
-	logFile := fmt.Sprintf("/tmp/peer-vpn-%s.log", id)
+	statusFile := fmt.Sprintf(filepath.Join(logDir, "peer-vpn-%s.status"), id)
+	logFile := fmt.Sprintf(filepath.Join(logDir, "peer-vpn-%s.log"), id)
 	os.WriteFile(statusFile, []byte("running"), 0644)
 	os.WriteFile(logFile, []byte(""), 0644)
 
@@ -3167,8 +3171,8 @@ func (s *Server) removePeerVpn(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	statusFile := fmt.Sprintf("/tmp/peer-vpn-%s.status", id)
-	logFile := fmt.Sprintf("/tmp/peer-vpn-%s.log", id)
+	statusFile := fmt.Sprintf(filepath.Join(logDir, "peer-vpn-%s.status"), id)
+	logFile := fmt.Sprintf(filepath.Join(logDir, "peer-vpn-%s.log"), id)
 	os.WriteFile(statusFile, []byte("running"), 0644)
 	os.WriteFile(logFile, []byte(""), 0644)
 
@@ -3220,8 +3224,8 @@ func (s *Server) getPeerVpnStatus(w http.ResponseWriter, r *http.Request) {
 	}
 	id := parts[3]
 
-	statusFile := fmt.Sprintf("/tmp/peer-vpn-%s.status", id)
-	logFile := fmt.Sprintf("/tmp/peer-vpn-%s.log", id)
+	statusFile := fmt.Sprintf(filepath.Join(logDir, "peer-vpn-%s.status"), id)
+	logFile := fmt.Sprintf(filepath.Join(logDir, "peer-vpn-%s.log"), id)
 
 	status := "idle"
 	stBytes, _ := os.ReadFile(statusFile)
