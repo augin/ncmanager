@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -351,8 +352,8 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	os.WriteFile("/tmp/dns-apply.status", []byte("running"), 0644)
-	os.WriteFile("/tmp/dns-apply.log", []byte("Запуск применения DNS маршрутов...\n"), 0644)
+	os.WriteFile(filepath.Join(logDir, "dns-apply.status"), []byte("running"), 0644)
+	os.WriteFile(filepath.Join(logDir, "dns-apply.log"), []byte("Запуск применения DNS маршрутов...\n"), 0644)
 
 	go func() {
 		type applyResult struct {
@@ -447,7 +448,7 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 			})
 		}
 
-		os.WriteFile("/tmp/dns-apply.status", []byte("completed"), 0644)
+		os.WriteFile(filepath.Join(logDir, "dns-apply.status"), []byte("completed"), 0644)
 		appendLog("\n🎉 Готово!\n")
 	}()
 
@@ -456,7 +457,7 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 }
 
 func appendLog(msg string) {
-	f, err := os.OpenFile("/tmp/dns-apply.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(filepath.Join(logDir, "dns-apply.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return
 	}

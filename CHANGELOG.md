@@ -1,5 +1,8 @@
 # Changelog
 
+## v1.12.24
+- **fix**: логи применения DNS-маршрутов и компонентов полностью вынесены в `/var/log/ncmanager/` (оставшиеся пути в `dns_routing.go` и `router_components.go`)
+
 ## v1.12.23
 - **feat**: добавлен пресет DNS-маршрутов BrawlStars (`brawlstarsgame.com`, `game.brawlstarsgame.com`, `cdn.id.supercell.com`, `o315582.ingest.sentry.io`) в категорию «Игры», включён в «Все игры»
 

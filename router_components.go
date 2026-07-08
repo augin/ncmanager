@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 )
@@ -16,7 +17,7 @@ type componentResult struct {
 }
 
 func componentsAppendLog(msg string) {
-	f, err := os.OpenFile("/tmp/components-apply.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	f, err := os.OpenFile(filepath.Join(logDir, "components-apply.log"), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 	if err != nil {
 		return
 	}
@@ -69,7 +70,7 @@ func ensureComponent(httpClient *http.Client, baseURL, login, password, targetNa
 				return httpClient, false, fmt.Sprintf("❌ не удалось установить %s: %s", targetName, err.Error())
 			}
 			componentsAppendLog(fmt.Sprintf("⏳ Ожидание перезагрузки роутера (%s)...\n", rebootWait))
-			os.WriteFile("/tmp/components-apply.status", []byte(fmt.Sprintf("waiting_reboot_%s", targetName)), 0644)
+			os.WriteFile(filepath.Join(logDir, "components-apply.status"), []byte(fmt.Sprintf("waiting_reboot_%s", targetName)), 0644)
 			ticker := time.NewTicker(30 * time.Second)
 			tickerWaitDone := make(chan bool)
 			go func() {
@@ -78,7 +79,7 @@ func ensureComponent(httpClient *http.Client, baseURL, login, password, targetNa
 					<-ticker.C
 					remaining := int(time.Until(waitEnd).Seconds())
 					componentsAppendLog(fmt.Sprintf("⏳ Ожидание перезагрузки... осталось %d сек\n", remaining))
-					os.WriteFile("/tmp/components-apply.status", []byte(fmt.Sprintf("waiting_reboot_%s_%ds", targetName, remaining)), 0644)
+					os.WriteFile(filepath.Join(logDir, "components-apply.status"), []byte(fmt.Sprintf("waiting_reboot_%s_%ds", targetName, remaining)), 0644)
 				}
 				ticker.Stop()
 				tickerWaitDone <- true
@@ -182,7 +183,7 @@ func configureRouterComponents(httpClient *http.Client, baseURL string, peer *Pe
 	}
 
 	componentsAppendLog("⏳ Ожидание перезагрузки роутера (180с)...\n")
-	os.WriteFile("/tmp/components-apply.status", []byte("waiting_reboot"), 0644)
+	os.WriteFile(filepath.Join(logDir, "components-apply.status"), []byte("waiting_reboot"), 0644)
 	time.Sleep(180 * time.Second)
 
 	componentsAppendLog("🔄 Переподключение...\n")
