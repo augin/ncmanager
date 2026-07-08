@@ -28,7 +28,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.12.24"
+const appVersion = "1.12.25"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
@@ -1013,6 +1013,7 @@ func (s *Server) removePeer(w http.ResponseWriter, r *http.Request) {
 func (s *Server) updatePeer(w http.ResponseWriter, r *http.Request) {
 	var req struct {
 		ID             string `json:"id"`
+		Name           string `json:"name"`
 		RouterDomain   string `json:"routerDomain"`
 		RouterLogin    string `json:"routerLogin"`
 		RouterPassword string `json:"routerPassword"`
@@ -1034,9 +1035,23 @@ func (s *Server) updatePeer(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
+	newName := strings.TrimSpace(req.Name)
+	if newName == "" {
+		http.Error(w, "peer name cannot be empty", http.StatusBadRequest)
+		return
+	}
+	for i := range peersCfg.Peers {
+		if peersCfg.Peers[i].ID != req.ID && strings.TrimSpace(peersCfg.Peers[i].Name) == newName {
+			http.Error(w, "peer name already exists", http.StatusConflict)
+			return
+		}
+	}
 	found := false
 	for i := range peersCfg.Peers {
 		if peersCfg.Peers[i].ID == req.ID {
+			if newName != "" {
+				peersCfg.Peers[i].Name = newName
+			}
 			if req.RouterDomain != "" {
 				peersCfg.Peers[i].RouterDomain = req.RouterDomain
 			}

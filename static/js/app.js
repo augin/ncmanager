@@ -403,7 +403,7 @@ function renderPeers(peers) {
 		<tr id="details-${p.id}" class="peer-details" style="display:${isExpanded ? '' : 'none'}">
 			<td colspan="10">
 				<div class="peer-details-content">
-					<h4>Настройки роутера для ${escapeHtml(p.name)}</h4>
+					<input type="text" id="rn-${p.id}" value="${escapeHtml(p.name)}" placeholder="Имя пира" class="peer-name-input" onkeydown="if(event.key==='Enter')savePeerRouter('${p.id}')">
 					<div class="grid-form">
 						<label>Домен<input id="rd-${p.id}" value="${escapeHtml(p.routerDomain || '')}" placeholder="router.local"></label>
 						<label>Логин<input id="rl-${p.id}" value="${escapeHtml(p.routerLogin || '')}" placeholder="admin"></label>
@@ -564,6 +564,7 @@ function togglePeerDetails(id, e) {
 }
 
 async function savePeerRouter(id, silent) {
+	const name = document.getElementById('rn-' + id).value.trim();
 	const routerDomain = document.getElementById('rd-' + id).value.trim();
 	const routerLogin = document.getElementById('rl-' + id).value.trim();
 	const routerPassword = document.getElementById('rp-' + id).value;
@@ -575,6 +576,7 @@ async function savePeerRouter(id, silent) {
 	try {
 		const res = await xhr('POST', '/peers/update', {
 			id: id,
+			name: name,
 			routerDomain: routerDomain,
 			routerLogin: routerLogin,
 			routerPassword: routerPassword,

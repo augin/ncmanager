@@ -1690,3 +1690,27 @@ code {
   font-size: 0.75rem;
   backdrop-filter: blur(6px);
 }
+
+.peer-name-input {
+  grid-column: 1 / -1;
+  font-size: 1.1rem;
+  font-weight: 600;
+  padding: 0.5rem 0.75rem;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--color-text-primary);
+  font-family: var(--font-sans);
+  margin-bottom: 0.5rem;
+  transition: border-color var(--t-fast), background var(--t-fast);
+}
+.peer-name-input:hover {
+  border-color: var(--color-border-hover);
+  background: var(--color-bg-primary);
+}
+.peer-name-input:focus {
+  outline: none;
+  border-color: var(--color-accent);
+  background: var(--color-bg-primary);
+  box-shadow: 0 0 0 3px var(--color-accent-tint);
+}
