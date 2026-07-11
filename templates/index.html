@@ -28,7 +28,10 @@
     <div class="header-inner">
       <div class="header-brand">
         NC Manager
-        <span class="version-pill" id="versionPill"></span>
+        <span class="version-pill" id="versionPill">
+          <span id="versionText"></span>
+          <span id="serverNameText" class="server-name-pill" style="display:none"></span>
+        </span>
       </div>
       <nav class="nav">
         <a class="nav-link nav-link--active" data-tab="peers" onclick="switchTab('peers', this)">Пиры</a>
@@ -131,6 +134,7 @@
 
         <div class="form-section">
           <h3>Настройки сервера</h3>
+          <label>Имя сервера<input id="iServerName" placeholder="NC Manager"></label>
           <label>Порт веб-интерфейса<input id="iHttpPort" type="number" value="8080" min="1" max="65535"></label>
         </div>
 

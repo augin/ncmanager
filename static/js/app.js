@@ -1768,13 +1768,32 @@ function clearExpandedInputs() {
   expandedInputs = {};
 }
 
+function applyServerName(name) {
+  const versionEl = document.getElementById('versionText');
+  const nameEl = document.getElementById('serverNameText');
+  const ver = versionEl ? versionEl.textContent.trim() : '';
+  const display = name || 'NC Manager';
+  if (nameEl) {
+    nameEl.textContent = display;
+    nameEl.style.display = '';
+  }
+  document.title = display;
+  if (versionEl) {
+    versionEl.textContent = ver;
+    const pill = document.getElementById('versionPill');
+    if (pill) pill.style.display = ver ? '' : 'none';
+  }
+}
+
 async function loadVersion() {
   try {
     const res = await xhr('GET', '/version');
     if (res.ok) {
       const data = await res.json();
+      const versionEl = document.getElementById('versionText');
+      if (versionEl) versionEl.textContent = data.version || '';
       const pill = document.getElementById('versionPill');
-      if (pill) pill.textContent = data.version || '';
+      if (pill) pill.style.display = data.version ? '' : 'none';
     }
   } catch (e) {}
 }
@@ -1795,9 +1814,11 @@ async function saveConfig(e) {
 		tlsEnabled: document.getElementById('iTLSEnabled').checked,
 		tlsHost: document.getElementById('iTLSHost').value,
 		tlsCache: document.getElementById('iTLSCache').value,
+		serverName: document.getElementById('iServerName').value.trim(),
 	};
 	const res = await xhr('POST', '/config/save', cfg);
 	if (res.ok) {
+		applyServerName(document.getElementById('iServerName').value.trim());
 		const btn = document.getElementById('saveConfigBtn');
 		if (btn) {
 			const oldText = btn.textContent;
@@ -1947,6 +1968,8 @@ async function init() {
 	document.getElementById('iTLSHost').value = cfg.tlsHost || '';
 	document.getElementById('iTLSCache').value = cfg.tlsCache || 'data/tls-cache';
 	document.getElementById('wanInterface').value = cfg.wanInterface || '';
+	document.getElementById('iServerName').value = cfg.serverName || '';
+	applyServerName(cfg.serverName || '');
 	document.getElementById('serverForm').addEventListener('submit', saveConfig);
 	await loadInterfaces();
 	await loadAmneziaStatus();

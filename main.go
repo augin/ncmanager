@@ -28,7 +28,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.12.26"
+const appVersion = "1.12.27"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
@@ -171,6 +171,7 @@ type Config struct {
 	TLSEnabled    bool   `json:"tlsEnabled,omitempty"`
 	TLSHost       string `json:"tlsHost,omitempty"`
 	TLSCache      string `json:"tlsCache,omitempty"`
+	ServerName    string `json:"serverName,omitempty"`
 }
 
 var passwordHash string
@@ -820,6 +821,11 @@ func (s *Server) saveConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	if v, ok := req["endpoint"].(string); ok {
 		cfg.Endpoint = resolveEndpoint(v)
+	}
+	if v, ok := req["serverName"].(string); ok && v != "" {
+		cfg.ServerName = strings.TrimSpace(v)
+	} else {
+		cfg.ServerName = ""
 	}
 
 	if err := saveConfig(dataFile, cfg); err != nil {

@@ -1714,3 +1714,10 @@ code {
   background: var(--color-bg-primary);
   box-shadow: 0 0 0 3px var(--color-accent-tint);
 }
+
+.server-name-pill {
+  margin-left: 8px;
+  padding-left: 8px;
+  border-left: 1px solid var(--color-border);
+  color: var(--color-text-secondary);
+}
