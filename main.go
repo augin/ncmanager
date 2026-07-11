@@ -28,7 +28,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.12.27"
+const appVersion = "1.12.28"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
@@ -757,18 +757,19 @@ func (s *Server) getConfig(w http.ResponseWriter, r *http.Request) {
 	routes, _ := loadDnsRoutes()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]any{
-		"wgPort":     cfg.WGPort,
-		"httpPort":   cfg.HttpPort,
-		"interface":  cfg.Interface,
+		"wgPort":      cfg.WGPort,
+		"httpPort":    cfg.HttpPort,
+		"interface":   cfg.Interface,
 		"wanInterface": cfg.WanInterface,
-		"endpoint":   cfg.Endpoint,
-		"dns":        cfg.DNS,
-		"subnet":     cfg.Subnet,
+		"endpoint":    cfg.Endpoint,
+		"dns":         cfg.DNS,
+		"subnet":      cfg.Subnet,
 		"interfaceIP": getInterfaceIP(cfg.Subnet),
-		"postUp":     cfg.PostUp,
-		"postDown":   cfg.PostDown,
-		"peers":      peersCfg.Peers,
-		"dnsRoutes":  routes,
+		"postUp":      cfg.PostUp,
+		"postDown":    cfg.PostDown,
+		"serverName":  cfg.ServerName,
+		"peers":       peersCfg.Peers,
+		"dnsRoutes":   routes,
 	})
 }
 
