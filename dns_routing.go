@@ -10,8 +10,11 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 )
+
+var dnsApplyRunning atomic.Bool
 
 type DnsRoute struct {
 	ID       string   `json:"id"`
@@ -335,12 +338,17 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
+	if !dnsApplyRunning.CompareAndSwap(false, true) {
+		http.Error(w, "DNS routes apply already running", http.StatusTooManyRequests)
+		return
+	}
 
 	var req struct {
 		PeerID string `json:"peerId"`
 	}
 	if r.ContentLength > 0 {
 		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			dnsApplyRunning.Store(false)
 			http.Error(w, "invalid json", http.StatusBadRequest)
 			return
 		}
@@ -348,6 +356,7 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 
 	routes, _ := loadDnsRoutes()
 	if len(routes) == 0 {
+		dnsApplyRunning.Store(false)
 		http.Error(w, "no dns routes configured", http.StatusBadRequest)
 		return
 	}
@@ -450,6 +459,7 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 
 		os.WriteFile(filepath.Join(logDir, "dns-apply.status"), []byte("completed"), 0644)
 		appendLog("\n🎉 Готово!\n")
+		dnsApplyRunning.Store(false)
 	}()
 
 	w.Header().Set("Content-Type", "application/json")
