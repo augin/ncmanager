@@ -1721,3 +1721,30 @@ code {
   border-left: 1px solid var(--color-border);
   color: var(--color-text-secondary);
 }
+
+.sub-nav {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 16px;
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: 8px;
+}
+.sub-nav-link {
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+  text-decoration: none;
+}
+.sub-nav-link:hover {
+  color: var(--color-text-primary);
+  background: var(--color-bg-hover);
+}
+.sub-nav-link--active {
+  color: var(--color-accent);
+  background: var(--color-bg-tertiary);
+}
+.settings-section {
+  padding-top: 4px;
+}

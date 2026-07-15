@@ -1891,11 +1891,11 @@ async function loadVersion() {
   } catch (e) {}
 }
 
-function switchSettingsTab(tab) {
-	document.getElementById('wgPanel').style.display = tab === 'wg' ? '' : 'none';
-	document.getElementById('generalPanel').style.display = tab === 'general' ? '' : 'none';
-	document.getElementById('settingsTabWg').className = tab === 'wg' ? 'btn btn-sm settings-tab active' : 'btn btn-sm btn-outline-primary settings-tab';
-	document.getElementById('settingsTabGeneral').className = tab === 'general' ? 'btn btn-sm settings-tab active' : 'btn btn-sm btn-outline-primary settings-tab';
+function switchSettingsTab(name, btn) {
+	document.querySelectorAll('#tab-settings .sub-nav-link')
+		.forEach(b => b.classList.toggle('sub-nav-link--active', b.dataset.subtab === name));
+	document.querySelectorAll('#tab-settings .settings-section')
+		.forEach(s => s.style.display = s.id === name ? 'block' : 'none');
 }
 
 async function saveWgConfig() {

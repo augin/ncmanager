@@ -105,33 +105,12 @@
 
     <section class="card" id="tab-settings" style="display:none">
       <h2 class="card-title">Настройки</h2>
-      <div style="display:flex;gap:8px;margin-bottom:16px">
-        <button class="btn btn-sm settings-tab active" id="settingsTabWg" onclick="switchSettingsTab('wg')">WG сервер</button>
-        <button class="btn btn-sm btn-outline-primary settings-tab" id="settingsTabGeneral" onclick="switchSettingsTab('general')">Общие настройки</button>
+      <div class="sub-nav">
+        <a class="sub-nav-link sub-nav-link--active" data-subtab="settings-general" onclick="switchSettingsTab('settings-general', this)">Общие настройки</a>
+        <a class="sub-nav-link" data-subtab="settings-wg" onclick="switchSettingsTab('settings-wg', this)">WG сервер</a>
       </div>
 
-      <div id="wgPanel">
-        <div class="grid-form">
-          <label>Интерфейс<input id="iInterface" value="wg0"></label>
-          <label>Порт<input id="iPort" type="number" value="51820"></label>
-          <label>Endpoint<input id="iEndpoint" placeholder="AUTO"></label>
-          <label>DNS<input id="iDns" value="1.1.1.1"></label>
-          <label>Подсеть<input id="iSubnet" value="10.0.0.0/24" placeholder="10.0.0.0/24"></label>
-          <div class="form-section">
-            <label>PostUp (оставьте пустым для автогенерации)</label>
-            <textarea id="iPostUp" rows="2" class="form-textarea" placeholder="iptables ..."></textarea>
-          </div>
-          <div class="form-section">
-            <label>PostDown (оставьте пустым для автогенерации)</label>
-            <textarea id="iPostDown" rows="2" class="form-textarea" placeholder="iptables ..."></textarea>
-          </div>
-        </div>
-        <div class="actions">
-          <button type="button" id="saveWgBtn" class="btn btn-primary" onclick="saveWgConfig()">Сохранить WG</button>
-        </div>
-      </div>
-
-      <div id="generalPanel" style="display:none">
+      <div id="settings-general" class="settings-section">
         <div class="grid-form">
           <div class="form-section">
             <h3>Настройки сервера</h3>
@@ -158,6 +137,27 @@
         </div>
         <div class="actions">
           <button type="button" id="saveGeneralBtn" class="btn btn-primary" onclick="saveGeneralConfig()">Сохранить</button>
+        </div>
+      </div>
+
+      <div id="settings-wg" class="settings-section" style="display:none">
+        <div class="grid-form">
+          <label>Интерфейс<input id="iInterface" value="wg0"></label>
+          <label>Порт<input id="iPort" type="number" value="51820"></label>
+          <label>Endpoint<input id="iEndpoint" placeholder="AUTO"></label>
+          <label>DNS<input id="iDns" value="1.1.1.1"></label>
+          <label>Подсеть<input id="iSubnet" value="10.0.0.0/24" placeholder="10.0.0.0/24"></label>
+          <div class="form-section">
+            <label>PostUp (оставьте пустым для автогенерации)</label>
+            <textarea id="iPostUp" rows="2" class="form-textarea" placeholder="iptables ..."></textarea>
+          </div>
+          <div class="form-section">
+            <label>PostDown (оставьте пустым для автогенерации)</label>
+            <textarea id="iPostDown" rows="2" class="form-textarea" placeholder="iptables ..."></textarea>
+          </div>
+        </div>
+        <div class="actions">
+          <button type="button" id="saveWgBtn" class="btn btn-primary" onclick="saveWgConfig()">Сохранить WG</button>
         </div>
       </div>
     </section>
