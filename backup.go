@@ -182,10 +182,10 @@ func (s *Server) restoreBackup(w http.ResponseWriter, r *http.Request) {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".conf") {
 			continue
 		}
-		exec.Command("awg-quick", "down", entry.Name()).CombinedOutput()
+		execWithTimeout(30*time.Second, "awg-quick", "down", entry.Name())
 	}
 
-	exec.Command("modprobe", "amneziawg").CombinedOutput()
+	execWithTimeout(5*time.Second, "modprobe", "amneziawg")
 
 	extractedWG := filepath.Join(workingDir, "etc", "wireguard", "wg0.conf")
 	if data, err := os.ReadFile(extractedWG); err == nil {
@@ -224,15 +224,15 @@ func (s *Server) restoreBackup(w http.ResponseWriter, r *http.Request) {
 	if err := s.restartServerDirect(); err != nil {
 		log.Printf("restore: restart wg: %v", err)
 	}
-	exec.Command("systemctl", "enable", "--now", "wg-quick@wg0").CombinedOutput()
+	execWithTimeout(10*time.Second, "systemctl", "enable", "--now", "wg-quick@wg0")
 
 	for _, entry := range amneziaRestoreEntries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".conf") {
 			continue
 		}
 		name := strings.TrimSuffix(entry.Name(), ".conf")
-		exec.Command("systemctl", "enable", "--now", "awg-quick@"+name).CombinedOutput()
-		out, err := exec.Command("awg-quick", "up", name).CombinedOutput()
+		execWithTimeout(10*time.Second, "systemctl", "enable", "--now", "awg-quick@"+name)
+		out, err := execWithTimeout(30*time.Second, "awg-quick", "up", name)
 		if err != nil {
 			log.Printf("restore: awg-quick up %s: %s", name, string(out))
 		}

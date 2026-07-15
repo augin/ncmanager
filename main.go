@@ -28,7 +28,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.12.30"
+const appVersion = "1.12.31"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
@@ -249,8 +249,8 @@ func main() {
 	syncServerKeyFromRunning()
 
 	if _, statErr := os.Stat(wgConfigFile); statErr == nil {
-		if _, showErr := exec.Command("wg", "show", "wg0").CombinedOutput(); showErr != nil {
-			out, upErr := exec.Command("wg-quick", "up", wgConfigFile).CombinedOutput()
+		if _, showErr := execWithTimeout(5*time.Second, "wg", "show", "wg0"); showErr != nil {
+			out, upErr := execWithTimeout(30*time.Second, "wg-quick", "up", wgConfigFile)
 			if upErr != nil {
 				log.Printf("wg-quick up failed: %s", strings.TrimSpace(string(out)))
 			} else {
@@ -271,7 +271,7 @@ func main() {
 			}
 		if cfgBytes, rerr := os.ReadFile(wgConfigFile); rerr == nil {
 			if tmpName, terr := wgSyncTempFile(toSyncconfConfig(string(cfgBytes))); terr == nil {
-				out, serr := exec.Command("wg", "syncconf", "wg0", tmpName).CombinedOutput()
+				out, serr := execWithTimeout(10*time.Second, "wg", "syncconf", "wg0", tmpName)
 				if serr != nil {
 					log.Printf("wg0 running, peer resync failed: %v, output: %s", serr, string(out))
 				} else {
@@ -369,7 +369,7 @@ func main() {
 }
 
 func startAmneziaTrafficPoller() {
-	if err := exec.Command("sh", "-c", "ls /etc/amnezia/amneziawg/*.conf >/dev/null 2>&1").Run(); err != nil {
+	if _, err := execWithTimeout(5*time.Second, "sh", "-c", "ls /etc/amnezia/amneziawg/*.conf >/dev/null 2>&1"); err != nil {
 		return
 	}
 	ticker := time.NewTicker(10 * time.Second)
@@ -444,6 +444,13 @@ func min(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func execWithTimeout(timeout time.Duration, name string, args ...string) ([]byte, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, name, args...)
+	return cmd.CombinedOutput()
 }
 
 func truncate(s string, maxLen int) string {
@@ -895,7 +902,7 @@ func configureUfwRoutes(cfg *Config) error {
 		{"ufw", "route", "allow", "in", "on", cfg.WanInterface, "out", "on", vpnIface},
 	}
 	for _, args := range cmds {
-		if out, err := exec.Command(args[0], args[1:]...).CombinedOutput(); err != nil {
+		if out, err := execWithTimeout(10*time.Second, args[0], args[1:]...); err != nil {
 			return fmt.Errorf("ufw %s: %w (%s)", strings.Join(args, " "), err, strings.TrimSpace(string(out)))
 		}
 	}
@@ -1529,7 +1536,7 @@ func (s *Server) getStatus(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) startServer(w http.ResponseWriter, r *http.Request) {
-	out, err := exec.Command("wg-quick", "up", s.configPath).CombinedOutput()
+	out, err := execWithTimeout(30*time.Second, "wg-quick", "up", s.configPath)
 	w.Header().Set("Content-Type", "application/json")
 	if err != nil {
 		msg := string(out)
@@ -1551,7 +1558,7 @@ func (s *Server) stopServer(w http.ResponseWriter, r *http.Request) {
 	s.mu.Lock()
 	path := s.configPath
 	s.mu.Unlock()
-	out, _ := exec.Command("wg-quick", "down", path).CombinedOutput()
+	out, _ := execWithTimeout(30*time.Second, "wg-quick", "down", path)
 	if len(out) > 0 {
 		log.Printf("stop: %s", string(out))
 	}
@@ -1572,13 +1579,13 @@ func (s *Server) restartServerDirect() error {
 	s.mu.Lock()
 	path := s.configPath
 	s.mu.Unlock()
-	downOut, downErr := exec.Command("wg-quick", "down", path).CombinedOutput()
+	downOut, downErr := execWithTimeout(30*time.Second, "wg-quick", "down", path)
 	if downErr != nil {
 		log.Printf("wg-quick down: %s", string(downOut))
 	}
-	exec.Command("ip", "link", "del", "dev", "wg0").CombinedOutput()
+	execWithTimeout(5*time.Second, "ip", "link", "del", "dev", "wg0")
 	time.Sleep(700 * time.Millisecond)
-	out, err := exec.Command("wg-quick", "up", path).CombinedOutput()
+	out, err := execWithTimeout(30*time.Second, "wg-quick", "up", path)
 	if err != nil {
 		msg := string(out)
 		log.Printf("wg-quick up failed: %s", msg)
@@ -1599,7 +1606,9 @@ func (s *Server) restartService(w http.ResponseWriter, r *http.Request) {
 }
 
 func generateKeyPair() (priv, pub string, err error) {
-	cmd := exec.Command("wg", "genkey")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "wg", "genkey")
 	privBuf := new(bytes.Buffer)
 	cmd.Stdout = privBuf
 	if err = cmd.Run(); err != nil {
@@ -1607,7 +1616,7 @@ func generateKeyPair() (priv, pub string, err error) {
 	}
 	priv = strings.TrimSpace(privBuf.String())
 
-	cmd2 := exec.Command("wg", "pubkey")
+	cmd2 := exec.CommandContext(ctx, "wg", "pubkey")
 	cmd2.Stdin = strings.NewReader(priv)
 	pubBuf := new(bytes.Buffer)
 	cmd2.Stdout = pubBuf
@@ -1701,15 +1710,13 @@ type wgPeer struct {
 }
 
 func checkWireGuardStatus(iface string) (bool, *wgInfo, error) {
-	cmd := exec.Command("wg", "show", iface, "public-key")
-	out, err := cmd.CombinedOutput()
+	out, err := execWithTimeout(5*time.Second, "wg", "show", iface, "public-key")
 	if err != nil {
 		return false, nil, err
 	}
 	pubKey := strings.TrimSpace(string(out))
 
-	cmd = exec.Command("wg", "show", iface, "dump")
-	out, err = cmd.CombinedOutput()
+	out, err = execWithTimeout(5*time.Second, "wg", "show", iface, "dump")
 	if err != nil {
 		return false, nil, err
 	}
@@ -1830,7 +1837,7 @@ func parsePublicKey(line string) string {
 }
 
 func syncconfRemovePeer(publicKey string) error {
-	out, err := exec.Command("wg", "showconf", "wg0").CombinedOutput()
+	out, err := execWithTimeout(5*time.Second, "wg", "showconf", "wg0")
 	if err != nil {
 		return fmt.Errorf("wg showconf failed: %w, output: %s", err, string(out))
 	}
@@ -1876,14 +1883,14 @@ func syncconfRemovePeer(publicKey string) error {
 	}
 	defer os.Remove(tmpName)
 
-	if out, err := exec.Command("wg", "syncconf", "wg0", tmpName).CombinedOutput(); err != nil {
+	if out, err := execWithTimeout(10*time.Second, "wg", "syncconf", "wg0", tmpName); err != nil {
 		return fmt.Errorf("wg syncconf failed: %v, output: %s", err, string(out))
 	}
 	return nil
 }
 
 func syncconfAddPeer(peer Peer) error {
-	out, err := exec.Command("wg", "showconf", "wg0").CombinedOutput()
+	out, err := execWithTimeout(5*time.Second, "wg", "showconf", "wg0")
 	if err != nil {
 		return fmt.Errorf("wg showconf failed: %w, output: %s", err, string(out))
 	}
@@ -1896,7 +1903,7 @@ func syncconfAddPeer(peer Peer) error {
 	}
 	defer os.Remove(tmpName)
 
-	if out, err := exec.Command("wg", "syncconf", "wg0", tmpName).CombinedOutput(); err != nil {
+	if out, err := execWithTimeout(10*time.Second, "wg", "syncconf", "wg0", tmpName); err != nil {
 		return fmt.Errorf("wg syncconf failed: %v, output: %s", err, string(out))
 	}
 	return nil
@@ -2073,7 +2080,9 @@ func loadPrivateKey(path string) ([]byte, error) {
 
 func getPublicKeyFromPrivate(privKeyBytes []byte) (string, error) {
 	trimmed := strings.TrimSpace(string(privKeyBytes))
-	cmd := exec.Command("wg", "pubkey")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "wg", "pubkey")
 	cmd.Stdin = bytes.NewReader([]byte(trimmed))
 	pubBuf := new(bytes.Buffer)
 	cmd.Stdout = pubBuf
@@ -2194,7 +2203,7 @@ func (s *Server) getAmneziaStatus(w http.ResponseWriter, r *http.Request) {
 	installed := err == nil
 	version := ""
 	if installed {
-		out, _ := exec.Command("awg", "-v").CombinedOutput()
+		out, _ := execWithTimeout(5*time.Second, "awg", "-v")
 		v := strings.TrimSpace(string(out))
 		if v != "" {
 			version = v
@@ -2371,16 +2380,16 @@ func (s *Server) importAmneziaConfig(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	exec.Command("modprobe", "amneziawg").CombinedOutput()
+	execWithTimeout(5*time.Second, "modprobe", "amneziawg")
 
-	out, upErr := exec.Command("awg-quick", "up", name).CombinedOutput()
+	out, upErr := execWithTimeout(30*time.Second, "awg-quick", "up", name)
 	if upErr != nil {
 		os.Remove(confPath)
 		http.Error(w, "awg-quick up failed: "+string(out), http.StatusInternalServerError)
 		return
 	}
 
-	exec.Command("systemctl", "enable", "--now", "awg-quick@"+name).CombinedOutput()
+	execWithTimeout(10*time.Second, "systemctl", "enable", "--now", "awg-quick@"+name)
 
 	var publicKey string
 	for _, line := range strings.Split(req.ConfigText, "\n") {
@@ -2523,12 +2532,12 @@ func (s *Server) getAmneziaInterfaceStats(w http.ResponseWriter, r *http.Request
 }
 
 func isAmneziaRunning(name string) bool {
-	_, err := exec.Command("awg", "show", name).CombinedOutput()
+	_, err := execWithTimeout(5*time.Second, "awg", "show", name)
 	return err == nil
 }
 
 func getAmneziaPublicKey(name string) string {
-	out, _ := exec.Command("awg", "show", name).CombinedOutput()
+	out, _ := execWithTimeout(5*time.Second, "awg", "show", name)
 	for _, line := range strings.Split(string(out), "\n") {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "public key: ") {
@@ -2539,7 +2548,7 @@ func getAmneziaPublicKey(name string) string {
 }
 
 func getAmneziaHandshake(name string) string {
-	out, _ := exec.Command("awg", "show", name).CombinedOutput()
+	out, _ := execWithTimeout(5*time.Second, "awg", "show", name)
 	for _, line := range strings.Split(string(out), "\n") {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "latest handshake: ") {
@@ -2550,7 +2559,7 @@ func getAmneziaHandshake(name string) string {
 }
 
 func getAmneziaTransfer(name string) (string, string) {
-	out, _ := exec.Command("awg", "show", name).CombinedOutput()
+	out, _ := execWithTimeout(5*time.Second, "awg", "show", name)
 	for _, line := range strings.Split(string(out), "\n") {
 		line = strings.TrimSpace(line)
 		if strings.HasPrefix(line, "transfer: ") {
@@ -2663,7 +2672,7 @@ func getAmneziaEndpoint(name string) string {
 }
 
 func getAmneziaPing(name string) string {
-	out, err := exec.Command("ping", "-c", "1", "-W", "1", "-I", name, "1.1.1.1").CombinedOutput()
+	out, err := execWithTimeout(5*time.Second, "ping", "-c", "1", "-W", "1", "-I", name, "1.1.1.1")
 	if err != nil {
 		return "timeout"
 	}
@@ -2709,7 +2718,7 @@ func (s *Server) checkAmneziaPing(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "interface name required", http.StatusBadRequest)
 		return
 	}
-	out, err := exec.Command("ping", "-c", "1", "-W", "2", "-I", name, "1.1.1.1").CombinedOutput()
+	out, err := execWithTimeout(5*time.Second, "ping", "-c", "1", "-W", "2", "-I", name, "1.1.1.1")
 	connected := err == nil
 	latency := float64(0)
 	text := "timeout"
@@ -2953,12 +2962,12 @@ func (s *Server) saveAmneziaInterfaceConfig(w http.ResponseWriter, r *http.Reque
 
 	confPath := fmt.Sprintf("/etc/amnezia/amneziawg/%s.conf", name)
 	wasRunning := false
-	_, err := exec.Command("ip", "link", "show", "dev", name).CombinedOutput()
+	_, err := execWithTimeout(5*time.Second, "ip", "link", "show", "dev", name)
 	wasRunning = err == nil
 
 	if wasRunning {
-		exec.Command("awg-quick", "down", name).CombinedOutput()
-		exec.Command("systemctl", "disable", "--now", "awg-quick@"+name).CombinedOutput()
+		execWithTimeout(30*time.Second, "awg-quick", "down", name)
+		execWithTimeout(10*time.Second, "systemctl", "disable", "--now", "awg-quick@"+name)
 	}
 
 	newConf := writeAmneziaConfig(req)
@@ -2982,11 +2991,11 @@ func (s *Server) saveAmneziaInterfaceConfig(w http.ResponseWriter, r *http.Reque
 	}
 
 	if wasRunning {
-		if upOut, upErr := exec.Command("awg-quick", "up", name).CombinedOutput(); upErr != nil {
+		if upOut, upErr := execWithTimeout(30*time.Second, "awg-quick", "up", name); upErr != nil {
 			http.Error(w, "awg-quick up failed: "+string(upOut), http.StatusInternalServerError)
 			return
 		}
-		exec.Command("systemctl", "enable", "--now", "awg-quick@"+name).CombinedOutput()
+		execWithTimeout(10*time.Second, "systemctl", "enable", "--now", "awg-quick@"+name)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -3008,7 +3017,7 @@ func (s *Server) manageAmneziaInterface(w http.ResponseWriter, r *http.Request) 
 
 	switch action {
 	case "down":
-		out, err := exec.Command("awg-quick", "down", name).CombinedOutput()
+		out, err := execWithTimeout(30*time.Second, "awg-quick", "down", name)
 		if err != nil {
 			http.Error(w, "awg-quick down failed: "+string(out), http.StatusInternalServerError)
 			return
@@ -3016,17 +3025,17 @@ func (s *Server) manageAmneziaInterface(w http.ResponseWriter, r *http.Request) 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "name": name})
 	case "up":
-		out, err := exec.Command("awg-quick", "up", name).CombinedOutput()
+		out, err := execWithTimeout(30*time.Second, "awg-quick", "up", name)
 		if err != nil {
 			http.Error(w, "awg-quick up failed: "+string(out), http.StatusInternalServerError)
 			return
 		}
-		exec.Command("systemctl", "enable", "--now", "awg-quick@"+name).CombinedOutput()
+		execWithTimeout(10*time.Second, "systemctl", "enable", "--now", "awg-quick@"+name)
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "name": name})
 	case "delete":
-		exec.Command("systemctl", "disable", "--now", "awg-quick@"+name).CombinedOutput()
-		exec.Command("awg-quick", "down", name).CombinedOutput()
+		execWithTimeout(10*time.Second, "systemctl", "disable", "--now", "awg-quick@"+name)
+		execWithTimeout(30*time.Second, "awg-quick", "down", name)
 		os.Remove(fmt.Sprintf("/etc/amnezia/amneziawg/%s.conf", name))
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]string{"status": "ok", "name": name})

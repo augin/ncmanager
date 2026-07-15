@@ -2018,7 +2018,7 @@ function startRouterCheck() {
 	if (routerCheckTimer) clearInterval(routerCheckTimer);
 	routerCheckTimer = setInterval(() => {
 		checkAllRouters();
-	}, 30000);
+	}, 60000);
 	checkAllRouters();
 }
 

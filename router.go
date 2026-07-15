@@ -13,7 +13,6 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"os"
-	"os/exec"
 	"strconv"
 	"strings"
 	"time"
@@ -227,7 +226,7 @@ func keeneticRemoveInterface(httpClient *http.Client, baseURL, ifaceName string)
 }
 
 func getActualServerPublicKey() string {
-	out, err := exec.Command("wg", "show", "wg0", "public-key").CombinedOutput()
+	out, err := execWithTimeout(5*time.Second, "wg", "show", "wg0", "public-key")
 	if err != nil {
 		log.Printf("getActualServerPublicKey: wg show public-key failed: %v", err)
 		return ""
@@ -258,7 +257,7 @@ func applyServerPrivateKey(priv string) error {
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	out, err := exec.Command("wg", "set", "wg0", "private-key", tmpName).CombinedOutput()
+	out, err := execWithTimeout(5*time.Second, "wg", "set", "wg0", "private-key", tmpName)
 	if err != nil {
 		return fmt.Errorf("wg set private-key failed: %v, output: %s", err, string(out))
 	}
@@ -266,7 +265,7 @@ func applyServerPrivateKey(priv string) error {
 }
 
 func getActualServerPrivateKey() string {
-	out, err := exec.Command("wg", "show", "wg0", "private-key").CombinedOutput()
+	out, err := execWithTimeout(5*time.Second, "wg", "show", "wg0", "private-key")
 	if err != nil {
 		log.Printf("getActualServerPrivateKey: wg show private-key failed: %v", err)
 		return ""
