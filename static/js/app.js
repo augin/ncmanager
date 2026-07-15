@@ -20,6 +20,8 @@ let routerCheckTimeout = 5000;
 let routerCheckInterval = 60000;
 let routerCacheTTL = 900;
 let refreshInProgress = false;
+let refreshPending = false;
+let searchDebounceTimer = null;
 const THEME_KEY = 'ncmanager_theme';
 const ROUTER_CACHE_KEY = 'ncmanager_router_cache';
 
@@ -314,7 +316,10 @@ async function loadStatus() {
 
 function onPeerSearchChange(value) {
 	peerSearch = value.trim();
-	loadPeers().then(renderPeers);
+	if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
+	searchDebounceTimer = setTimeout(() => {
+		scheduleRefresh();
+	}, 300);
 }
 
 function applySort(arr) {
@@ -347,7 +352,7 @@ function handleSort(field) {
 		sortField = field;
 		sortDir = 'asc';
 	}
-	loadPeers().then(renderPeers);
+	scheduleRefresh();
 }
 
 function updateSortIndicators() {
@@ -375,19 +380,19 @@ function editCreatedAt(peerId, cell) {
 
 	function save() {
 		if (!input.value) {
-			loadPeers();
+			scheduleRefresh();
 			return;
 		}
 		const iso = input.value + 'T00:00:00Z';
 		xhr('POST', '/peers/update', { id: peerId, createdAt: iso })
-			.then(() => loadPeers())
-			.catch(() => loadPeers());
+			.then(() => scheduleRefresh())
+			.catch(() => scheduleRefresh());
 	}
 
 	input.addEventListener('blur', save);
 	input.addEventListener('keydown', function(e) {
 		if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
-		if (e.key === 'Escape') { loadPeers(); }
+		if (e.key === 'Escape') { scheduleRefresh(); }
 	});
 }
 
@@ -565,6 +570,7 @@ function checkAllRouters() {
 	const cache = getRouterCache();
 	const now = Date.now();
 	const promises = [];
+	const pendingUpdates = {};
 	for (const led of ledEls) {
 		if (!led.id || !led.id.startsWith('router-led-')) continue;
 		const peerId = led.id.replace('router-led-', '');
@@ -576,7 +582,7 @@ function checkAllRouters() {
 			.then(res => {
 				if (res.ok) {
 					const data = res.json();
-					setRouterCache(peerId, data);
+					pendingUpdates[peerId] = { available: data.available, model: data.model || '', version: data.version || '', ts: now };
 					if (data.available) {
 						led.className = 'led led-green';
 						led.title = data.model ? ('Модель: ' + data.model + ' | Версия: ' + data.version) : 'Роутер доступен';
@@ -595,7 +601,13 @@ function checkAllRouters() {
 			});
 		promises.push(p);
 	}
-	Promise.allSettled(promises).then(() => { routerCheckRunning = false; });
+	Promise.allSettled(promises).then(() => {
+		if (Object.keys(pendingUpdates).length > 0) {
+			const merged = { ...cache, ...pendingUpdates };
+			sessionStorage.setItem(ROUTER_CACHE_KEY, JSON.stringify(merged));
+		}
+		routerCheckRunning = false;
+	});
 }
 
 function togglePwd(inputId, btn) {
@@ -657,10 +669,8 @@ async function savePeerRouter(id, silent) {
 					btn.classList.remove('copied');
 				}, 2000);
 			}
-			loadPeers().then(peers => {
-				renderPeers(peers);
-				setTimeout(checkAllRouters, 100);
-			});
+			refresh();
+			setTimeout(checkAllRouters, 100);
 			if (routerDomain && routerLogin && routerPassword) {
 				fetchRouterInfo(id);
 			}
@@ -1746,6 +1756,15 @@ function peerSignature(p) {
 	].join('|');
 }
 
+function scheduleRefresh() {
+	if (refreshPending) return;
+	refreshPending = true;
+	setTimeout(() => {
+		refreshPending = false;
+		refresh();
+	}, 0);
+}
+
 async function refresh() {
 	if (refreshInProgress) return;
 	const ae = document.activeElement;
@@ -2226,7 +2245,9 @@ async function loadAmneziaStatus() {
       if (data.installStatus === 'completed') {
         setTimeout(closeAmneziaModal, 8000);
       }
-      setTimeout(loadAmneziaStatus, 4000);
+      if (data.installStatus === 'running') {
+        setTimeout(loadAmneziaStatus, 4000);
+      }
     }
   } catch (e) {
     console.error('loadAmneziaStatus failed:', e);
