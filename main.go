@@ -28,7 +28,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.12.31"
+const appVersion = "1.12.32"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
@@ -1013,6 +1013,7 @@ func (s *Server) removePeer(w http.ResponseWriter, r *http.Request) {
 	peersCfg.Peers = filtered
 
 	_ = savePeers(peersCfg)
+	clearRouterCache(req.ID)
 	cfg, _ := loadConfig(dataFile)
 	_ = generateWgConfig(cfg, peersCfg.Peers)
 

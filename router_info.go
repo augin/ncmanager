@@ -5,8 +5,29 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
+	"sync"
 	"time"
 )
+
+const routerCacheTTL = 15 * time.Minute
+
+type routerCacheEntry struct {
+	available bool
+	model     string
+	version   string
+	ts        time.Time
+}
+
+var (
+	routerCache   = make(map[string]*routerCacheEntry)
+	routerCacheMu sync.RWMutex
+)
+
+func clearRouterCache(peerID string) {
+	routerCacheMu.Lock()
+	delete(routerCache, peerID)
+	routerCacheMu.Unlock()
+}
 
 func (s *Server) getPeerRouterInfo(w http.ResponseWriter, r *http.Request) {
 	parts := strings.Split(r.URL.Path, "/")
@@ -100,32 +121,55 @@ func (s *Server) checkPeerRouter(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if peer.RouterLogin != "" && peer.RouterPassword != "" {
-		httpClient, baseURL, err := keeneticSetupClient(peer.RouterDomain, peer.RouterLogin, peer.RouterPassword)
-		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]any{"available": false, "model": "", "version": ""})
-			return
-		}
-		model, version, err := s.getRouterInfo(httpClient, baseURL)
-		if err != nil {
-			w.Header().Set("Content-Type", "application/json")
-			json.NewEncoder(w).Encode(map[string]any{"available": false, "model": "", "version": ""})
-			return
-		}
+	routerCacheMu.RLock()
+	entry, ok := routerCache[peerID]
+	routerCacheMu.RUnlock()
+	if ok && time.Since(entry.ts) < routerCacheTTL {
 		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"available": true, "model": model, "version": version})
+		json.NewEncoder(w).Encode(map[string]any{
+			"available": entry.available,
+			"model":     entry.model,
+			"version":   entry.version,
+		})
 		return
 	}
 
-	available := checkRouterHTTPAvailability(peer.RouterDomain)
-	if available {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"available": true, "model": "", "version": ""})
+	var available bool
+	var model, version string
+
+	if peer.RouterLogin != "" && peer.RouterPassword != "" {
+		httpClient, baseURL, err := keeneticSetupClient(peer.RouterDomain, peer.RouterLogin, peer.RouterPassword)
+		if err != nil {
+			available = false
+		} else {
+			m, v, err := s.getRouterInfo(httpClient, baseURL)
+			if err != nil {
+				available = false
+			} else {
+				available = true
+				model = m
+				version = v
+			}
+		}
 	} else {
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(map[string]any{"available": false, "model": "", "version": ""})
+		available = checkRouterHTTPAvailability(peer.RouterDomain)
 	}
+
+	routerCacheMu.Lock()
+	routerCache[peerID] = &routerCacheEntry{
+		available: available,
+		model:     model,
+		version:   version,
+		ts:        time.Now(),
+	}
+	routerCacheMu.Unlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]any{
+		"available": available,
+		"model":     model,
+		"version":   version,
+	})
 }
 
 func checkRouterHTTPAvailability(domain string) bool {
