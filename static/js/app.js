@@ -19,6 +19,7 @@ let routerCheckRunning = false;
 let routerCheckTimeout = 5000;
 let routerCheckInterval = 60000;
 let routerCacheTTL = 900;
+let refreshInProgress = false;
 const THEME_KEY = 'ncmanager_theme';
 const ROUTER_CACHE_KEY = 'ncmanager_router_cache';
 
@@ -488,13 +489,26 @@ function updatePeerStats(peers) {
 		row.className = status.class === 'offline' ? 'peer-row-offline' : '';
 		const handshakeEl = row.querySelector('[data-field="handshake"]');
 		if (handshakeEl) {
-			handshakeEl.className = 'peer-age';
 			handshakeEl.title = p.lastHandshake && new Date(p.lastHandshake).getTime() >= MIN_REASONABLE_DATE ? new Date(p.lastHandshake).toLocaleString('ru-RU') : 'никогда';
-			handshakeEl.innerHTML = '<span class="led ' + ledClass + '" title="' + status.text + '"></span> ' + hs;
+			const led = handshakeEl.querySelector('.led');
+			if (led) {
+				led.className = 'led ' + ledClass;
+				led.title = status.text;
+			}
+			const textNode = handshakeEl.lastChild;
+			if (textNode && textNode.nodeType === 3) {
+				textNode.textContent = hs;
+			}
 		}
 		const trafficEl = row.querySelector('[data-field="traffic"]');
 		if (trafficEl) {
-			trafficEl.innerHTML = '<span title="↑ ' + tx + '">↑ ' + tx + '</span> / <span title="↓ ' + rx + '">↓ ' + rx + '</span>';
+			const spans = trafficEl.querySelectorAll('span');
+			if (spans.length >= 2) {
+				spans[0].textContent = '↑ ' + tx;
+				spans[0].title = '↑ ' + tx;
+				spans[1].textContent = '↓ ' + rx;
+				spans[1].title = '↓ ' + rx;
+			}
 		}
 		const paidEl = row.querySelector('.paid-indicator-row');
 		if (paidEl) {
@@ -1733,6 +1747,10 @@ function peerSignature(p) {
 }
 
 async function refresh() {
+	if (refreshInProgress) return;
+	const ae = document.activeElement;
+	const editing = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA') && ae.closest('#peersTable');
+	refreshInProgress = true;
 	try {
 		const peers = await loadPeers();
 		const status = await loadStatus();
@@ -1746,7 +1764,7 @@ async function refresh() {
 				}
 			}
 		}
-		if (peersChanged) {
+		if (peersChanged && !editing) {
 			saveExpandedInputs();
 			renderPeers(peers);
 			restoreExpandedInputs();
@@ -1755,6 +1773,10 @@ async function refresh() {
 			setTimeout(checkAllRouters, 100);
 		} else {
 			updatePeerStats(peers);
+			if (peersChanged) {
+				previousPeerIds = currentIds;
+				previousPeerSigs = new Map(peers.map(p => [p.id, peerSignature(p)]));
+			}
 		}
 		const badge = document.getElementById('statusBadge');
 		const btn = document.getElementById('btnToggle');
@@ -1770,6 +1792,7 @@ async function refresh() {
 	} catch (e) {
 		console.error('refresh error:', e);
 	}
+	refreshInProgress = false;
 	if (currentTab === 'waniface') {
 		loadAmneziaInterfaces();
 	}
@@ -2053,7 +2076,7 @@ function startAutoRefresh() {
 				refresh();
 			}
 		}
-	}, 5000);
+	}, 10000);
 	startRouterCheck();
 }
 
