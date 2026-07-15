@@ -412,7 +412,7 @@ function renderPeers(peers) {
 		const canToggle = !!(p.routerDomain && p.routerLogin && p.routerPassword);
 		const vpnActive = !!(p.vpnActive && p.routerIfName);
 		html += `<tr class="${rowClass}" data-peer-id="${p.id}">
-			<td style="width:20px;padding:8px 4px"><span class="led led-gray" id="router-led-${p.id}" title="Проверка доступности роутера..."></span></td>
+			<td style="width:20px;padding:8px 4px">${canToggle ? `<span class="led led-gray" id="router-led-${p.id}" title="Проверка доступности роутера..."></span>` : ''}</td>
 			<td><span class="peer-name-toggle" onclick="togglePeerDetails('${p.id}', event)" style="cursor:pointer;color:#38bdf8">${escapeHtml(p.name)}</span></td>
 			<td><code>${escapeHtml(p.allowedIPs)}</code></td>
 			<td><span class="created-at-editable" ondblclick="editCreatedAt('${p.id}', this)" title="Двойной клик для редактирования">${created}</span></td>
