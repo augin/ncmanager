@@ -17,6 +17,35 @@ let _keeneticPeerId = null;
 let routerCheckTimer = null;
 let routerCheckRunning = false;
 const THEME_KEY = 'ncmanager_theme';
+const ROUTER_CACHE_KEY = 'ncmanager_router_cache';
+
+function getRouterCache() {
+	try { return JSON.parse(sessionStorage.getItem(ROUTER_CACHE_KEY)) || {}; } catch(e) { return {}; }
+}
+
+function setRouterCache(peerId, data) {
+	const cache = getRouterCache();
+	cache[peerId] = { available: data.available, model: data.model || '', version: data.version || '', ts: Date.now() };
+	sessionStorage.setItem(ROUTER_CACHE_KEY, JSON.stringify(cache));
+}
+
+function applyCachedRouterStatus() {
+	const cache = getRouterCache();
+	const ledEls = document.querySelectorAll('.led');
+	for (const led of ledEls) {
+		if (!led.id || !led.id.startsWith('router-led-')) continue;
+		const peerId = led.id.replace('router-led-', '');
+		const entry = cache[peerId];
+		if (!entry) continue;
+		if (entry.available) {
+			led.className = 'led led-green';
+			led.title = entry.model ? ('Модель: ' + entry.model + ' | Версия: ' + entry.version) : 'Роутер доступен';
+		} else {
+			led.className = 'led led-gray';
+			led.title = 'Роутер недоступен';
+		}
+	}
+}
 
 function getSystemTheme() {
 	return window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
@@ -438,6 +467,7 @@ function renderPeers(peers) {
 		unpaidEl.textContent = unpaid + ' неоплачено';
 		unpaidEl.classList.toggle('peer-meta-unpaid', unpaid > 0);
 	}
+	applyCachedRouterStatus();
 }
 
 function updatePeerStats(peers) {
@@ -513,6 +543,7 @@ function updateRouterLed(peerId, routerDomain) {
 function checkAllRouters() {
 	if (routerCheckRunning) return;
 	routerCheckRunning = true;
+	applyCachedRouterStatus();
 	const ledEls = document.querySelectorAll('.led');
 	const promises = [];
 	for (const led of ledEls) {
@@ -522,6 +553,7 @@ function checkAllRouters() {
 			.then(res => {
 				if (res.ok) {
 					const data = res.json();
+					setRouterCache(peerId, data);
 					if (data.available) {
 						led.className = 'led led-green';
 						led.title = data.model ? ('Модель: ' + data.model + ' | Версия: ' + data.version) : 'Роутер доступен';
