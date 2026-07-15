@@ -9,7 +9,10 @@ import (
 	"time"
 )
 
-const routerCacheTTL = 15 * time.Minute
+const (
+	routerCacheTTL            = 15 * time.Minute
+	routerCacheTTLUnavailable = 1 * time.Minute
+)
 
 type routerCacheEntry struct {
 	available bool
@@ -124,7 +127,11 @@ func (s *Server) checkPeerRouter(w http.ResponseWriter, r *http.Request) {
 	routerCacheMu.RLock()
 	entry, ok := routerCache[peerID]
 	routerCacheMu.RUnlock()
-	if ok && time.Since(entry.ts) < routerCacheTTL {
+	ttl := routerCacheTTL
+	if ok && !entry.available {
+		ttl = routerCacheTTLUnavailable
+	}
+	if ok && time.Since(entry.ts) < ttl {
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]any{
 			"available": entry.available,
