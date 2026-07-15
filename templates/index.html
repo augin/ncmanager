@@ -138,6 +138,13 @@
           <label>Порт веб-интерфейса<input id="iHttpPort" type="number" value="8080" min="1" max="65535"></label>
         </div>
 
+        <div class="form-section">
+          <h3>Проверка роутеров</h3>
+          <label>Таймаут проверки (сек)<input id="iRouterCheckTimeout" type="number" min="1" max="60" value="5"></label>
+          <label>Интервал опроса (сек)<input id="iRouterCheckInterval" type="number" min="10" max="3600" value="60"></label>
+          <label>Время кеша (сек)<input id="iRouterCacheTTL" type="number" min="10" max="86400" value="900"></label>
+        </div>
+
         <div class="actions">
           <button type="submit" id="saveConfigBtn" class="btn btn-primary">Сохранить</button>
         </div>

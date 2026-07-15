@@ -16,6 +16,9 @@ let activeElementCursorEnd = null;
 let _keeneticPeerId = null;
 let routerCheckTimer = null;
 let routerCheckRunning = false;
+let routerCheckTimeout = 5000;
+let routerCheckInterval = 60000;
+let routerCacheTTL = 900;
 const THEME_KEY = 'ncmanager_theme';
 const ROUTER_CACHE_KEY = 'ncmanager_router_cache';
 
@@ -545,11 +548,17 @@ function checkAllRouters() {
 	routerCheckRunning = true;
 	applyCachedRouterStatus();
 	const ledEls = document.querySelectorAll('.led');
+	const cache = getRouterCache();
+	const now = Date.now();
 	const promises = [];
 	for (const led of ledEls) {
 		if (!led.id || !led.id.startsWith('router-led-')) continue;
 		const peerId = led.id.replace('router-led-', '');
-		const p = xhr('GET', '/peers/router-check/' + encodeURIComponent(peerId), null, { timeout: 5000 })
+		const cached = cache[peerId];
+		if (cached && cached.available && (now - cached.ts) < routerCacheTTL * 1000) {
+			continue;
+		}
+		const p = xhr('GET', '/peers/router-check/' + encodeURIComponent(peerId), null, { timeout: routerCheckTimeout })
 			.then(res => {
 				if (res.ok) {
 					const data = res.json();
@@ -1857,6 +1866,9 @@ async function saveConfig(e) {
 		tlsHost: document.getElementById('iTLSHost').value,
 		tlsCache: document.getElementById('iTLSCache').value,
 		serverName: document.getElementById('iServerName').value.trim(),
+		routerCheckTimeout: parseInt(document.getElementById('iRouterCheckTimeout').value) || 5,
+		routerCheckInterval: parseInt(document.getElementById('iRouterCheckInterval').value) || 60,
+		routerCacheTTL: parseInt(document.getElementById('iRouterCacheTTL').value) || 900,
 	};
 	const res = await xhr('POST', '/config/save', cfg);
 	if (res.ok) {
@@ -2012,6 +2024,12 @@ async function init() {
 	document.getElementById('wanInterface').value = cfg.wanInterface || '';
 	document.getElementById('iServerName').value = cfg.serverName || '';
 	applyServerName(cfg.serverName || '');
+	document.getElementById('iRouterCheckTimeout').value = cfg.routerCheckTimeout || 5;
+	document.getElementById('iRouterCheckInterval').value = cfg.routerCheckInterval || 60;
+	document.getElementById('iRouterCacheTTL').value = cfg.routerCacheTTL || 900;
+	routerCheckTimeout = (cfg.routerCheckTimeout || 5) * 1000;
+	routerCheckInterval = (cfg.routerCheckInterval || 60) * 1000;
+	routerCacheTTL = cfg.routerCacheTTL || 900;
 	document.getElementById('serverForm').addEventListener('submit', saveConfig);
 	await loadInterfaces();
 	await loadAmneziaStatus();
@@ -2050,7 +2068,7 @@ function startRouterCheck() {
 	if (routerCheckTimer) clearInterval(routerCheckTimer);
 	routerCheckTimer = setInterval(() => {
 		checkAllRouters();
-	}, 600000);
+	}, routerCheckInterval);
 	checkAllRouters();
 }
 

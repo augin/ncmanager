@@ -28,7 +28,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.12.35"
+const appVersion = "1.12.36"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
@@ -159,19 +159,22 @@ type Peer struct {
 }
 
 type Config struct {
-	WGPort        int    `json:"wgPort"`
-	HttpPort      int    `json:"httpPort"`
-	Interface     string `json:"interface"`
-	WanInterface  string `json:"wanInterface"`
-	Endpoint      string `json:"endpoint"`
-	DNS           string `json:"dns"`
-	Subnet        string `json:"subnet"`
-	PostUp        string `json:"postUp,omitempty"`
-	PostDown      string `json:"postDown,omitempty"`
-	TLSEnabled    bool   `json:"tlsEnabled,omitempty"`
-	TLSHost       string `json:"tlsHost,omitempty"`
-	TLSCache      string `json:"tlsCache,omitempty"`
-	ServerName    string `json:"serverName,omitempty"`
+	WGPort             int    `json:"wgPort"`
+	HttpPort           int    `json:"httpPort"`
+	Interface          string `json:"interface"`
+	WanInterface       string `json:"wanInterface"`
+	Endpoint           string `json:"endpoint"`
+	DNS                string `json:"dns"`
+	Subnet             string `json:"subnet"`
+	PostUp             string `json:"postUp,omitempty"`
+	PostDown           string `json:"postDown,omitempty"`
+	TLSEnabled         bool   `json:"tlsEnabled,omitempty"`
+	TLSHost            string `json:"tlsHost,omitempty"`
+	TLSCache           string `json:"tlsCache,omitempty"`
+	ServerName         string `json:"serverName,omitempty"`
+	RouterCheckTimeout int    `json:"routerCheckTimeout,omitempty"`
+	RouterCheckInterval int   `json:"routerCheckInterval,omitempty"`
+	RouterCacheTTL     int    `json:"routerCacheTTL,omitempty"`
 }
 
 var passwordHash string
@@ -207,6 +210,9 @@ func main() {
 		}
 	}
 	server.endpoint = resolveEndpoint(cfg.Endpoint)
+	if cfg.RouterCacheTTL > 0 {
+		routerCacheTTLSeconds = cfg.RouterCacheTTL
+	}
 
 	if cfg.HttpPort == 0 {
 		cfg.HttpPort = 8080
@@ -775,6 +781,9 @@ func (s *Server) getConfig(w http.ResponseWriter, r *http.Request) {
 		"postUp":      cfg.PostUp,
 		"postDown":    cfg.PostDown,
 		"serverName":  cfg.ServerName,
+		"routerCheckTimeout":  cfg.RouterCheckTimeout,
+		"routerCheckInterval": cfg.RouterCheckInterval,
+		"routerCacheTTL":      cfg.RouterCacheTTL,
 		"peers":       peersCfg.Peers,
 		"dnsRoutes":   routes,
 	})
@@ -835,6 +844,15 @@ func (s *Server) saveConfig(w http.ResponseWriter, r *http.Request) {
 	} else {
 		cfg.ServerName = ""
 	}
+	if v, ok := req["routerCheckTimeout"].(float64); ok && v > 0 {
+		cfg.RouterCheckTimeout = int(v)
+	}
+	if v, ok := req["routerCheckInterval"].(float64); ok && v > 0 {
+		cfg.RouterCheckInterval = int(v)
+	}
+	if v, ok := req["routerCacheTTL"].(float64); ok && v > 0 {
+		cfg.RouterCacheTTL = int(v)
+	}
 
 	if err := saveConfig(dataFile, cfg); err != nil {
 		s.mu.Unlock()
@@ -845,6 +863,10 @@ func (s *Server) saveConfig(w http.ResponseWriter, r *http.Request) {
 	s.iface = cfg.Interface
 	s.endpoint = cfg.Endpoint
 	s.mu.Unlock()
+
+	if cfg.RouterCacheTTL > 0 {
+		routerCacheTTLSeconds = cfg.RouterCacheTTL
+	}
 
 	peersCfg, _ := loadPeers()
 	if subnetChanged {
