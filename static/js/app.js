@@ -488,7 +488,7 @@ function updateRouterLed(peerId, routerDomain) {
 		led.title = 'Домен роутера не настроен';
 		return;
 	}
-	xhr('GET', '/peers/router-check/' + encodeURIComponent(peerId), null, { timeout: 10000 })
+	xhr('GET', '/peers/router-check/' + encodeURIComponent(peerId), null, { timeout: 5000 })
 		.then(res => {
 			if (res.ok) {
 				const data = res.json();
@@ -518,7 +518,7 @@ function checkAllRouters() {
 	for (const led of ledEls) {
 		if (!led.id || !led.id.startsWith('router-led-')) continue;
 		const peerId = led.id.replace('router-led-', '');
-		const p = xhr('GET', '/peers/router-check/' + encodeURIComponent(peerId), null, { timeout: 10000 })
+		const p = xhr('GET', '/peers/router-check/' + encodeURIComponent(peerId), null, { timeout: 5000 })
 			.then(res => {
 				if (res.ok) {
 					const data = res.json();
