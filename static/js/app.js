@@ -15,6 +15,7 @@ let activeElementCursorStart = null;
 let activeElementCursorEnd = null;
 let _keeneticPeerId = null;
 let routerCheckTimer = null;
+let routerCheckRunning = false;
 const THEME_KEY = 'ncmanager_theme';
 
 function getSystemTheme() {
@@ -143,7 +144,7 @@ function setToken(token) {
 	}
 }
 
-function xhr(method, path, body) {
+function xhr(method, path, body, options) {
 	return new Promise((resolve, reject) => {
 		const x = new XMLHttpRequest();
 		x.open(method, API + path, true);
@@ -151,6 +152,9 @@ function xhr(method, path, body) {
 		const token = getToken();
 		if (token) {
 			x.setRequestHeader('Authorization', 'Bearer ' + token);
+		}
+		if (options && options.timeout) {
+			x.timeout = options.timeout;
 		}
 		x.onreadystatechange = function() {
 			if (x.readyState !== 4) return;
@@ -167,6 +171,7 @@ function xhr(method, path, body) {
 				text: () => x.responseText
 			});
 		};
+		x.ontimeout = () => reject(new Error('Timeout'));
 		x.onerror = () => reject(new Error('Network error'));
 		x.send(body ? JSON.stringify(body) : null);
 	});
@@ -483,7 +488,7 @@ function updateRouterLed(peerId, routerDomain) {
 		led.title = 'Домен роутера не настроен';
 		return;
 	}
-	xhr('GET', '/peers/router-check/' + encodeURIComponent(peerId))
+	xhr('GET', '/peers/router-check/' + encodeURIComponent(peerId), null, { timeout: 10000 })
 		.then(res => {
 			if (res.ok) {
 				const data = res.json();
@@ -506,11 +511,14 @@ function updateRouterLed(peerId, routerDomain) {
 }
 
 function checkAllRouters() {
+	if (routerCheckRunning) return;
+	routerCheckRunning = true;
 	const ledEls = document.querySelectorAll('.led');
+	const promises = [];
 	for (const led of ledEls) {
 		if (!led.id || !led.id.startsWith('router-led-')) continue;
 		const peerId = led.id.replace('router-led-', '');
-		xhr('GET', '/peers/router-check/' + encodeURIComponent(peerId))
+		const p = xhr('GET', '/peers/router-check/' + encodeURIComponent(peerId), null, { timeout: 10000 })
 			.then(res => {
 				if (res.ok) {
 					const data = res.json();
@@ -530,7 +538,9 @@ function checkAllRouters() {
 				led.className = 'led led-gray';
 				led.title = 'Ошибка проверки';
 			});
+		promises.push(p);
 	}
+	Promise.allSettled(promises).then(() => { routerCheckRunning = false; });
 }
 
 function togglePwd(inputId, btn) {
