@@ -1891,31 +1891,28 @@ async function loadVersion() {
   } catch (e) {}
 }
 
-async function saveConfig(e) {
-	e.preventDefault();
+function switchSettingsTab(tab) {
+	document.getElementById('wgPanel').style.display = tab === 'wg' ? '' : 'none';
+	document.getElementById('generalPanel').style.display = tab === 'general' ? '' : 'none';
+	document.getElementById('settingsTabWg').className = tab === 'wg' ? 'btn btn-sm settings-tab active' : 'btn btn-sm btn-outline-primary settings-tab';
+	document.getElementById('settingsTabGeneral').className = tab === 'general' ? 'btn btn-sm settings-tab active' : 'btn btn-sm btn-outline-primary settings-tab';
+}
+
+async function saveWgConfig() {
 	try {
 	const cfg = {
 		interface: document.getElementById('iInterface').value,
 		wgPort: parseInt(document.getElementById('iPort').value),
-		httpPort: parseInt(document.getElementById('iHttpPort').value),
 		endpoint: document.getElementById('iEndpoint').value,
 		dns: document.getElementById('iDns').value,
 		subnet: document.getElementById('iSubnet').value,
 		wanInterface: document.getElementById('wanInterface').value,
 		postUp: document.getElementById('iPostUp').value,
 		postDown: document.getElementById('iPostDown').value,
-		tlsEnabled: document.getElementById('iTLSEnabled').checked,
-		tlsHost: document.getElementById('iTLSHost').value,
-		tlsCache: document.getElementById('iTLSCache').value,
-		serverName: document.getElementById('iServerName').value.trim(),
-		routerCheckTimeout: parseInt(document.getElementById('iRouterCheckTimeout').value) || 5,
-		routerCheckInterval: parseInt(document.getElementById('iRouterCheckInterval').value) || 60,
-		routerCacheTTL: parseInt(document.getElementById('iRouterCacheTTL').value) || 900,
 	};
 	const res = await xhr('POST', '/config/save', cfg);
 	if (res.ok) {
-		applyServerName(document.getElementById('iServerName').value.trim());
-		const btn = document.getElementById('saveConfigBtn');
+		const btn = document.getElementById('saveWgBtn');
 		if (btn) {
 			const oldText = btn.textContent;
 			btn.textContent = 'Сохранено';
@@ -1932,12 +1929,46 @@ async function saveConfig(e) {
 			const ip = cfg.interfaceIP || '';
 			interfaceIPEl.textContent = ip ? '(' + ip + ')' : '';
 		}
+	}
+  } catch (e) {
+    alert('Ошибка: ' + e.message);
+  }
+}
+
+async function saveGeneralConfig() {
+	try {
+	const cfg = {
+		serverName: document.getElementById('iServerName').value.trim(),
+		httpPort: parseInt(document.getElementById('iHttpPort').value),
+		tlsEnabled: document.getElementById('iTLSEnabled').checked,
+		tlsHost: document.getElementById('iTLSHost').value,
+		tlsCache: document.getElementById('iTLSCache').value,
+		routerCheckTimeout: parseInt(document.getElementById('iRouterCheckTimeout').value) || 5,
+		routerCheckInterval: parseInt(document.getElementById('iRouterCheckInterval').value) || 60,
+		routerCacheTTL: parseInt(document.getElementById('iRouterCacheTTL').value) || 900,
+	};
+	const res = await xhr('POST', '/config/save/general', cfg);
+	if (res.ok) {
+		applyServerName(cfg.serverName);
+		const btn = document.getElementById('saveGeneralBtn');
+		if (btn) {
+			const oldText = btn.textContent;
+			btn.textContent = 'Сохранено';
+			btn.classList.add('copied');
+			setTimeout(() => {
+				btn.textContent = oldText;
+				btn.classList.remove('copied');
+			}, 2000);
+		}
+		routerCheckTimeout = cfg.routerCheckTimeout * 1000;
+		routerCheckInterval = cfg.routerCheckInterval * 1000;
+		routerCacheTTL = cfg.routerCacheTTL;
 
 		if (cfg.httpPort && cfg.httpPort !== originalHttpPort) {
 			const msg = 'Порт веб-интерфейса будет применён после перезапуска сервиса. Перезапустить сейчас?';
 			if (confirm(msg)) {
 				try {
-					const restartBtn = document.getElementById('saveConfigBtn');
+					const restartBtn = document.getElementById('saveGeneralBtn');
 					if (restartBtn) {
 						restartBtn.textContent = 'Перезапуск...';
 						restartBtn.disabled = true;
@@ -2072,7 +2103,6 @@ async function init() {
 	routerCheckTimeout = (cfg.routerCheckTimeout || 5) * 1000;
 	routerCheckInterval = (cfg.routerCheckInterval || 60) * 1000;
 	routerCacheTTL = cfg.routerCacheTTL || 900;
-	document.getElementById('serverForm').addEventListener('submit', saveConfig);
 	await loadInterfaces();
 	await loadAmneziaStatus();
 	await loadPresets();

@@ -104,51 +104,62 @@
   </section>
 
     <section class="card" id="tab-settings" style="display:none">
-      <h2 class="card-title">Настройки WG сервера</h2>
-      <form id="serverForm" class="grid-form">
-        <label>Интерфейс<input id="iInterface" value="wg0"></label>
-        <label>Порт<input id="iPort" type="number" value="51820"></label>
-        <label>Endpoint<input id="iEndpoint" placeholder="AUTO"></label>
-        <label>DNS<input id="iDns" value="1.1.1.1"></label>
-        <label>Подсеть<input id="iSubnet" value="10.0.0.0/24" placeholder="10.0.0.0/24"></label>
-        <div class="form-section">
-          <label>PostUp (оставьте пустым для автогенерации)</label>
-          <textarea id="iPostUp" rows="2" class="form-textarea" placeholder="iptables ..."></textarea>
-        </div>
-        <div class="form-section">
-          <label>PostDown (оставьте пустым для автогенерации)</label>
-          <textarea id="iPostDown" rows="2" class="form-textarea" placeholder="iptables ..."></textarea>
-        </div>
+      <h2 class="card-title">Настройки</h2>
+      <div style="display:flex;gap:8px;margin-bottom:16px">
+        <button class="btn btn-sm settings-tab active" id="settingsTabWg" onclick="switchSettingsTab('wg')">WG сервер</button>
+        <button class="btn btn-sm btn-outline-primary settings-tab" id="settingsTabGeneral" onclick="switchSettingsTab('general')">Общие настройки</button>
+      </div>
 
-        <hr class="card-divider">
-
-        <div class="form-section">
-          <h3>HTTPS (Let's Encrypt)</h3>
-          <label class="toggle-switch" title="Включить HTTPS">
-            <input type="checkbox" id="iTLSEnabled">
-            <span class="toggle-slider"></span>
-          </label>
-          <label>Домен (TLS Host)<input id="iTLSHost" placeholder="example.com"></label>
-          <label>Папка кэша (TLS Cache)<input id="iTLSCache" placeholder="data/tls-cache"></label>
+      <div id="wgPanel">
+        <div class="grid-form">
+          <label>Интерфейс<input id="iInterface" value="wg0"></label>
+          <label>Порт<input id="iPort" type="number" value="51820"></label>
+          <label>Endpoint<input id="iEndpoint" placeholder="AUTO"></label>
+          <label>DNS<input id="iDns" value="1.1.1.1"></label>
+          <label>Подсеть<input id="iSubnet" value="10.0.0.0/24" placeholder="10.0.0.0/24"></label>
+          <div class="form-section">
+            <label>PostUp (оставьте пустым для автогенерации)</label>
+            <textarea id="iPostUp" rows="2" class="form-textarea" placeholder="iptables ..."></textarea>
+          </div>
+          <div class="form-section">
+            <label>PostDown (оставьте пустым для автогенерации)</label>
+            <textarea id="iPostDown" rows="2" class="form-textarea" placeholder="iptables ..."></textarea>
+          </div>
         </div>
-
-        <div class="form-section">
-          <h3>Настройки сервера</h3>
-          <label>Имя сервера<input id="iServerName" placeholder="NC Manager"></label>
-          <label>Порт веб-интерфейса<input id="iHttpPort" type="number" value="8080" min="1" max="65535"></label>
-        </div>
-
-        <div class="form-section">
-          <h3>Проверка роутеров</h3>
-          <label>Таймаут проверки (сек)<input id="iRouterCheckTimeout" type="number" min="1" max="60" value="5"></label>
-          <label>Интервал опроса (сек)<input id="iRouterCheckInterval" type="number" min="10" max="3600" value="60"></label>
-          <label>Время кеша (сек)<input id="iRouterCacheTTL" type="number" min="10" max="86400" value="900"></label>
-        </div>
-
         <div class="actions">
-          <button type="submit" id="saveConfigBtn" class="btn btn-primary">Сохранить</button>
+          <button type="button" id="saveWgBtn" class="btn btn-primary" onclick="saveWgConfig()">Сохранить WG</button>
         </div>
-      </form>
+      </div>
+
+      <div id="generalPanel" style="display:none">
+        <div class="grid-form">
+          <div class="form-section">
+            <h3>Настройки сервера</h3>
+            <label>Имя сервера<input id="iServerName" placeholder="NC Manager"></label>
+            <label>Порт веб-интерфейса<input id="iHttpPort" type="number" value="8080" min="1" max="65535"></label>
+          </div>
+
+          <div class="form-section">
+            <h3>HTTPS (Let's Encrypt)</h3>
+            <label class="toggle-switch" title="Включить HTTPS">
+              <input type="checkbox" id="iTLSEnabled">
+              <span class="toggle-slider"></span>
+            </label>
+            <label>Домен (TLS Host)<input id="iTLSHost" placeholder="example.com"></label>
+            <label>Папка кэша (TLS Cache)<input id="iTLSCache" placeholder="data/tls-cache"></label>
+          </div>
+
+          <div class="form-section">
+            <h3>Проверка роутеров</h3>
+            <label>Таймаут проверки (сек)<input id="iRouterCheckTimeout" type="number" min="1" max="60" value="5"></label>
+            <label>Интервал опроса (сек)<input id="iRouterCheckInterval" type="number" min="10" max="3600" value="60"></label>
+            <label>Время кеша (сек)<input id="iRouterCacheTTL" type="number" min="10" max="86400" value="900"></label>
+          </div>
+        </div>
+        <div class="actions">
+          <button type="button" id="saveGeneralBtn" class="btn btn-primary" onclick="saveGeneralConfig()">Сохранить</button>
+        </div>
+      </div>
     </section>
 
     <section class="card" id="tab-waniface" style="display:none">

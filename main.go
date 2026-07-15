@@ -28,7 +28,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.12.38"
+const appVersion = "1.13.0"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
@@ -299,6 +299,7 @@ func main() {
 	api.HandleFunc("/status", withAuth(server.getStatus))
 	api.HandleFunc("/config", withAuth(server.getConfig))
 	api.HandleFunc("/config/save", withAuth(server.saveConfig))
+	api.HandleFunc("/config/save/general", withAuth(server.saveGeneralConfig))
 	api.HandleFunc("/interfaces", withAuth(server.listInterfaces))
 	api.HandleFunc("/peers", withAuth(server.listPeers))
 	api.HandleFunc("/peers/add", withAuth(server.addPeer))
@@ -780,6 +781,9 @@ func (s *Server) getConfig(w http.ResponseWriter, r *http.Request) {
 		"interfaceIP": getInterfaceIP(cfg.Subnet),
 		"postUp":      cfg.PostUp,
 		"postDown":    cfg.PostDown,
+		"tlsEnabled":  cfg.TLSEnabled,
+		"tlsHost":     cfg.TLSHost,
+		"tlsCache":    cfg.TLSCache,
 		"serverName":  cfg.ServerName,
 		"routerCheckTimeout":  cfg.RouterCheckTimeout,
 		"routerCheckInterval": cfg.RouterCheckInterval,
@@ -838,6 +842,15 @@ func (s *Server) saveConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	if v, ok := req["endpoint"].(string); ok {
 		cfg.Endpoint = resolveEndpoint(v)
+	}
+	if v, ok := req["tlsEnabled"].(bool); ok {
+		cfg.TLSEnabled = v
+	}
+	if v, ok := req["tlsHost"].(string); ok {
+		cfg.TLSHost = strings.TrimSpace(v)
+	}
+	if v, ok := req["tlsCache"].(string); ok {
+		cfg.TLSCache = strings.TrimSpace(v)
 	}
 	if v, ok := req["serverName"].(string); ok && v != "" {
 		cfg.ServerName = strings.TrimSpace(v)
@@ -909,6 +922,63 @@ func (s *Server) saveConfig(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "interfaceIP": getInterfaceIP(cfg.Subnet)})
+}
+
+func (s *Server) saveGeneralConfig(w http.ResponseWriter, r *http.Request) {
+	var req map[string]any
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
+	}
+	s.mu.Lock()
+	cfg, _ := loadConfig(dataFile)
+	if cfg == nil {
+		cfg = &Config{}
+	}
+	if v, ok := req["serverName"].(string); ok && v != "" {
+		cfg.ServerName = strings.TrimSpace(v)
+	} else {
+		cfg.ServerName = ""
+	}
+	if v, ok := req["httpPort"].(float64); ok {
+		p := int(v)
+		if p < 1 || p > 65535 {
+			s.mu.Unlock()
+			http.Error(w, "invalid httpPort: must be 1-65535", http.StatusBadRequest)
+			return
+		}
+		cfg.HttpPort = p
+	}
+	if v, ok := req["tlsEnabled"].(bool); ok {
+		cfg.TLSEnabled = v
+	}
+	if v, ok := req["tlsHost"].(string); ok {
+		cfg.TLSHost = strings.TrimSpace(v)
+	}
+	if v, ok := req["tlsCache"].(string); ok {
+		cfg.TLSCache = strings.TrimSpace(v)
+	}
+	if v, ok := req["routerCheckTimeout"].(float64); ok && v > 0 {
+		cfg.RouterCheckTimeout = int(v)
+	}
+	if v, ok := req["routerCheckInterval"].(float64); ok && v > 0 {
+		cfg.RouterCheckInterval = int(v)
+	}
+	if v, ok := req["routerCacheTTL"].(float64); ok && v > 0 {
+		cfg.RouterCacheTTL = int(v)
+	}
+	if err := saveConfig(dataFile, cfg); err != nil {
+		s.mu.Unlock()
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	s.mu.Unlock()
+	if cfg.RouterCacheTTL > 0 {
+		routerCacheTTLSeconds = cfg.RouterCacheTTL
+	}
+	log.Printf("saveGeneralConfig: serverName=%s httpPort=%d", cfg.ServerName, cfg.HttpPort)
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
 
 func configureUfwRoutes(cfg *Config) error {
