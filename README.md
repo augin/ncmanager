@@ -33,9 +33,30 @@
 
 ## Установка
 
-### Deb-пакет (рекомендуется)
+### APT-репозиторий (рекомендуется)
 
-Скачайте последний `.deb` файл из [Releases](https://github.com/augin/ncmanager/releases) и установите:
+```bash
+# Импорт ключа
+curl -fsSL https://deb.augin.ru/signing-key.gpg | sudo gpg --dearmor \
+  -o /usr/share/keyrings/augin.gpg
+
+# Добавление репозитория
+echo "deb [signed-by=/usr/share/keyrings/augin.gpg] https://deb.augin.ru/ stable main" \
+  | sudo tee /etc/apt/sources.list.d/augin.list
+
+# Установка
+sudo apt update
+sudo apt install ncmanager
+```
+
+После установки автоматически обновляется при выходе новой версии:
+```bash
+sudo apt update && sudo apt upgrade ncmanager
+```
+
+### Deb-пакет вручную
+
+Скачайте последний `.deb` из [Releases](https://github.com/augin/ncmanager/releases):
 
 ```bash
 sudo dpkg -i ncmanager_<version>.deb
