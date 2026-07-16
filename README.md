@@ -37,11 +37,11 @@
 
 ```bash
 # Импорт ключа
-curl -fsSL https://deb.augin.ru/signing-key.gpg | sudo gpg --dearmor \
+curl -fsSL http://deb.augin.ru/signing-key.gpg | sudo gpg --dearmor \
   -o /usr/share/keyrings/augin.gpg
 
 # Добавление репозитория
-echo "deb [signed-by=/usr/share/keyrings/augin.gpg] https://deb.augin.ru/ stable main" \
+echo "deb [signed-by=/usr/share/keyrings/augin.gpg] http://deb.augin.ru/ stable main" \
   | sudo tee /etc/apt/sources.list.d/augin.list
 
 # Установка
