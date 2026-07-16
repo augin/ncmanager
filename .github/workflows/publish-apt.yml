@@ -3,6 +3,11 @@ name: Publish to APT Repository
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to publish"
+        required: true
 
 permissions:
   contents: read
@@ -22,7 +27,9 @@ jobs:
       - name: Download .deb from release
         run: |
           mkdir -p incoming
-          gh release download "${{ github.event.release.tag_name }}" \
+          TAG="${{ inputs.tag || github.event.release.tag_name }}"
+          echo "Downloading from tag: $TAG"
+          gh release download "$TAG" \
             --repo "${{ github.repository }}" \
             --pattern "*.deb" --dir incoming/
           ls -la incoming/
@@ -32,7 +39,9 @@ jobs:
       - name: Import GPG key
         run: |
           echo "$GPG_PRIVATE_KEY" | gpg --batch --import
-          echo "${KEY_ID}:6:" | gpg --batch --import-ownertrust --pinentry-mode=loopback
+          FINGERPRINT=$(gpg --list-keys --with-colons "$KEY_ID" | grep '^fpr' | head -1 | cut -d: -f10)
+          echo "Fingerprint: $FINGERPRINT"
+          echo "${FINGERPRINT}:6:" | gpg --batch --import-ownertrust --pinentry-mode=loopback
 
       - name: Clone APT repository
         run: |
@@ -102,5 +111,5 @@ jobs:
           cd apt-repo
           git add -A
           git diff --cached --quiet && echo "No changes" && exit 0
-          git commit -m "Update: ${{ github.event.release.tag_name }} — $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git commit -m "Update: ${{ inputs.tag || github.event.release.tag_name }} — $(date -u +%Y-%m-%dT%H:%M:%SZ)"
           git push "https://x-access-token:${{ secrets.APT_REPO_TOKEN }}@github.com/${{ env.APT_REPO }}.git" ${{ env.APT_BRANCH }}
