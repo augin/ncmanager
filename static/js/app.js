@@ -10,6 +10,7 @@ let peerSearch = '';
 let sortField = 'createdAt';
 let sortDir = 'asc';
 let expandedInputs = {};
+let forceRender = false;
 let activeElementId = null;
 let activeElementCursorStart = null;
 let activeElementCursorEnd = null;
@@ -352,6 +353,7 @@ function handleSort(field) {
 		sortField = field;
 		sortDir = 'asc';
 	}
+	forceRender = true;
 	scheduleRefresh();
 }
 
@@ -1783,7 +1785,7 @@ async function refresh() {
 				}
 			}
 		}
-		if (peersChanged && !editing) {
+		if ((peersChanged || forceRender) && !editing) {
 			saveExpandedInputs();
 			renderPeers(peers);
 			restoreExpandedInputs();
@@ -1797,6 +1799,7 @@ async function refresh() {
 				previousPeerSigs = new Map(peers.map(p => [p.id, peerSignature(p)]));
 			}
 		}
+		forceRender = false;
 		const badge = document.getElementById('statusBadge');
 		const btn = document.getElementById('btnToggle');
 		if (status.running) {
