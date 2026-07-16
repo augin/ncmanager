@@ -23,7 +23,12 @@ func (s *Server) createBackup(w http.ResponseWriter, r *http.Request) {
 
 	backupDir, _ := filepath.Abs(".")
 	timestamp := time.Now().Format("20060102-150405")
-	backupName := fmt.Sprintf("ncmanager-backup-%s.zip", timestamp)
+	cfg, _ := loadConfig(dataFile)
+	prefix := "ncmanager"
+	if cfg != nil && cfg.ServerName != "" {
+		prefix = strings.ToLower(strings.ReplaceAll(cfg.ServerName, " ", "-"))
+	}
+	backupName := fmt.Sprintf("%s-backup-%s.zip", prefix, timestamp)
 
 	w.Header().Set("Content-Type", "application/zip")
 	w.Header().Set("Content-Disposition", fmt.Sprintf("attachment; filename=%q", backupName))
