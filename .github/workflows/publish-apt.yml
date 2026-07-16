@@ -1,0 +1,106 @@
+name: Publish to APT Repository
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    env:
+      APT_REPO: augin/augin.github.io
+      APT_BRANCH: main
+      DISTRIBUTION: stable
+      COMPONENT: main
+      GPG_PRIVATE_KEY: ${{ secrets.APT_GPG_PRIVATE_KEY }}
+      KEY_ID: ${{ secrets.APT_GPG_KEY_ID }}
+
+    steps:
+      - name: Download .deb from release
+        run: |
+          mkdir -p incoming
+          gh release download "${{ github.event.release.tag_name }}" \
+            --repo "${{ github.repository }}" \
+            --pattern "*.deb" --dir incoming/
+          ls -la incoming/
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Import GPG key
+        run: |
+          echo "$GPG_PRIVATE_KEY" | gpg --batch --import
+          echo "${KEY_ID}:6:" | gpg --batch --import-ownertrust --pinentry-mode=loopback
+
+      - name: Clone APT repository
+        run: |
+          git clone "https://x-access-token:${{ secrets.APT_REPO_TOKEN }}@github.com/${{ env.APT_REPO }}.git" apt-repo
+          cd apt-repo
+          git config user.name "APT Bot"
+          git config user.email "apt@augin.ru"
+
+      - name: Add .deb to pool
+        run: |
+          cd apt-repo
+          mkdir -p pool/main
+
+          # Copy new .deb files
+          cp ../incoming/*.deb pool/main/ || true
+
+          # Prune old versions — keep last 4 per package
+          for PKG in $(ls pool/main/*.deb 2>/dev/null | xargs -n1 basename | cut -d'_' -f1 | sort -u); do
+            VERSIONS=$(ls pool/main/${PKG}_*.deb 2>/dev/null | xargs -n1 basename | cut -d'_' -f2 | sort -V | uniq)
+            COUNT=$(echo "$VERSIONS" | grep -c . || true)
+            if [ "$COUNT" -gt 4 ]; then
+              OLD=$(echo "$VERSIONS" | head -n -4)
+              for VER in $OLD; do
+                rm -f pool/main/${PKG}_${VER}_*.deb
+                echo "Pruned ${PKG}_${VER}"
+              done
+            fi
+          done
+
+          echo "--- Pool contents:"
+          ls -la pool/main/
+
+      - name: Generate Packages index
+        run: |
+          cd apt-repo
+          mkdir -p dists/${{ env.DISTRIBUTION }}/${{ env.COMPONENT }}/binary-amd64
+          apt-ftparchive --arch amd64 packages pool/main/ \
+            > dists/${{ env.DISTRIBUTION }}/${{ env.COMPONENT }}/binary-amd64/Packages
+          gzip -9fk dists/${{ env.DISTRIBUTION }}/${{ env.COMPONENT }}/binary-amd64/Packages
+
+      - name: Generate Release file
+        run: |
+          cd apt-repo
+          apt-ftparchive -c apt-release.conf release dists/${{ env.DISTRIBUTION }}/ \
+            > dists/${{ env.DISTRIBUTION }}/Release
+
+      - name: Sign repository
+        run: |
+          cd apt-repo
+
+          # InRelease (clearsigned)
+          gpg --yes --batch --pinentry-mode loopback --clearsign \
+            -o dists/${{ env.DISTRIBUTION }}/InRelease \
+            dists/${{ env.DISTRIBUTION }}/Release
+
+          # Release.gpg (detached)
+          gpg --yes --batch --pinentry-mode loopback --armor --detach-sign \
+            -o dists/${{ env.DISTRIBUTION }}/Release.gpg \
+            dists/${{ env.DISTRIBUTION }}/Release
+
+          # Export public key
+          gpg --yes --batch --export "${KEY_ID}" > signing-key.gpg
+          gpg --yes --batch --armor --export "${KEY_ID}" > signing-key.asc
+
+      - name: Push to APT repository
+        run: |
+          cd apt-repo
+          git add -A
+          git diff --cached --quiet && echo "No changes" && exit 0
+          git commit -m "Update: ${{ github.event.release.tag_name }} — $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git push "https://x-access-token:${{ secrets.APT_REPO_TOKEN }}@github.com/${{ env.APT_REPO }}.git" ${{ env.APT_BRANCH }}
