@@ -12,6 +12,10 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: apt-publish
+  cancel-in-progress: false
+
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -112,4 +116,5 @@ jobs:
           git add -A
           git diff --cached --quiet && echo "No changes" && exit 0
           git commit -m "Update: ${{ inputs.tag || github.event.release.tag_name }} — $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          git pull --rebase "https://x-access-token:${{ secrets.APT_REPO_TOKEN }}@github.com/${{ env.APT_REPO }}.git" ${{ env.APT_BRANCH }}
           git push "https://x-access-token:${{ secrets.APT_REPO_TOKEN }}@github.com/${{ env.APT_REPO }}.git" ${{ env.APT_BRANCH }}
