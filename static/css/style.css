@@ -649,8 +649,16 @@ main { max-width: 1366px; margin: 0 auto; padding: 24px; }
 }
 .filter-btn--active:hover {
   background: var(--color-accent-hover);
-  border-color: var(--color-accent-hover);
+  border-color: var(--color-accent);
   color: var(--color-accent-contrast, #ffffff);
+}
+.filter-btn .filter-count {
+  font-size: 0.72rem;
+  opacity: 0.7;
+  margin-left: 4px;
+}
+.filter-btn--active .filter-count {
+  opacity: 0.85;
 }
 
 table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }

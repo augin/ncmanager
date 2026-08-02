@@ -418,6 +418,11 @@ function renderPeers(peers) {
 	} else if (peerFilter === 'vpn') {
 		filtered = filtered.filter(p => p.vpnOnly);
 	}
+	const searchBase = query ? peers.filter(p => (p.name || '').toLowerCase().includes(query)) : peers;
+	const cntR = document.getElementById('filterRoutersCount');
+	const cntV = document.getElementById('filterVpnCount');
+	if (cntR) cntR.textContent = searchBase.filter(p => !p.vpnOnly).length;
+	if (cntV) cntV.textContent = searchBase.filter(p => p.vpnOnly).length;
 	const displayList = applySort(filtered);
 	const tbody = document.getElementById('peersTable');
 	if (!displayList.length) {

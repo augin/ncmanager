@@ -78,8 +78,8 @@
         <button onclick="addPeer()" class="btn btn-primary size-sm">+ Добавить</button>
       </div>
       <div class="peer-filters" id="peerFilters">
-        <button class="filter-btn" id="filterRouters" onclick="setPeerFilter('routers')">Роутеры</button>
-        <button class="filter-btn" id="filterVpn" onclick="setPeerFilter('vpn')">VPN</button>
+        <button class="filter-btn" id="filterRouters" onclick="setPeerFilter('routers')">Роутеры <span class="filter-count" id="filterRoutersCount"></span></button>
+        <button class="filter-btn" id="filterVpn" onclick="setPeerFilter('vpn')">VPN <span class="filter-count" id="filterVpnCount"></span></button>
       </div>
       <div id="peersTable"></div>
     </section>
