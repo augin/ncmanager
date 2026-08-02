@@ -467,7 +467,7 @@ function renderPeers(peers) {
 			<td colspan="10">
 				<div class="peer-details-content">
 					<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-						<input type="text" id="rn-${p.id}" value="${escapeHtml(p.name)}" placeholder="Имя пира" class="peer-name-input" style="flex:1;min-width:200px;margin-bottom:0" onkeydown="if(event.key==='Enter')savePeerRouter('${p.id}')">
+						<input type="text" id="rn-${p.id}" value="${escapeHtml(p.name)}" placeholder="Имя пира" class="peer-name-input" style="flex:0 0 auto;width:320px;max-width:100%;margin-bottom:0" onkeydown="if(event.key==='Enter')savePeerRouter('${p.id}')">
 						<label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:0;white-space:nowrap"><input type='checkbox' id='rvpn-${p.id}' ${p.vpnOnly ? 'checked' : ''} onchange="toggleVpnOnly('${p.id}', this.checked)" style="position:absolute;opacity:0;width:0;height:0"><span class="paid-indicator ${p.vpnOnly ? 'paid-indicator--on' : 'paid-indicator--off'}"></span><span class="paid-label">Только VPN</span></label>
 					</div>
 					<div class="grid-form">
