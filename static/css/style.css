@@ -965,9 +965,34 @@ code {
 	font-weight: 700;
 }
 .paid-label {
-	font-size: 0.8rem;
-	color: var(--color-text-muted);
-	margin-left: 6px;
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  margin-left: 6px;
+}
+
+.vpn-only-check {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  white-space: nowrap;
+  margin: 0;
+}
+.vpn-only-check input[type='checkbox'] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--color-accent);
+  flex-shrink: 0;
+}
+.vpn-only-label {
+  font-size: 0.85rem;
+  color: var(--color-text-muted);
+  user-select: none;
+}
+.vpn-only-check:hover .vpn-only-label {
+  color: var(--color-text-primary);
 }
 
 .paid-indicator-row {

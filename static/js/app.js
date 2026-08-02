@@ -467,8 +467,8 @@ function renderPeers(peers) {
 			<td colspan="10">
 				<div class="peer-details-content">
 					<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
-						<input type="text" id="rn-${p.id}" value="${escapeHtml(p.name)}" placeholder="Имя пира" class="peer-name-input" style="flex:0 0 auto;width:320px;max-width:100%;margin-bottom:0" onkeydown="if(event.key==='Enter')savePeerRouter('${p.id}')">
-						<label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:0;white-space:nowrap"><input type='checkbox' id='rvpn-${p.id}' ${p.vpnOnly ? 'checked' : ''} onchange="toggleVpnOnly('${p.id}', this.checked)" style="position:absolute;opacity:0;width:0;height:0"><span class="paid-indicator ${p.vpnOnly ? 'paid-indicator--on' : 'paid-indicator--off'}"></span><span class="paid-label">Только VPN</span></label>
+						<input type="text" id="rn-${p.id}" value="${escapeHtml(p.name)}" placeholder="Имя пира" class="peer-name-input" size="${Math.max((p.name || '').length + 2, 10)}" style="width:auto;flex:0 0 auto;margin-bottom:0" onkeydown="if(event.key==='Enter')savePeerRouter('${p.id}')">
+						<label class="vpn-only-check"><input type='checkbox' id='rvpn-${p.id}' ${p.vpnOnly ? 'checked' : ''} onchange="toggleVpnOnly('${p.id}', this.checked)"><span class="vpn-only-label">Только VPN</span></label>
 					</div>
 					<div class="grid-form">
 						<div id="router-creds-${p.id}" style="display:${p.vpnOnly ? 'none' : 'contents'}">
@@ -738,22 +738,15 @@ async function togglePeerPaid(id, checked) {
 
 async function toggleVpnOnly(id, checked) {
 	const creds = document.getElementById('router-creds-' + id);
-	const indicator = document.querySelector('label:has(#rvpn-' + id + ') .paid-indicator');
 	try {
 		await xhr('POST', '/peers/update', {
 			id: id,
 			vpnOnly: checked,
 		});
 		if (creds) creds.style.display = checked ? 'none' : 'contents';
-		if (indicator) {
-			indicator.className = 'paid-indicator ' + (checked ? 'paid-indicator--on' : 'paid-indicator--off');
-		}
 	} catch (e) {
 		const el = document.getElementById('rvpn-' + id);
 		if (el) el.checked = !checked;
-		if (indicator) {
-			indicator.className = 'paid-indicator ' + (!checked ? 'paid-indicator--on' : 'paid-indicator--off');
-		}
 		alert('Ошибка обновления статуса');
 	}
 }
