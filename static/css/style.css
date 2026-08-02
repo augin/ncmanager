@@ -978,6 +978,30 @@ code {
   white-space: nowrap;
   margin: 0;
 }
+.peer-details-content label.vpn-only-check,
+.peer-details-content label.check-row {
+  display: inline-flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  white-space: nowrap;
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--color-text-secondary);
+}
+.peer-details-content label.vpn-only-check input {
+  margin: 0;
+  padding: 0;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+}
+.peer-details-content label.check-row .paid-indicator {
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+}
 .vpn-only-check input[type='checkbox'] {
   width: 16px;
   height: 16px;
