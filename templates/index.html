@@ -77,6 +77,10 @@
         <input type="text" id="peerName" class="peer-search" placeholder="Поиск или имя пира" oninput="onPeerSearchChange(this.value)">
         <button onclick="addPeer()" class="btn btn-primary size-sm">+ Добавить</button>
       </div>
+      <div class="peer-filters" id="peerFilters">
+        <button class="filter-btn" id="filterRouters" onclick="setPeerFilter('routers')">Роутеры</button>
+        <button class="filter-btn" id="filterVpn" onclick="setPeerFilter('vpn')">VPN</button>
+      </div>
       <div id="peersTable"></div>
     </section>
 

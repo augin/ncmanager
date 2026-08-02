@@ -7,6 +7,7 @@ let previousPeerSigs = new Map();
 let refreshTimer = null;
 let expandedPeers = new Set();
 let peerSearch = '';
+let peerFilter = '';
 let sortField = 'createdAt';
 let sortDir = 'asc';
 let expandedInputs = {};
@@ -324,6 +325,16 @@ function onPeerSearchChange(value) {
 	}, 300);
 }
 
+function setPeerFilter(f) {
+	peerFilter = (peerFilter === f) ? '' : f;
+	const btnR = document.getElementById('filterRouters');
+	const btnV = document.getElementById('filterVpn');
+	if (btnR) btnR.classList.toggle('filter-btn--active', peerFilter === 'routers');
+	if (btnV) btnV.classList.toggle('filter-btn--active', peerFilter === 'vpn');
+	forceRender = true;
+	scheduleRefresh();
+}
+
 function applySort(arr) {
 	if (!sortField) return arr;
 	const sorted = [...arr];
@@ -401,11 +412,17 @@ function editCreatedAt(peerId, cell) {
 
 function renderPeers(peers) {
 	const query = peerSearch.trim().toLowerCase();
-	const filtered = query ? peers.filter(p => (p.name || '').toLowerCase().includes(query)) : peers;
+	let filtered = query ? peers.filter(p => (p.name || '').toLowerCase().includes(query)) : peers;
+	if (peerFilter === 'routers') {
+		filtered = filtered.filter(p => p.routerDomain && p.routerLogin && p.routerPassword);
+	} else if (peerFilter === 'vpn') {
+		filtered = filtered.filter(p => p.vpnOnly);
+	}
 	const displayList = applySort(filtered);
 	const tbody = document.getElementById('peersTable');
 	if (!displayList.length) {
-		tbody.innerHTML = query ? '<p style="color:#64748b;padding:12px">Нет совпадений</p>' : '<p style="color:#64748b;padding:12px">Нет пиров</p>';
+		const filterLabel = peerFilter === 'routers' ? 'Нет пиров с роутером' : (peerFilter === 'vpn' ? 'Нет пиров «Только VPN»' : '');
+		tbody.innerHTML = '<p style="color:#64748b;padding:12px">' + (filterLabel || (query ? 'Нет совпадений' : 'Нет пиров')) + '</p>';
 		return;
 	}
 	let html = '<table><thead><tr><th></th><th onclick="handleSort(\'name\')" style="cursor:pointer">Имя <span class="sort-indicator" data-field="name"></span></th><th>IP</th><th onclick="handleSort(\'createdAt\')" style="cursor:pointer">Создан <span class="sort-indicator" data-field="createdAt"></span></th><th>Handshake</th><th>Endpoint</th><th onclick="handleSort(\'traffic\')" style="cursor:pointer">Трафик <span class="sort-indicator" data-field="traffic"></span></th><th>Оплата</th><th>Действия</th><th></th></tr></thead><tbody>';
@@ -449,11 +466,16 @@ function renderPeers(peers) {
 		<tr id="details-${p.id}" class="peer-details" style="display:${isExpanded ? '' : 'none'}">
 			<td colspan="10">
 				<div class="peer-details-content">
-					<input type="text" id="rn-${p.id}" value="${escapeHtml(p.name)}" placeholder="Имя пира" class="peer-name-input" onkeydown="if(event.key==='Enter')savePeerRouter('${p.id}')">
+					<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+						<input type="text" id="rn-${p.id}" value="${escapeHtml(p.name)}" placeholder="Имя пира" class="peer-name-input" style="flex:1;min-width:200px;margin-bottom:0" onkeydown="if(event.key==='Enter')savePeerRouter('${p.id}')">
+						<label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer;margin-bottom:0;white-space:nowrap"><input type='checkbox' id='rvpn-${p.id}' ${p.vpnOnly ? 'checked' : ''} onchange="toggleVpnOnly('${p.id}', this.checked)" style="position:absolute;opacity:0;width:0;height:0"><span class="paid-indicator ${p.vpnOnly ? 'paid-indicator--on' : 'paid-indicator--off'}"></span><span class="paid-label">Только VPN</span></label>
+					</div>
 					<div class="grid-form">
+						<div id="router-creds-${p.id}" style="display:${p.vpnOnly ? 'none' : 'contents'}">
 						<label>Домен<input id="rd-${p.id}" value="${escapeHtml(p.routerDomain || '')}" placeholder="router.local"></label>
 						<label>Логин<input id="rl-${p.id}" value="${escapeHtml(p.routerLogin || '')}" placeholder="admin"></label>
- <label>Пароль<span class="pwd-wrap"><input type='password' id='rp-${p.id}' value='${escapeHtml(p.routerPassword || '')}' placeholder='••••••'><button type='button' class='pwd-toggle' onclick="togglePwd('rp-${p.id}', this)" title="Показать/скрыть">👁</button></span></label>
+  <label>Пароль<span class="pwd-wrap"><input type='password' id='rp-${p.id}' value='${escapeHtml(p.routerPassword || '')}' placeholder='••••••'><button type='button' class='pwd-toggle' onclick="togglePwd('rp-${p.id}', this)" title="Показать/скрыть">👁</button></span></label>
+  						</div>
  						<label style="display:inline-flex;align-items:center;gap:6px;margin-left:12px;cursor:pointer"><input type='checkbox' id='rpaid-${p.id}' class="paid-input" ${p.paid ? 'checked' : ''} onchange="togglePeerPaid('${p.id}', this.checked)" style="position:absolute;opacity:0;width:0;height:0"><span class="paid-indicator ${p.paid ? 'paid-indicator--on' : 'paid-indicator--off'}"></span><span class="paid-label">Оплачено</span></label>
  						<p id="routerStatus-${p.id}" style="grid-column:1/-1;color:#059669;font-size:0.85rem"></p>
   						<label style="grid-column:1/-1">Описание<textarea id='rdesc-${p.id}' rows="4" style="width:100%;padding:6px;border-radius:4px;background:var(--color-bg-primary);color:var(--color-text-primary);border:1px solid var(--color-border);font-family:var(--font-sans);font-size:0.85rem;resize:vertical;min-height:100px" placeholder='Комментарий'>${escapeHtml(p.description || '')}</textarea></label>
@@ -711,6 +733,28 @@ async function togglePeerPaid(id, checked) {
 			indicator.className = 'paid-indicator ' + (!checked ? 'paid-indicator--on' : 'paid-indicator--off');
 		}
 		alert('Ошибка обновления статуса оплаты');
+	}
+}
+
+async function toggleVpnOnly(id, checked) {
+	const creds = document.getElementById('router-creds-' + id);
+	const indicator = document.querySelector('label:has(#rvpn-' + id + ') .paid-indicator');
+	try {
+		await xhr('POST', '/peers/update', {
+			id: id,
+			vpnOnly: checked,
+		});
+		if (creds) creds.style.display = checked ? 'none' : 'contents';
+		if (indicator) {
+			indicator.className = 'paid-indicator ' + (checked ? 'paid-indicator--on' : 'paid-indicator--off');
+		}
+	} catch (e) {
+		const el = document.getElementById('rvpn-' + id);
+		if (el) el.checked = !checked;
+		if (indicator) {
+			indicator.className = 'paid-indicator ' + (!checked ? 'paid-indicator--on' : 'paid-indicator--off');
+		}
+		alert('Ошибка обновления статуса');
 	}
 }
 
@@ -1755,7 +1799,7 @@ function peerSignature(p) {
 	return [
 		p.name, p.allowedIPs, p.endpoint, p.createdAt, p.paid,
 		p.routerDomain, p.routerLogin, p.routerPassword,
-		p.routerIfName, p.vpnActive, p.description,
+		p.routerIfName, p.vpnActive, p.description, p.vpnOnly,
 	].join('|');
 }
 

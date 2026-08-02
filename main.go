@@ -28,7 +28,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.13.5"
+const appVersion = "1.14.0"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
@@ -156,6 +156,7 @@ type Peer struct {
 	RouterIfName   string    `json:"routerIfName,omitempty"`
 	Paid           bool      `json:"paid,omitempty"`
 	VPNActive      bool      `json:"vpnActive,omitempty"`
+	VPNOnly        bool      `json:"vpnOnly,omitempty"`
 }
 
 type Config struct {
@@ -1126,6 +1127,7 @@ func (s *Server) updatePeer(w http.ResponseWriter, r *http.Request) {
 		RouterPassword string `json:"routerPassword"`
 		Description    string `json:"description"`
 		Paid           *bool  `json:"paid"`
+		VPNOnly        *bool  `json:"vpnOnly"`
 		CreatedAt      string `json:"createdAt"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
@@ -1175,6 +1177,9 @@ func (s *Server) updatePeer(w http.ResponseWriter, r *http.Request) {
 			}
 			if req.Paid != nil {
 				peersCfg.Peers[i].Paid = *req.Paid
+			}
+			if req.VPNOnly != nil {
+				peersCfg.Peers[i].VPNOnly = *req.VPNOnly
 			}
 			if req.CreatedAt != "" {
 				if t, err := time.Parse(time.RFC3339, req.CreatedAt); err == nil {
