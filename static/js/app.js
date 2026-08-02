@@ -469,6 +469,7 @@ function renderPeers(peers) {
 					<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
 						<input type="text" id="rn-${p.id}" value="${escapeHtml(p.name)}" placeholder="Имя пира" class="peer-name-input" size="${Math.max((p.name || '').length + 2, 10)}" style="width:auto;flex:0 0 auto;margin-bottom:0" onkeydown="if(event.key==='Enter')savePeerRouter('${p.id}')">
 						<label class="vpn-only-check"><input type='checkbox' id='rvpn-${p.id}' ${p.vpnOnly ? 'checked' : ''} onchange="toggleVpnOnly('${p.id}', this.checked)"><span class="vpn-only-label">Только VPN</span></label>
+ 						<label class="check-row"><input type='checkbox' id='rpaid-${p.id}' class="paid-input" ${p.paid ? 'checked' : ''} onchange="togglePeerPaid('${p.id}', this.checked)"><span class="paid-indicator ${p.paid ? 'paid-indicator--on' : 'paid-indicator--off'}"></span><span class="paid-label">Оплачено</span></label>
 					</div>
 					<div class="grid-form">
 						<div id="router-creds-${p.id}" style="display:${p.vpnOnly ? 'none' : 'contents'}">
@@ -476,8 +477,7 @@ function renderPeers(peers) {
 						<label>Логин<input id="rl-${p.id}" value="${escapeHtml(p.routerLogin || '')}" placeholder="admin"></label>
   <label>Пароль<span class="pwd-wrap"><input type='password' id='rp-${p.id}' value='${escapeHtml(p.routerPassword || '')}' placeholder='••••••'><button type='button' class='pwd-toggle' onclick="togglePwd('rp-${p.id}', this)" title="Показать/скрыть">👁</button></span></label>
   						</div>
- 						<label class="check-row" style="margin-left:12px"><input type='checkbox' id='rpaid-${p.id}' class="paid-input" ${p.paid ? 'checked' : ''} onchange="togglePeerPaid('${p.id}', this.checked)"><span class="paid-indicator ${p.paid ? 'paid-indicator--on' : 'paid-indicator--off'}"></span><span class="paid-label">Оплачено</span></label>
- 						<p id="routerStatus-${p.id}" style="grid-column:1/-1;color:#059669;font-size:0.85rem"></p>
+  						<p id="routerStatus-${p.id}" style="grid-column:1/-1;color:#059669;font-size:0.85rem"></p>
   						<label style="grid-column:1/-1">Описание<textarea id='rdesc-${p.id}' rows="4" style="width:100%;padding:6px;border-radius:4px;background:var(--color-bg-primary);color:var(--color-text-primary);border:1px solid var(--color-border);font-family:var(--font-sans);font-size:0.85rem;resize:vertical;min-height:100px" placeholder='Комментарий'>${escapeHtml(p.description || '')}</textarea></label>
   					</div>
     					<button id="saveRouterBtn-${p.id}" onclick="savePeerRouter('${p.id}')" class="btn btn-secondary" style="margin-top:8px">Сохранить</button>
