@@ -319,6 +319,7 @@ function onPeerSearchChange(value) {
 	peerSearch = value.trim();
 	if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
 	searchDebounceTimer = setTimeout(() => {
+		forceRender = true;
 		scheduleRefresh();
 	}, 300);
 }
