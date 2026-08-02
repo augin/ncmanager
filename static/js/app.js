@@ -414,14 +414,14 @@ function renderPeers(peers) {
 	const query = peerSearch.trim().toLowerCase();
 	let filtered = query ? peers.filter(p => (p.name || '').toLowerCase().includes(query)) : peers;
 	if (peerFilter === 'routers') {
-		filtered = filtered.filter(p => p.routerDomain && p.routerLogin && p.routerPassword);
+		filtered = filtered.filter(p => !p.vpnOnly);
 	} else if (peerFilter === 'vpn') {
 		filtered = filtered.filter(p => p.vpnOnly);
 	}
 	const displayList = applySort(filtered);
 	const tbody = document.getElementById('peersTable');
 	if (!displayList.length) {
-		const filterLabel = peerFilter === 'routers' ? 'Нет пиров с роутером' : (peerFilter === 'vpn' ? 'Нет пиров «Только VPN»' : '');
+		const filterLabel = peerFilter === 'routers' ? 'Все пиры помечены «Только VPN»' : (peerFilter === 'vpn' ? 'Нет пиров «Только VPN»' : '');
 		tbody.innerHTML = '<p style="color:#64748b;padding:12px">' + (filterLabel || (query ? 'Нет совпадений' : 'Нет пиров')) + '</p>';
 		return;
 	}
