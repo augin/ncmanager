@@ -1587,90 +1587,45 @@ async function toggleDnsRoute(id) {
   }
 }
 
-async function applyDnsRoutes() {
-	if (!confirm('Настроить DNS на всех роутерах?')) return;
-	let poll = null;
-    try {
-    	const btn = event.target;
-    	const oldText = btn.textContent;
-    	btn.textContent = 'Применение...';
-    	btn.disabled = true;
-    	const log = document.getElementById('routerLog');
-    	const closeBtn = document.getElementById('routerCloseBtn');
-    	const dlBtn = document.getElementById('keeneticDownloadBtn');
-    	if (log) {
-    		log.textContent = 'Применение DNS маршрутов...\n';
-    		log.scrollTop = log.scrollHeight;
-    	}
-    	if (closeBtn) closeBtn.style.display = 'none';
-    	if (dlBtn) dlBtn.style.display = 'none';
-	closeAllModals();
-	document.getElementById('routerModal').classList.add('show');
-    	if (log) log.style.display = '';
-
-    	const startRes = await xhr('POST', '/dns/routes/apply');
-    	if (!startRes.ok) {
-    		if (log) log.textContent += '❌ Ошибка запуска: ' + (await startRes.text()) + '\n';
-    		if (closeBtn) closeBtn.style.display = '';
-    		if (dlBtn) dlBtn.style.display = '';
-    		btn.textContent = oldText;
-    		btn.disabled = false;
-    		return;
-    	}
-
-    	let pollCount = 0;
-    	poll = setInterval(async () => {
-    		pollCount++;
-    		try {
-    			const statusRes = await xhr('GET', '/dns/apply/status');
-    			if (statusRes.ok) {
-    				const data = await statusRes.json();
-    				if (log && data.log) {
-    					log.textContent = data.log;
-    					log.scrollTop = log.scrollHeight;
-    				}
-    				if (data.status === 'completed' || data.status === 'failed') {
-    					clearInterval(poll);
-    					if (closeBtn) closeBtn.style.display = '';
-    					if (dlBtn) dlBtn.style.display = '';
-    					btn.textContent = oldText;
-    					btn.disabled = false;
-    					if (data.status === 'failed' && log) {
-    						log.textContent += '\n❌ Завершено с ошибками\n';
-    					}
-    				}
-    			}
-    		} catch (e) {
-    			console.error('poll error:', e);
-    		}
-    		if (pollCount > 120) {
-    			clearInterval(poll);
-    			if (log) log.textContent += '\n⏰ Таймаут ожидания\n';
-    			if (closeBtn) closeBtn.style.display = '';
-    			if (dlBtn) dlBtn.style.display = '';
-    			btn.textContent = oldText;
-    			btn.disabled = false;
-    		}
-    	}, 500);
-    } catch (e) {
-    	if (poll) clearInterval(poll);
-    	const log = document.getElementById('routerLog');
-    	if (log) log.textContent += '❌ Ошибка: ' + e.message + '\n';
-    	const closeBtn = document.getElementById('routerCloseBtn');
-    	if (closeBtn) closeBtn.style.display = '';
-    	const dlBtn2 = document.getElementById('keeneticDownloadBtn');
-    	if (dlBtn2) dlBtn2.style.display = '';
-    	const btn = event.target;
-    	if (btn) {
-    		btn.textContent = 'Настроить DNS';
-    		btn.disabled = false;
-    	}
-    }
-}
-
 async function loadDnsRoutesList() {
   const res = await xhr('GET', '/dns/routes');
   return res.json();
+}
+
+async function exportDnsRoutes() {
+  try {
+    const res = await xhr('GET', '/dns/routes/export');
+    if (!res.ok) {
+      alert('Ошибка экспорта: ' + (await res.text()));
+      return;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'dns-routes.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert('Ошибка экспорта: ' + e.message);
+  }
+}
+
+async function importDnsRoutes(file) {
+  try {
+    const fd = new FormData();
+    fd.append('file', file);
+    const res = await xhr('POST', '/dns/routes/import', fd);
+    if (!res.ok) {
+      alert('Ошибка импорта: ' + (await res.text()));
+      return;
+    }
+    const data = await res.json();
+    alert('Импортировано маршрутов: ' + data.count);
+    loadDnsRoutes();
+  } catch (e) {
+    alert('Ошибка импорта: ' + e.message);
+  }
 }
 
 function showAddDnsRoute() {

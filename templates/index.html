@@ -89,7 +89,9 @@
         <h2 class="card-title">DNS маршрутизация</h2>
         <div class="dns-actions">
           <button onclick="showAddDnsRoute()" class="btn btn-outline-primary">+ Новый маршрут</button>
-          <button onclick="applyDnsRoutes()" class="btn btn-secondary">Настроить DNS на всех роутерах</button>
+          <button onclick="exportDnsRoutes()" class="btn btn-secondary">⬇ Экспорт</button>
+          <button onclick="document.getElementById('importDnsFile').click()" class="btn btn-secondary">⬆ Импорт</button>
+          <input type="file" id="importDnsFile" accept=".json" style="display:none" onchange="if(this.files[0]) importDnsRoutes(this.files[0])">
         </div>
       </div>
       <div class="dns-section">

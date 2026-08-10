@@ -28,7 +28,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.14.9"
+const appVersion = "1.15.0"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
@@ -305,6 +305,8 @@ func main() {
 	api.HandleFunc("/dns/routes/create", withAuth(server.createDnsRoute))
 	api.HandleFunc("/dns/routes/update", withAuth(server.updateDnsRoute))
 	api.HandleFunc("/dns/routes/delete", withAuth(server.deleteDnsRoute))
+	api.HandleFunc("/dns/routes/export", withAuth(server.exportDnsRoutes))
+	api.HandleFunc("/dns/routes/import", withAuth(server.importDnsRoutes))
 	api.HandleFunc("/dns/routes/apply", withAuth(server.applyDnsRoutesToRouter))
 	api.HandleFunc("/dns/apply/status", withAuth(server.getDnsApplyStatus))
 	api.HandleFunc("/presets/dns-routes", withAuth(server.getDnsRoutePresets))
