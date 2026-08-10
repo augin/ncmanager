@@ -28,7 +28,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.14.6"
+const appVersion = "1.14.7"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
@@ -1097,6 +1097,8 @@ func (s *Server) removePeer(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	publicKeyToRemove := peerToRemove.PublicKey
+
 	filtered := peersCfg.Peers[:0]
 	for _, p := range peersCfg.Peers {
 		if p.ID != req.ID {
@@ -1110,7 +1112,7 @@ func (s *Server) removePeer(w http.ResponseWriter, r *http.Request) {
 	cfg, _ := loadConfig(dataFile)
 	_ = generateWgConfig(cfg, peersCfg.Peers)
 
-	if err := syncconfRemovePeer(peerToRemove.PublicKey); err != nil {
+	if err := syncconfRemovePeer(publicKeyToRemove); err != nil {
 		log.Printf("removePeer: syncconf failed: %v", err)
 	}
 
