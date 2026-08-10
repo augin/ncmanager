@@ -185,7 +185,6 @@ function xhr(method, path, body, options) {
 	return new Promise((resolve, reject) => {
 		const x = new XMLHttpRequest();
 		x.open(method, API + path, true);
-		x.setRequestHeader('Content-Type', 'application/json');
 		const token = getToken();
 		if (token) {
 			x.setRequestHeader('Authorization', 'Bearer ' + token);
@@ -205,12 +204,18 @@ function xhr(method, path, body, options) {
 				ok: x.status >= 200 && x.status < 300,
 				status: x.status,
 				json: () => { try { return JSON.parse(x.responseText); } catch(e) { return {}; } },
-				text: () => x.responseText
+				text: () => x.responseText,
+				blob: () => new Blob([x.response])
 			});
 		};
 		x.ontimeout = () => reject(new Error('Timeout'));
 		x.onerror = () => reject(new Error('Network error'));
-		x.send(body ? JSON.stringify(body) : null);
+		if (!(body instanceof FormData)) {
+			x.setRequestHeader('Content-Type', 'application/json');
+			x.send(body ? JSON.stringify(body) : null);
+		} else {
+			x.send(body);
+		}
 	});
 }
 
