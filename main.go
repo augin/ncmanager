@@ -28,7 +28,7 @@ import (
 	"golang.org/x/crypto/acme/autocert"
 )
 
-const appVersion = "1.14.8"
+const appVersion = "1.14.9"
 const dataFile = "data/config.json"
 const peersFile = "data/peers.json"
 const dnsRoutesFile = "data/dns-routes.json"
@@ -223,24 +223,6 @@ func main() {
 	if cfg.WanInterface == "" {
 		cfg.WanInterface = detectDefaultWan()
 		_ = saveConfig(dataFile, cfg)
-	}
-
-	if cfg.PostUp == "" || cfg.PostDown == "" {
-		if data, err := os.ReadFile(wgConfigFile); err == nil {
-			lines := strings.Split(string(data), "\n")
-			for _, line := range lines {
-				line = strings.TrimSpace(line)
-				if strings.HasPrefix(line, "PostUp = ") && cfg.PostUp == "" {
-					cfg.PostUp = strings.TrimSpace(strings.TrimPrefix(line, "PostUp = "))
-				}
-				if strings.HasPrefix(line, "PostDown = ") && cfg.PostDown == "" {
-					cfg.PostDown = strings.TrimSpace(strings.TrimPrefix(line, "PostDown = "))
-				}
-			}
-			if cfg.PostUp != "" || cfg.PostDown != "" {
-				_ = saveConfig(dataFile, cfg)
-			}
-		}
 	}
 
 	peersCfg, err := loadPeers()
@@ -780,8 +762,8 @@ func (s *Server) getConfig(w http.ResponseWriter, r *http.Request) {
 		"dns":         cfg.DNS,
 		"subnet":      cfg.Subnet,
 		"interfaceIP": getInterfaceIP(cfg.Subnet),
-		"postUp":      cfg.PostUp,
-		"postDown":    cfg.PostDown,
+		"postUp":      autogenPostUp(cfg.WanInterface, cfg.WGPort),
+		"postDown":    autogenPostDown(cfg.WanInterface, cfg.WGPort),
 		"tlsEnabled":  cfg.TLSEnabled,
 		"tlsHost":     cfg.TLSHost,
 		"tlsCache":    cfg.TLSCache,
@@ -835,12 +817,8 @@ func (s *Server) saveConfig(w http.ResponseWriter, r *http.Request) {
 			subnetChanged = true
 		}
 	}
-	if v, ok := req["postUp"].(string); ok {
-		cfg.PostUp = v
-	}
-	if v, ok := req["postDown"].(string); ok {
-		cfg.PostDown = v
-	}
+	cfg.PostUp = ""
+	cfg.PostDown = ""
 	if v, ok := req["endpoint"].(string); ok {
 		cfg.Endpoint = resolveEndpoint(v)
 	}
@@ -2069,6 +2047,20 @@ func toSyncconfConfig(cfg string) string {
 		}
 	}
 	return b.String()
+}
+
+func autogenPostUp(wanIface string, wgPort int) string {
+	if wanIface == "" {
+		wanIface = "eth0"
+	}
+	return fmt.Sprintf("iptables -A INPUT -p udp --dport %d -j ACCEPT || true; iptables -A FORWARD -i %s -o %%i -j ACCEPT || true; iptables -A FORWARD -i %%i -j ACCEPT || true; iptables -t nat -A POSTROUTING -o %s -j MASQUERADE || true; ip route add default dev %s table 110 || true; ip rule add iif %%i table 110 || true;", wgPort, wanIface, wanIface, wanIface)
+}
+
+func autogenPostDown(wanIface string, wgPort int) string {
+	if wanIface == "" {
+		wanIface = "eth0"
+	}
+	return fmt.Sprintf("iptables -D INPUT -p udp --dport %d -j ACCEPT || true; iptables -D FORWARD -i %s -o %%i -j ACCEPT || true; iptables -D FORWARD -i %%i -j ACCEPT || true; iptables -t nat -D POSTROUTING -o %s -j MASQUERADE || true; ip route del default dev %s table 110 || true; ip rule del iif %%i table 110 || true;", wgPort, wanIface, wanIface, wanIface)
 }
 
 func generateWgConfig(cfg *Config, peers []Peer) error {

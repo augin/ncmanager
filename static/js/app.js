@@ -1957,8 +1957,6 @@ async function saveWgConfig() {
 		dns: document.getElementById('iDns').value,
 		subnet: document.getElementById('iSubnet').value,
 		wanInterface: document.getElementById('wanInterface').value,
-		postUp: document.getElementById('iPostUp').value,
-		postDown: document.getElementById('iPostDown').value,
 	};
 	const res = await xhr('POST', '/config/save', cfg);
 	if (res.ok) {
