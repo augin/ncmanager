@@ -485,11 +485,13 @@ function renderPeers(peers) {
   						<p id="routerStatus-${p.id}" style="grid-column:1/-1;color:#059669;font-size:0.85rem"></p>
   						<label style="grid-column:1/-1">Описание<textarea id='rdesc-${p.id}' rows="4" style="width:100%;padding:6px;border-radius:4px;background:var(--color-bg-primary);color:var(--color-text-primary);border:1px solid var(--color-border);font-family:var(--font-sans);font-size:0.85rem;resize:vertical;min-height:100px" placeholder='Комментарий'>${escapeHtml(p.description || '')}</textarea></label>
   					</div>
-    					<button id="saveRouterBtn-${p.id}" onclick="savePeerRouter('${p.id}')" class="btn btn-secondary" style="margin-top:8px">Сохранить</button>
-    					<button onclick="configureRouter('${p.id}')" class="btn btn-outline-primary" style="margin-top:8px;margin-left:8px">Настроить VPN</button>
-    					<button onclick="configureDnsRoutes('${p.id}')" class="btn btn-outline-primary" style="margin-top:8px;margin-left:8px">Настроить DNS-маршрутизацию</button>
-    					<button onclick="configureComponents('${p.id}')" class="btn btn-outline-primary" style="margin-top:8px;margin-left:8px">Настроить компоненты</button>
-    					<button onclick="configureDnsRouter('${p.id}')" class="btn btn-outline-primary" style="margin-top:8px;margin-left:8px">Настроить DNS</button>
+					<div id="router-actions-${p.id}" style="display:${p.vpnOnly ? 'none' : ''}">
+     					<button id="saveRouterBtn-${p.id}" onclick="savePeerRouter('${p.id}')" class="btn btn-secondary" style="margin-top:8px">Сохранить</button>
+     					<button onclick="configureRouter('${p.id}')" class="btn btn-outline-primary" style="margin-top:8px;margin-left:8px">Настроить VPN</button>
+     					<button onclick="configureDnsRoutes('${p.id}')" class="btn btn-outline-primary" style="margin-top:8px;margin-left:8px">Настроить DNS-маршрутизацию</button>
+     					<button onclick="configureComponents('${p.id}')" class="btn btn-outline-primary" style="margin-top:8px;margin-left:8px">Настроить компоненты</button>
+     					<button onclick="configureDnsRouter('${p.id}')" class="btn btn-outline-primary" style="margin-top:8px;margin-left:8px">Настроить DNS</button>
+     				</div>
    				</div>
   			</td>
   		</tr>`;
@@ -743,12 +745,14 @@ async function togglePeerPaid(id, checked) {
 
 async function toggleVpnOnly(id, checked) {
 	const creds = document.getElementById('router-creds-' + id);
+	const actions = document.getElementById('router-actions-' + id);
 	try {
 		await xhr('POST', '/peers/update', {
 			id: id,
 			vpnOnly: checked,
 		});
 		if (creds) creds.style.display = checked ? 'none' : 'contents';
+		if (actions) actions.style.display = checked ? 'none' : '';
 	} catch (e) {
 		const el = document.getElementById('rvpn-' + id);
 		if (el) el.checked = !checked;
