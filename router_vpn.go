@@ -237,14 +237,7 @@ func importWireGuardConfigToRouter(baseURL, login, password string, confData []b
 
 	// Set peer settings (endpoint, allowed-ips, keepalive, comment) in one call
 	if ifaceName != "" {
-		serverPub := getActualServerPublicKey()
-		if serverPub == "" {
-			if serverPrivBytes, err := loadPrivateKey("data/server_private.key"); err == nil {
-				if sp, err := getPublicKeyFromPrivate(serverPrivBytes); err == nil {
-					serverPub = strings.TrimSpace(string(sp))
-				}
-			}
-		}
+		serverPub := resolveServerPublicKey()
 		if serverPub != "" {
 			peerEndpoint := fmt.Sprintf("%s:%d", endpoint, wgPort)
 			if err := keeneticRemovePeer(httpClient, baseURL, ifaceName, serverPub); err != nil {

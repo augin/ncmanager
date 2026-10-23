@@ -25,89 +25,6 @@ func componentsAppendLog(msg string) {
 	f.WriteString(msg)
 }
 
-func ensureComponent(httpClient *http.Client, baseURL, login, password, targetName string) (*http.Client, bool, string) {
-	const maxAttempts = 3
-	const rebootWait = 180 * time.Second
-	const checkInterval = 60 * time.Second
-
-	for attempt := 1; attempt <= maxAttempts; attempt++ {
-		componentsAppendLog(fmt.Sprintf("🔎 Поиск компонента %s (попытка %d/%d)...\n", targetName, attempt, maxAttempts))
-
-		components, err := keeneticGetComponents(httpClient, baseURL)
-		if err != nil {
-			componentsAppendLog(fmt.Sprintf("⚠️ ошибка получения компонентов: %s\n", err.Error()))
-			if attempt < maxAttempts {
-				componentsAppendLog(fmt.Sprintf("⏳ Ожидание (%s) перед повторной попыткой...\n", checkInterval))
-				time.Sleep(checkInterval)
-				continue
-			}
-			return httpClient, false, "⚠️ проверка компонентов: " + err.Error()
-		}
-
-		info, found := findComponent(components, targetName)
-		if found && info.Installed {
-			foundName := info.Name
-			foundDesc := info.Description
-			if foundDesc == "" {
-				foundDesc = foundName
-			}
-			componentsAppendLog(fmt.Sprintf("✅ Компонент %s (%s) уже установлен\n", foundName, foundDesc))
-			return httpClient, true, fmt.Sprintf("✅ компонент %s (%s) уже установлен", foundName, foundDesc)
-		}
-
-		if found && !info.Installed {
-			componentsAppendLog(fmt.Sprintf("⚠️ Компонент %s найден, но не установлен — требуется установка (raw_installed=%q)\n", info.Name, info.RawInstalled))
-		}
-
-		if attempt < maxAttempts {
-			installKey := targetName
-			if found {
-				installKey = info.Name
-			}
-			componentsAppendLog(fmt.Sprintf("📦 Устанавливаю компонент %s (ключ: %s)...\n", targetName, installKey))
-			if err := keeneticEnableComponent(httpClient, baseURL, installKey); err != nil {
-				componentsAppendLog(fmt.Sprintf("❌ не удалось установить %s: %s\n", targetName, err.Error()))
-				return httpClient, false, fmt.Sprintf("❌ не удалось установить %s: %s", targetName, err.Error())
-			}
-			componentsAppendLog(fmt.Sprintf("⏳ Ожидание перезагрузки роутера (%s)...\n", rebootWait))
-			os.WriteFile(filepath.Join(logDir, "components-apply.status"), []byte(fmt.Sprintf("waiting_reboot_%s", targetName)), 0644)
-			ticker := time.NewTicker(30 * time.Second)
-			tickerWaitDone := make(chan bool)
-			go func() {
-				waitEnd := time.Now().Add(rebootWait)
-				for time.Now().Before(waitEnd) {
-					<-ticker.C
-					remaining := int(time.Until(waitEnd).Seconds())
-					componentsAppendLog(fmt.Sprintf("⏳ Ожидание перезагрузки... осталось %d сек\n", remaining))
-					os.WriteFile(filepath.Join(logDir, "components-apply.status"), []byte(fmt.Sprintf("waiting_reboot_%s_%ds", targetName, remaining)), 0644)
-				}
-				ticker.Stop()
-				tickerWaitDone <- true
-			}()
-			<-tickerWaitDone
-			componentsAppendLog(fmt.Sprintf("🔄 Переподключение к роутеру...\n"))
-			if login != "" && password != "" {
-				componentsAppendLog("🔄 Переавторизация после перезагрузки роутера...\n")
-				domain := strings.TrimPrefix(baseURL, "https://")
-				domain = strings.TrimPrefix(domain, "http://")
-				newClient, newURL, authErr := keeneticSetupClient(domain, login, password)
-				if authErr == nil {
-					httpClient = newClient
-					baseURL = newURL
-					componentsAppendLog("✅ Переавторизация успешна\n")
-				} else {
-					componentsAppendLog(fmt.Sprintf("⚠️ переавторизация не удалась: %v\n", authErr))
-				}
-			}
-		} else {
-			componentsAppendLog(fmt.Sprintf("❌ Компонент %s не найден после %d попыток\n", targetName, maxAttempts))
-			return httpClient, false, fmt.Sprintf("❌ компонент %s не найден после %d попыток", targetName, maxAttempts)
-		}
-	}
-
-	return httpClient, false, fmt.Sprintf("❌ не удалось установить %s", targetName)
-}
-
 func findComponent(components map[string]ComponentInfo, target string) (ComponentInfo, bool) {
 	if info, ok := components[target]; ok {
 		return info, true
@@ -119,14 +36,6 @@ func findComponent(components map[string]ComponentInfo, target string) (Componen
 		}
 	}
 	return ComponentInfo{}, false
-}
-
-func getComponentNames(components map[string]ComponentInfo) []string {
-	names := make([]string, 0, len(components))
-	for name := range components {
-		names = append(names, name)
-	}
-	return names
 }
 
 func configureRouterComponents(httpClient *http.Client, baseURL string, peer *Peer, serverPub, serverEndpoint string, serverPort int, wanInterface string) componentResult {

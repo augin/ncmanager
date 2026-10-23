@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -13,7 +14,26 @@ const (
 	routerCacheTTLUnavailable = 1 * time.Minute
 )
 
-var routerCacheTTLSeconds = 900
+// routerCacheTTLSeconds хранит TTL кэша сведений о роутере. Меняется при
+// перезагрузке конфигурации (HTTP-хендлер), читается в горутинах обработчиков,
+// поэтому доступ только через atomic.
+var routerCacheTTLSeconds atomic.Int64
+
+func init() {
+	routerCacheTTLSeconds.Store(900)
+}
+
+func routerCacheTTL() time.Duration {
+	return time.Duration(routerCacheTTLSeconds.Load()) * time.Second
+}
+
+// setRouterCacheTTLSeconds обновляет TTL (значения <= 0 игнорируются,
+// как и в исходном коде).
+func setRouterCacheTTLSeconds(seconds int) {
+	if seconds > 0 {
+		routerCacheTTLSeconds.Store(int64(seconds))
+	}
+}
 
 type routerCacheEntry struct {
 	available bool
@@ -128,7 +148,7 @@ func (s *Server) checkPeerRouter(w http.ResponseWriter, r *http.Request) {
 	routerCacheMu.RLock()
 	entry, ok := routerCache[peerID]
 	routerCacheMu.RUnlock()
-	ttl := time.Duration(routerCacheTTLSeconds) * time.Second
+	ttl := routerCacheTTL()
 	if ok && !entry.available {
 		ttl = routerCacheTTLUnavailable
 	}

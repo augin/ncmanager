@@ -186,25 +186,6 @@ func keeneticGetObjectGroups(httpClient *http.Client, baseURL string) ([]string,
 	return names, nil
 }
 
-func keeneticRenameInterface(httpClient *http.Client, baseURL, oldName, newName string) error {
-	payload := map[string]any{
-		"interface": map[string]any{
-			oldName: map[string]any{
-				"rename": newName,
-			},
-		},
-	}
-	_, status, err := keeneticRciPost(httpClient, baseURL, payload)
-	if err != nil {
-		return err
-	}
-	if status != http.StatusOK {
-		return fmt.Errorf("rename failed (HTTP %d)", status)
-	}
-	time.Sleep(200 * time.Millisecond)
-	return nil
-}
-
 func keeneticRemoveInterface(httpClient *http.Client, baseURL, ifaceName string) error {
 	payload := map[string]any{
 		"interface": map[string]any{
@@ -287,7 +268,7 @@ func syncServerKeyFromRunning() {
 		log.Printf("syncServerKey: no running interface, keeping existing key")
 		return
 	}
-	if err := savePrivateKey("data/server_private.key", actualPriv); err != nil {
+	if err := savePrivateKey(serverPrivateKeyFile, actualPriv); err != nil {
 		log.Printf("syncServerKey: failed to save: %v", err)
 		return
 	}
@@ -483,251 +464,6 @@ func keeneticGetComponents(httpClient *http.Client, baseURL string) (map[string]
 	return result, nil
 }
 
-func tryDirectComponentLookup(httpClient *http.Client, baseURL string) map[string]ComponentInfo {
-	targets := []string{"wireguard", "dns-tls", "dns_proxy", "wireguard-server"}
-	result := make(map[string]ComponentInfo)
-
-	for _, name := range targets {
-		paths := []string{
-			"/rci/components/" + name,
-			"/rci/components/list/" + name,
-		}
-		for _, path := range paths {
-			resp, err := httpClient.Get(baseURL + path)
-			if err != nil {
-				continue
-			}
-			data, _ := io.ReadAll(resp.Body)
-			resp.Body.Close()
-			if resp.StatusCode != http.StatusOK || len(data) < 2 {
-				continue
-			}
-
-			var obj map[string]any
-			if err := json.Unmarshal(data, &obj); err != nil {
-				continue
-			}
-			info := parseComponentInfo(name, obj)
-			if info.Description != "" || info.Installed {
-				result[name] = info
-				log.Printf("RCI GET %s: found desc=%s installed=%v", path, info.Description, info.Installed)
-				break
-			}
-			log.Printf("RCI GET %s: no description/installed, keys=%v", path, getKeys(obj))
-		}
-	}
-
-	return result
-}
-
-func parseComponentsResponse(data map[string]any) (map[string]ComponentInfo, error) {
-	result := make(map[string]ComponentInfo)
-	skipKeys := map[string]bool{"system": true, "interface": true, "user": true, "service": true, "ip": true, "ipv6": true}
-
-	for name, comp := range data {
-		if skipKeys[name] {
-			continue
-		}
-
-		compMap, ok := comp.(map[string]any)
-		if !ok {
-			continue
-		}
-
-		// Special handling for "components" section - it may contain real packages
-		if name == "components" {
-			// Try components.list first (common batch response format)
-			if ls, ok := compMap["list"].(map[string]any); ok {
-				for compName, compData := range ls {
-					if childMap, ok := compData.(map[string]any); ok {
-						// "component" is a container that holds all real packages inside
-						if compName == "component" {
-							scanForComponents(childMap, "", result)
-							continue
-						}
-						info := parseComponentInfo(compName, childMap)
-						if info.Description != "" || info.Installed {
-							result[compName] = info
-						} else {
-							for _, v := range childMap {
-								if _, isStr := v.(string); isStr {
-									result[compName] = info
-									break
-								}
-								if _, isNum := v.(float64); isNum {
-									result[compName] = info
-									break
-								}
-							}
-						}
-					}
-				}
-			}
-			// Also scan direct children of components (GET /rci/ format)
-			for compName, compData := range compMap {
-				if compName == "list" {
-					continue
-				}
-				childMap, ok := compData.(map[string]any)
-				if !ok {
-					continue
-				}
-				info := parseComponentInfo(compName, childMap)
-				if info.Description != "" || info.Installed {
-					result[compName] = info
-				} else {
-					for _, v := range childMap {
-						if _, isStr := v.(string); isStr {
-							result[compName] = info
-							break
-						}
-						if _, isNum := v.(float64); isNum {
-							result[compName] = info
-							break
-						}
-					}
-				}
-			}
-			continue
-		}
-
-		info := parseComponentInfo(name, compMap)
-		if info.Description != "" || info.Installed {
-			result[name] = info
-		} else {
-			for _, v := range compMap {
-				if _, isStr := v.(string); isStr {
-					result[name] = info
-					break
-				}
-				if _, isNum := v.(float64); isNum {
-					result[name] = info
-					break
-				}
-			}
-		}
-	}
-
-	filtered := make(map[string]ComponentInfo)
-	for name, info := range result {
-		if !isSystemComponent(name) {
-			filtered[name] = info
-		}
-	}
-
-	if len(filtered) > 0 {
-		keys := make([]string, 0, len(filtered))
-		for n := range filtered {
-			keys = append(keys, n)
-		}
-		if len(keys) > 30 {
-			keys = keys[:30]
-		}
-		log.Printf("RCI parseComponentsResponse: found %d components: %v", len(filtered), keys)
-		return filtered, nil
-	}
-
-	log.Printf("RCI parseComponentsResponse: no components found in %d top-level keys (raw keys: %v)", len(data), getKeys(data))
-	return result, nil
-}
-
-func scanForComponents(data map[string]any, path string, result map[string]ComponentInfo) {
-	for name, comp := range data {
-		currentPath := name
-		if path != "" {
-			currentPath = path + "." + name
-		}
-
-		compMap, ok := comp.(map[string]any)
-		if !ok {
-			continue
-		}
-
-		info := parseComponentInfo(name, compMap)
-		if info.Description != "" || info.Installed {
-			if !isSystemComponent(name) {
-				result[name] = info
-			}
-			continue
-		}
-
-		hasAnyData := false
-		for _, v := range compMap {
-			switch val := v.(type) {
-			case string:
-				if val != "" {
-					hasAnyData = true
-				}
-			case float64:
-				hasAnyData = true
-			case bool:
-				hasAnyData = true
-			case map[string]any:
-				if len(val) > 0 {
-					hasAnyData = true
-				}
-			case []any:
-				if len(val) > 0 {
-					hasAnyData = true
-				}
-			}
-		}
-		if hasAnyData && !isSystemComponent(name) {
-			result[name] = info
-			continue
-		}
-
-		scanForComponents(compMap, currentPath, result)
-	}
-}
-
-func dumpComponentTree(data map[string]any, prefix string) {
-	for name, comp := range data {
-		compType := fmt.Sprintf("%T", comp)
-		if compMap, ok := comp.(map[string]any); ok {
-			log.Printf("%s%s: map with %d keys", prefix, name, len(compMap))
-			if name == "components" {
-				for k, v := range compMap {
-					log.Printf("  %scomponents.%s: %T", prefix, k, v)
-					if childMap, ok := v.(map[string]any); ok {
-						for ck, cv := range childMap {
-							log.Printf("    %scomponents.%s.%s: %T", prefix, k, ck, cv)
-						}
-					}
-				}
-			}
-			// Also show any other map that might contain components
-			if name != "components" && len(compMap) > 0 {
-				count := 0
-				for k, v := range compMap {
-					if count >= 5 {
-						break
-					}
-					log.Printf("  %s%s.%s: %T", prefix, name, k, v)
-					if childMap, ok := v.(map[string]any); ok {
-						for ck, cv := range childMap {
-							if count >= 5 {
-								break
-							}
-							log.Printf("    %s%s.%s.%s: %T", prefix, name, k, ck, cv)
-						}
-					}
-					count++
-				}
-			}
-		} else {
-			log.Printf("%s%s: %s", prefix, name, compType)
-		}
-	}
-}
-
-func getKeys(m map[string]any) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	return keys
-}
 func isSystemComponent(name string) bool {
 	systemComponents := map[string]bool{
 		"firmware": true, "local": true, "component": true, "group": true,
@@ -758,13 +494,12 @@ func parseComponentInfo(name string, compMap map[string]any) ComponentInfo {
 	} else if installedStr, ok := compMap["installed"].(string); ok && installedStr != "" {
 		info.RawInstalled = installedStr
 		lower := strings.ToLower(installedStr)
-		if strings.ContainsAny(lower, "0123456789.") {
-			info.Installed = true
-		} else if lower == "true" || lower == "1" || lower == "yes" || lower == "on" {
-			info.Installed = true
-		} else if lower == "false" || lower == "0" || lower == "no" || lower == "off" {
+		switch lower {
+		case "false", "0", "no", "off":
 			info.Installed = false
-		} else {
+		default:
+			// "true"/"1"/"yes"/"on", версии вида "1.2.3" и прочие значения
+			// означают установленный компонент.
 			info.Installed = true
 		}
 	}

@@ -39,11 +39,11 @@ func (s *Server) createBackup(w http.ResponseWriter, r *http.Request) {
 	files := []string{
 		"data/config.json",
 		"data/peers.json",
-		"data/server_private.key",
-		"data/.auth",
-		"data/.secret",
-		"data/.key",
-		"presets/dns-routes.json",
+		serverPrivateKeyFile,
+		authHashFile,
+		authSecretFile,
+		encryptionKeyFile,
+		presetsFile,
 	}
 	for _, rel := range files {
 		abs := filepath.Join(backupDir, rel)
@@ -55,7 +55,7 @@ func (s *Server) createBackup(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	absWG := "/etc/wireguard"
+	absWG := wireguardConfDir
 	if entries, err := os.ReadDir(absWG); err == nil {
 		for _, entry := range entries {
 			if entry.IsDir() {
@@ -69,7 +69,7 @@ func (s *Server) createBackup(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	absAmnezia := "/etc/amnezia/amneziawg"
+	absAmnezia := amneziaConfDir
 	if entries, err := os.ReadDir(absAmnezia); err == nil {
 		for _, entry := range entries {
 			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".conf") {
@@ -182,7 +182,7 @@ func (s *Server) restoreBackup(w http.ResponseWriter, r *http.Request) {
 	downCmd.Stderr = io.Discard
 	downCmd.CombinedOutput()
 
-	amneziaEntries, _ := os.ReadDir("/etc/amnezia/amneziawg")
+	amneziaEntries, _ := os.ReadDir(amneziaConfDir)
 	for _, entry := range amneziaEntries {
 		if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".conf") {
 			continue
@@ -194,8 +194,8 @@ func (s *Server) restoreBackup(w http.ResponseWriter, r *http.Request) {
 
 	extractedWG := filepath.Join(workingDir, "etc", "wireguard", "wg0.conf")
 	if data, err := os.ReadFile(extractedWG); err == nil {
-		os.MkdirAll("/etc/wireguard", 0700)
-		if err := writeFileAtomic("/etc/wireguard/wg0.conf", data); err != nil {
+		os.MkdirAll(wireguardConfDir, 0700)
+		if err := writeFileAtomic(wgConfigFile, data); err != nil {
 			log.Printf("restore: write wg0.conf: %v", err)
 		}
 	}
@@ -203,14 +203,14 @@ func (s *Server) restoreBackup(w http.ResponseWriter, r *http.Request) {
 	extractedAmneziaDir := filepath.Join(workingDir, "etc", "amnezia", "amneziawg")
 	var amneziaRestoreEntries []os.DirEntry
 	if entries, err := os.ReadDir(extractedAmneziaDir); err == nil {
-		os.MkdirAll("/etc/amnezia/amneziawg", 0700)
+		os.MkdirAll(amneziaConfDir, 0700)
 		amneziaRestoreEntries = entries
 		for _, entry := range entries {
 			if entry.IsDir() || !strings.HasSuffix(entry.Name(), ".conf") {
 				continue
 			}
 			src := filepath.Join(extractedAmneziaDir, entry.Name())
-			dst := filepath.Join("/etc/amnezia/amneziawg", entry.Name())
+			dst := filepath.Join(amneziaConfDir, entry.Name())
 			if data, err := os.ReadFile(src); err == nil {
 				if err := writeFileAtomic(dst, data); err != nil {
 					log.Printf("restore: write %s: %v", dst, err)

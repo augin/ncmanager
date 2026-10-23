@@ -94,13 +94,7 @@ func (s *Server) configurePeerDns(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
 	}
-	peerIdx := -1
-	for i := range peersCfg.Peers {
-		if peersCfg.Peers[i].ID == id {
-			peerIdx = i
-			break
-		}
-	}
+	peerIdx := findPeerIndex(peersCfg.Peers, id)
 	if peerIdx < 0 {
 		http.Error(w, "peer not found", http.StatusNotFound)
 		return

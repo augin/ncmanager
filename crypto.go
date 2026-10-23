@@ -12,7 +12,7 @@ import (
 var encryptionKey []byte
 
 func InitEncryptionKey() {
-	path := "data/.key"
+	path := encryptionKeyFile
 	if b, err := os.ReadFile(path); err == nil && len(b) >= 32 {
 		encryptionKey = b[:32]
 		return

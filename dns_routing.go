@@ -410,17 +410,17 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 				wgIface = "Wireguard1"
 			}
 
-		var applyPayload []routeApply
-		var routeNames []string
-		for _, rt := range routes {
-			applyPayload = append(applyPayload, routeApply{
-				Name:    rt.Name,
-				Domains: rt.Domains,
-				Subnets: rt.Subnets,
-				Enabled: rt.Enabled,
-			})
-			routeNames = append(routeNames, rt.Name)
-		}
+			var applyPayload []routeApply
+			var routeNames []string
+			for _, rt := range routes {
+				applyPayload = append(applyPayload, routeApply{
+					Name:    rt.Name,
+					Domains: rt.Domains,
+					Subnets: rt.Subnets,
+					Enabled: rt.Enabled,
+				})
+				routeNames = append(routeNames, rt.Name)
+			}
 
 			if len(applyPayload) > 0 {
 				appendLog(fmt.Sprintf("📡 Применение %d маршрутов на %s (%s)...\n", len(applyPayload), peer.Name, peer.RouterDomain))
@@ -497,13 +497,7 @@ func (s *Server) configurePeerDnsRoutes(w http.ResponseWriter, r *http.Request) 
 	}
 
 	peersCfg, _ := loadPeers()
-	peerIdx := -1
-	for i := range peersCfg.Peers {
-		if peersCfg.Peers[i].ID == id {
-			peerIdx = i
-			break
-		}
-	}
+	peerIdx := findPeerIndex(peersCfg.Peers, id)
 	if peerIdx < 0 {
 		http.Error(w, "peer not found", http.StatusNotFound)
 		return
@@ -545,7 +539,7 @@ func (s *Server) configurePeerDnsRoutes(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) getDnsRoutePresets(w http.ResponseWriter, r *http.Request) {
-	data, err := os.ReadFile("presets/dns-routes.json")
+	data, err := os.ReadFile(presetsFile)
 	if err != nil {
 		http.Error(w, "presets not found", http.StatusNotFound)
 		return
