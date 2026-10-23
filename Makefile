@@ -3,6 +3,9 @@
 BINARY = ncmanager
 GO = go
 GOFLAGS = -ldflags="-s -w"
+# Static binary without cgo: the toolchain's gcc may emit AVX instructions
+# (e.g. on newer CI runners) which crash on CPUs without AVX.
+export CGO_ENABLED = 0
 
 build:
 	$(GO) build $(GOFLAGS) -o $(BINARY) .

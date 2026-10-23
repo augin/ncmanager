@@ -18,7 +18,7 @@ import (
 	"unicode"
 )
 
-const appVersion = "1.16.0"
+const appVersion = "1.16.1"
 
 const dataFile = "data/config.json"
 
