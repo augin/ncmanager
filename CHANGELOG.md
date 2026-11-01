@@ -1,5 +1,9 @@
 # Changelog
 
+## v1.16.2
+- **fix**: смена интерфейса выхода применяется сразу — в `saveConfig` интерфейс гасится ДО перезаписи `wg0.conf`, чтобы `wg-quick down` выполнил `PostDown` старого конфига (раньше выполнялся `PostDown` нового конфига, и iptables-правила и маршрут по умолчанию в table 110 старого WAN-интерфейса оставались в системе)
+- **fix**: PostUp использует `ip route replace default dev <wan> table 110` вместо `ip route add` — при наличии устаревшего маршрута в table 110 `add` падал с `File exists` (ошибка проглатывалась `|| true`) и трафик продолжал выходить через старый интерфейс; перезапуск wg-quick разбит на `stopServerDirect`/`startServerDirect`
+
 ## v1.16.1
 - **fix**: сборка с `CGO_ENABLED=0` — пакет 1.16.0 падал с SIGILL на CPU без AVX (gcc на CI-раннере Ubuntu 26.04 генерировал AVX-инструкции в cgo-коде); бинарник теперь статический
 

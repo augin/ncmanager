@@ -159,7 +159,7 @@ func TestAutogenPostUp(t *testing.T) {
 		"iptables -A FORWARD -i eth0 -o %i -j ACCEPT || true; " +
 		"iptables -A FORWARD -i %i -j ACCEPT || true; " +
 		"iptables -t nat -A POSTROUTING -o eth0 -j MASQUERADE || true; " +
-		"ip route add default dev eth0 table 110 || true; " +
+		"ip route replace default dev eth0 table 110 || true; " +
 		"ip rule add iif %i table 110 || true;"
 	if got != want {
 		t.Errorf("autogenPostUp mismatch\ngot:  %s\nwant: %s", got, want)
@@ -425,6 +425,15 @@ func TestRenderWgConfigDefaults(t *testing.T) {
 	}
 	if !strings.Contains(got, "iptables -A INPUT") || !strings.Contains(got, "-i eth0") {
 		t.Errorf("нет PostUp по умолчанию с eth0:\n%s", got)
+	}
+	// Регрессия смены WAN-интерфейса: в table 110 может остаться маршрут от
+	// предыдущего интерфейса — тогда `ip route add` падает с "File exists"
+	// и выход так и не меняется. Нужен `ip route replace`.
+	if !strings.Contains(got, "ip route replace default dev eth0 table 110") {
+		t.Errorf("PostUp должен использовать ip route replace:\n%s", got)
+	}
+	if strings.Contains(got, "ip route add default dev") {
+		t.Errorf("PostUp не должен содержать ip route add:\n%s", got)
 	}
 	if !strings.Contains(got, "iptables -D INPUT") {
 		t.Errorf("нет PostDown по умолчанию:\n%s", got)

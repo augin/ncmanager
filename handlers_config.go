@@ -175,13 +175,22 @@ func (s *Server) saveConfig(w http.ResponseWriter, r *http.Request) {
 	}
 	_ = savePeers(peersCfg)
 
+	// Сначала гасим интерфейс со СТАРЫМ конфигом: wg-quick down читает
+	// /etc/wireguard/wg0.conf на момент вызова. Если записать новый конфиг раньше,
+	// down выполнит PostDown нового конфига, а iptables-правила и маршрут
+	// по умолчанию в table 110 старого WAN-интерфейса останутся в системе —
+	// из-за них новый интерфейс выхода не применяется.
+	s.stopServerDirect()
+
 	if err := generateWgConfig(cfg, peersCfg.Peers); err != nil {
+		log.Printf("saveConfig: generate wg config: %v", err)
+		s.startServerDirect() // поднимаем обратно со старым конфигом
 		http.Error(w, fmt.Sprintf("failed to generate wg config: %v", err), http.StatusInternalServerError)
 		return
 	}
 	log.Printf("saveConfig: wg config generated subnet=%s peers=%d", cfg.Subnet, len(peersCfg.Peers))
 
-	if err := s.restartServerDirect(); err != nil {
+	if err := s.startServerDirect(); err != nil {
 		http.Error(w, fmt.Sprintf("failed to restart server: %v", err), http.StatusInternalServerError)
 		return
 	}
@@ -333,15 +342,34 @@ func (s *Server) restartServer(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) restartServerDirect() error {
+	s.stopServerDirect()
+	return s.startServerDirect()
+}
+
+// stopServerDirect гасит WireGuard-интерфейс: wg-quick down (PostDown выполняется
+// из текущего, ещё не перезаписанного конфига) + принудительное удаление ссылки.
+// Вызывать ДО перезаписи wg0.conf — иначе PostDown старого интерфейса не отработает.
+func (s *Server) stopServerDirect() {
 	s.mu.Lock()
 	path := s.configPath
+	iface := s.iface
 	s.mu.Unlock()
+	if iface == "" {
+		iface = "wg0"
+	}
 	downOut, downErr := execWithTimeout(30*time.Second, "wg-quick", "down", path)
 	if downErr != nil {
 		log.Printf("wg-quick down: %s", string(downOut))
 	}
-	execWithTimeout(5*time.Second, "ip", "link", "del", "dev", "wg0")
+	execWithTimeout(5*time.Second, "ip", "link", "del", "dev", iface)
 	time.Sleep(700 * time.Millisecond)
+}
+
+// startServerDirect поднимает WireGuard-интерфейс по действующему wg0.conf.
+func (s *Server) startServerDirect() error {
+	s.mu.Lock()
+	path := s.configPath
+	s.mu.Unlock()
 	out, err := execWithTimeout(30*time.Second, "wg-quick", "up", path)
 	if err != nil {
 		msg := string(out)

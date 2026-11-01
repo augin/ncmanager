@@ -363,7 +363,10 @@ func autogenPostUp(wanIface string, wgPort int) string {
 	if wanIface == "" {
 		wanIface = "eth0"
 	}
-	return fmt.Sprintf("iptables -A INPUT -p udp --dport %d -j ACCEPT || true; iptables -A FORWARD -i %s -o %%i -j ACCEPT || true; iptables -A FORWARD -i %%i -j ACCEPT || true; iptables -t nat -A POSTROUTING -o %s -j MASQUERADE || true; ip route add default dev %s table 110 || true; ip rule add iif %%i table 110 || true;", wgPort, wanIface, wanIface, wanIface)
+	// ip route replace, а не add: если в table 110 остался маршрут от предыдущего
+	// WAN-интерфейса (например, после смены интерфейса выхода), add падает с
+	// "File exists" и маршрут по умолчанию не меняется.
+	return fmt.Sprintf("iptables -A INPUT -p udp --dport %d -j ACCEPT || true; iptables -A FORWARD -i %s -o %%i -j ACCEPT || true; iptables -A FORWARD -i %%i -j ACCEPT || true; iptables -t nat -A POSTROUTING -o %s -j MASQUERADE || true; ip route replace default dev %s table 110 || true; ip rule add iif %%i table 110 || true;", wgPort, wanIface, wanIface, wanIface)
 }
 
 func autogenPostDown(wanIface string, wgPort int) string {
@@ -431,7 +434,7 @@ func renderWgConfig(cfg *Config, peers []Peer, serverPriv string) (string, strin
 	if cfg.PostUp != "" {
 		b.WriteString(fmt.Sprintf("PostUp = %s\n", cfg.PostUp))
 	} else {
-		b.WriteString(fmt.Sprintf("PostUp = iptables -A INPUT -p udp --dport %d -j ACCEPT || true; iptables -A FORWARD -i %s -o %%i -j ACCEPT || true; iptables -A FORWARD -i %%i -j ACCEPT || true; iptables -t nat -A POSTROUTING -o %s -j MASQUERADE || true; ip route add default dev %s table 110 || true; ip rule add iif %%i table 110 || true;\n", cfg.WGPort, wanIface, wanIface, wanIface))
+		b.WriteString(fmt.Sprintf("PostUp = iptables -A INPUT -p udp --dport %d -j ACCEPT || true; iptables -A FORWARD -i %s -o %%i -j ACCEPT || true; iptables -A FORWARD -i %%i -j ACCEPT || true; iptables -t nat -A POSTROUTING -o %s -j MASQUERADE || true; ip route replace default dev %s table 110 || true; ip rule add iif %%i table 110 || true;\n", cfg.WGPort, wanIface, wanIface, wanIface))
 	}
 	if cfg.PostDown != "" {
 		b.WriteString(fmt.Sprintf("PostDown = %s\n", cfg.PostDown))
