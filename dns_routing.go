@@ -68,6 +68,42 @@ type routeApply struct {
 	Enabled bool
 }
 
+// dnsRouteChunkSize — максимальное число элементов в одной fqdn-группе.
+const dnsRouteChunkSize = 300
+
+// plannedGroup — ожидаемая fqdn-группа маршрута на роутере.
+type plannedGroup struct {
+	Name  string
+	Items []string
+}
+
+// planRouteGroups разбивает элементы маршрута на группы <slug>_NCM<n>.
+// Единый источник истины для применения и последующей проверки.
+func planRouteGroups(route routeApply) []plannedGroup {
+	items := make([]string, 0, len(route.Domains)+len(route.Subnets))
+	items = append(items, route.Domains...)
+	items = append(items, route.Subnets...)
+	if len(items) == 0 {
+		return nil
+	}
+	slug := sanitizeGroupSlug(route.Name)
+	if slug == "" {
+		slug = "route"
+	}
+	var out []plannedGroup
+	for i := 0; i < len(items); i += dnsRouteChunkSize {
+		end := i + dnsRouteChunkSize
+		if end > len(items) {
+			end = len(items)
+		}
+		out = append(out, plannedGroup{
+			Name:  fmt.Sprintf("%s_NCM%d", slug, len(out)+1),
+			Items: items[i:end],
+		})
+	}
+	return out
+}
+
 func keeneticApplyDnsRoutes(httpClient *http.Client, baseURL, wgIface string, routes []routeApply, logFn func(string)) error {
 	existingGroups, err := keeneticGetObjectGroups(httpClient, baseURL)
 	if err != nil {
@@ -178,28 +214,17 @@ func keeneticApplyDnsRoutes(httpClient *http.Client, baseURL, wgIface string, ro
 			}
 		}
 
-		items := make([]string, 0, len(route.Domains)+len(route.Subnets))
-		items = append(items, route.Domains...)
-		items = append(items, route.Subnets...)
-		if len(items) == 0 {
+		groups := planRouteGroups(route)
+		if len(groups) == 0 {
 			if logFn != nil {
 				logFn("⏭️ Маршрут пустой, пропуск: " + route.Name + "\n")
 			}
 			continue
 		}
 
-		const chunkSize = 300
-		var chunks [][]string
-		for i := 0; i < len(items); i += chunkSize {
-			end := i + chunkSize
-			if end > len(items) {
-				end = len(items)
-			}
-			chunks = append(chunks, items[i:end])
-		}
-
-		for chunkIdx, chunk := range chunks {
-			groupName := fmt.Sprintf("%s_NCM%d", slug, chunkIdx+1)
+		for _, group := range groups {
+			groupName := group.Name
+			chunk := group.Items
 
 			includes := make([]any, len(chunk))
 			for i, item := range chunk {
@@ -254,6 +279,187 @@ func keeneticApplyDnsRoutes(httpClient *http.Client, baseURL, wgIface string, ro
 		}
 	}
 	return nil
+}
+
+// includeAddrs разбирает значение "include" из дампа роутера:
+// список адресов, одиночный адрес или объект {"address": ...}.
+func includeAddrs(v any) []string {
+	var out []string
+	switch t := v.(type) {
+	case string:
+		out = append(out, t)
+	case []any:
+		for _, e := range t {
+			out = append(out, includeAddrs(e)...)
+		}
+	case map[string]any:
+		if addr, ok := t["address"]; ok {
+			out = append(out, includeAddrs(addr)...)
+		}
+	}
+	return out
+}
+
+// parseFqdnGroups разбирает секцию object-group дампа роутера:
+// имя fqdn-группы -> адреса из include.
+func parseFqdnGroups(og any) map[string][]string {
+	groups := make(map[string][]string)
+	ogMap, ok := og.(map[string]any)
+	if !ok {
+		return groups
+	}
+	fqdn, ok := ogMap["fqdn"].(map[string]any)
+	if !ok {
+		return groups
+	}
+	for name, def := range fqdn {
+		defMap, ok := def.(map[string]any)
+		if !ok {
+			continue
+		}
+		if inc, ok := defMap["include"]; ok {
+			groups[name] = includeAddrs(inc)
+		}
+	}
+	return groups
+}
+
+// parseDnsProxyRoutes разбирает секцию dns-proxy.route дампа роутера:
+// имя группы -> множество интерфейсов, на которые ведут маршруты.
+func parseDnsProxyRoutes(dp any) map[string]map[string]bool {
+	routes := make(map[string]map[string]bool)
+	add := func(group, iface string) {
+		if group == "" {
+			return
+		}
+		if routes[group] == nil {
+			routes[group] = make(map[string]bool)
+		}
+		routes[group][iface] = true
+	}
+	entry := func(e any) {
+		m, ok := e.(map[string]any)
+		if !ok {
+			return
+		}
+		group, _ := m["group"].(string)
+		iface, _ := m["interface"].(string)
+		add(group, iface)
+	}
+	dpMap, ok := dp.(map[string]any)
+	if !ok {
+		return routes
+	}
+	switch t := dpMap["route"].(type) {
+	case []any:
+		for _, e := range t {
+			entry(e)
+		}
+	case map[string]any:
+		if _, has := t["group"]; has {
+			entry(t)
+		} else {
+			for _, e := range t {
+				entry(e)
+			}
+		}
+	}
+	return routes
+}
+
+// keeneticGetDnsState читает из конфигурации роутера fqdn-группы
+// (имя -> адреса) и маршруты dns-proxy (группа -> интерфейсы).
+func keeneticGetDnsState(httpClient *http.Client, baseURL string) (map[string][]string, map[string]map[string]bool, error) {
+	resp, err := keeneticGetWithTimeout(httpClient, baseURL+"/rci/", keeneticRciDumpTimeout)
+	if err != nil {
+		return nil, nil, fmt.Errorf("get rci dump failed: %v", err)
+	}
+	defer resp.Body.Close()
+	data, _ := io.ReadAll(resp.Body)
+	var parsed map[string]any
+	if err := json.Unmarshal(data, &parsed); err != nil {
+		return nil, nil, fmt.Errorf("parse rci dump failed: %v", err)
+	}
+	return parseFqdnGroups(parsed["object-group"]), parseDnsProxyRoutes(parsed["dns-proxy"]), nil
+}
+
+// verifyDnsRoutesState сравнивает ожидаемые группы и маршруты с
+// фактическим состоянием роутера. Пустой список проблем = все маршруты
+// успешно добавлены.
+func verifyDnsRoutesState(wgIface string, routes []routeApply, actualGroups map[string][]string, actualRoutes map[string]map[string]bool) []string {
+	var problems []string
+	for _, route := range routes {
+		for _, g := range planRouteGroups(route) {
+			items, ok := actualGroups[g.Name]
+			if !ok {
+				problems = append(problems, fmt.Sprintf("маршрут «%s»: группа %s не найдена на роутере", route.Name, g.Name))
+				continue
+			}
+			have := make(map[string]bool, len(items))
+			for _, it := range items {
+				have[it] = true
+			}
+			var missing []string
+			for _, it := range g.Items {
+				if !have[it] {
+					missing = append(missing, it)
+				}
+			}
+			if len(missing) > 0 {
+				problems = append(problems, fmt.Sprintf("маршрут «%s»: в группе %s отсутствует %d из %d элементов: %s",
+					route.Name, g.Name, len(missing), len(g.Items), formatItemList(missing, 5)))
+			}
+			ifaces := actualRoutes[g.Name]
+			if route.Enabled {
+				switch {
+				case ifaces == nil:
+					problems = append(problems, fmt.Sprintf("маршрут «%s»: dns-proxy маршрут %s → %s не найден", route.Name, g.Name, wgIface))
+				case !ifaces[wgIface]:
+					problems = append(problems, fmt.Sprintf("маршрут «%s»: %s ведёт на %s вместо %s", route.Name, g.Name, formatItemList(mapKeys(ifaces), 3), wgIface))
+				}
+			} else if ifaces != nil {
+				problems = append(problems, fmt.Sprintf("маршрут «%s»: отключён, но dns-proxy маршрут %s всё ещё существует", route.Name, g.Name))
+			}
+		}
+	}
+	return problems
+}
+
+// keeneticVerifyDnsRoutes проверяет на роутере, что все маршруты
+// действительно добавлены. Возвращает список проблем.
+func keeneticVerifyDnsRoutes(httpClient *http.Client, baseURL, wgIface string, routes []routeApply) ([]string, error) {
+	groups, dnsRoutes, err := keeneticGetDnsState(httpClient, baseURL)
+	if err != nil {
+		return nil, err
+	}
+	return verifyDnsRoutesState(wgIface, routes, groups, dnsRoutes), nil
+}
+
+// dnsRoutesTotals считает ожидаемое число групп и элементов.
+func dnsRoutesTotals(routes []routeApply) (groups, items int) {
+	for _, route := range routes {
+		for _, g := range planRouteGroups(route) {
+			groups++
+			items += len(g.Items)
+		}
+	}
+	return groups, items
+}
+
+// formatItemList выводит до limit элементов через запятую.
+func formatItemList(items []string, limit int) string {
+	if len(items) <= limit {
+		return strings.Join(items, ", ")
+	}
+	return fmt.Sprintf("%s и ещё %d", strings.Join(items[:limit], ", "), len(items)-limit)
+}
+
+func mapKeys(m map[string]bool) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 func (s *Server) listDnsRoutes(w http.ResponseWriter, r *http.Request) {
@@ -367,12 +573,14 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 
 	go func() {
 		type applyResult struct {
-			Peer   string   `json:"peer"`
-			Router string   `json:"router"`
-			Error  string   `json:"error,omitempty"`
-			Routes []string `json:"routes,omitempty"`
+			Peer     string   `json:"peer"`
+			Router   string   `json:"router"`
+			Error    string   `json:"error,omitempty"`
+			Routes   []string `json:"routes,omitempty"`
+			Problems []string `json:"problems,omitempty"`
 		}
 		var results []applyResult
+		var hadErrors bool
 		peersCfg, _ := loadPeers()
 		peers := peersCfg.Peers
 		if req.PeerID != "" {
@@ -386,6 +594,7 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 
 		for _, peer := range peers {
 			if peer.RouterDomain == "" || peer.RouterLogin == "" || peer.RouterPassword == "" {
+				hadErrors = true
 				results = append(results, applyResult{
 					Peer:   peer.Name,
 					Router: peer.RouterDomain,
@@ -397,6 +606,7 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 			httpClient, baseURL, err := keeneticSetupClient(peer.RouterDomain, peer.RouterLogin, peer.RouterPassword)
 			if err != nil {
 				log.Printf("dns-routes apply auth failed for %s: %v", peer.Name, err)
+				hadErrors = true
 				results = append(results, applyResult{
 					Peer:   peer.Name,
 					Router: peer.RouterDomain,
@@ -427,6 +637,7 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 				if err := keeneticApplyDnsRoutes(httpClient, baseURL, wgIface, applyPayload, appendLog); err != nil {
 					log.Printf("dns-routes apply failed for %s: %v", peer.Name, err)
 					appendLog(fmt.Sprintf("❌ Ошибка применения на %s: %v\n", peer.Name, err))
+					hadErrors = true
 					results = append(results, applyResult{
 						Peer:   peer.Name,
 						Router: peer.RouterDomain,
@@ -441,6 +652,7 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 			if err := keeneticSave(httpClient, baseURL); err != nil {
 				log.Printf("dns-routes save failed for %s: %v", peer.Name, err)
 				appendLog(fmt.Sprintf("❌ Ошибка сохранения на %s: %v\n", peer.Name, err))
+				hadErrors = true
 				results = append(results, applyResult{
 					Peer:   peer.Name,
 					Router: peer.RouterDomain,
@@ -451,6 +663,42 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 			}
 
 			appendLog(fmt.Sprintf("✅ Конфигурация сохранена на %s\n", peer.Name))
+
+			// Проверка: все ли маршруты действительно добавились на роутер.
+			if len(applyPayload) > 0 {
+				appendLog(fmt.Sprintf("🔎 Проверка маршрутов на %s...\n", peer.Name))
+				problems, verr := keeneticVerifyDnsRoutes(httpClient, baseURL, wgIface, applyPayload)
+				if verr != nil {
+					log.Printf("dns-routes verify failed for %s: %v", peer.Name, verr)
+					appendLog(fmt.Sprintf("⚠️ Проверка не выполнена: %v\n", verr))
+					hadErrors = true
+					results = append(results, applyResult{
+						Peer:   peer.Name,
+						Router: peer.RouterDomain,
+						Error:  fmt.Sprintf("verify failed: %v", verr),
+						Routes: routeNames,
+					})
+					continue
+				}
+				if len(problems) > 0 {
+					for _, p := range problems {
+						appendLog("  ⚠️ " + p + "\n")
+					}
+					appendLog(fmt.Sprintf("❌ Проверка: обнаружено проблем — %d\n", len(problems)))
+					hadErrors = true
+					results = append(results, applyResult{
+						Peer:     peer.Name,
+						Router:   peer.RouterDomain,
+						Error:    fmt.Sprintf("проверка: %d проблем", len(problems)),
+						Routes:   routeNames,
+						Problems: problems,
+					})
+					continue
+				}
+				groups, items := dnsRoutesTotals(applyPayload)
+				appendLog(fmt.Sprintf("✅ Проверка: все маршруты добавлены (%d групп, %d элементов)\n", groups, items))
+			}
+
 			results = append(results, applyResult{
 				Peer:   peer.Name,
 				Router: peer.RouterDomain,
@@ -458,8 +706,17 @@ func (s *Server) applyDnsRoutesToRouter(w http.ResponseWriter, r *http.Request) 
 			})
 		}
 
-		os.WriteFile(filepath.Join(logDir, "dns-apply.status"), []byte("completed"), 0644)
-		appendLog("\n🎉 Готово!\n")
+		status := "completed"
+		finalMsg := "\n🎉 Готово!\n"
+		if hadErrors {
+			status = "failed"
+			finalMsg = "\n⚠️ Завершено с ошибками, см. лог выше\n"
+		}
+		if data, err := json.MarshalIndent(results, "", "  "); err == nil {
+			os.WriteFile(filepath.Join(logDir, "dns-apply.result.json"), data, 0644)
+		}
+		os.WriteFile(filepath.Join(logDir, "dns-apply.status"), []byte(status), 0644)
+		appendLog(finalMsg)
 		dnsApplyRunning.Store(false)
 	}()
 
