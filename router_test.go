@@ -1,6 +1,9 @@
 package main
 
-import "testing"
+import (
+	"net"
+	"testing"
+)
 
 func TestRouterBaseURLs(t *testing.T) {
 	cases := []struct {
@@ -32,6 +35,26 @@ func TestRouterBaseURLs(t *testing.T) {
 				break
 			}
 		}
+	}
+}
+
+func TestPreferIPv4(t *testing.T) {
+	ips := []net.IPAddr{
+		{IP: net.ParseIP("2a03:21c0::96")},
+		{IP: net.ParseIP("185.162.93.96")},
+		{IP: net.ParseIP("2a00:ab00::67")},
+		{IP: net.ParseIP("87.228.71.67")},
+	}
+	got := preferIPv4(ips)
+	want := []string{"185.162.93.96", "87.228.71.67", "2a03:21c0::96", "2a00:ab00::67"}
+	for i := range want {
+		if got[i].IP.String() != want[i] {
+			t.Fatalf("preferIPv4()[%d] = %s, want %s (all: %v)", i, got[i].IP, want[i], got)
+		}
+	}
+	// исходный слайс не мутируется
+	if ips[0].IP.To16().String() != net.ParseIP("2a03:21c0::96").String() {
+		t.Error("input slice must not be mutated")
 	}
 }
 

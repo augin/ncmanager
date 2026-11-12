@@ -2,10 +2,12 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/md5"
 	"crypto/sha256"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -13,6 +15,7 @@ import (
 	"net/http"
 	"net/http/cookiejar"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -32,7 +35,75 @@ const (
 	// (object-groups, интерфейсы): на загруженных роутерах они
 	// отдаются дольше обычных запросов.
 	keeneticRciDumpTimeout = 120 * time.Second
+	// routerDialTimeout — таймаут подключения к одному адресу роутера.
+	// Часть ретрансляторов KeenDNS не отвечает вовсе, поэтому ждать
+	// общий таймаут клиента на каждом адресе нельзя.
+	routerDialTimeout = 8 * time.Second
+	// keeneticAuthAttempts — количество попыток аутентификации на схему
+	// при сетевых сбоях (каждая попытка — свежий DNS, другой ретранслятор).
+	keeneticAuthAttempts = 2
 )
+
+// authPermError — ошибка аутентификации, при которой повтор бессмыслен
+// (неверные учётные данные или роутер без NDMS auth).
+type authPermError struct{ err error }
+
+func (e *authPermError) Error() string { return e.err.Error() }
+func (e *authPermError) Unwrap() error { return e.err }
+
+// preferIPv4 упорядочивает адреса так, чтобы IPv4 шёл первым:
+// туннелированный IPv6 до роутера часто очень медленный или недоступный.
+func preferIPv4(ips []net.IPAddr) []net.IPAddr {
+	sorted := make([]net.IPAddr, len(ips))
+	copy(sorted, ips)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		return sorted[i].IP.To4() != nil && sorted[j].IP.To4() == nil
+	})
+	return sorted
+}
+
+// routerDialContext подключается к адресам роутера по одному с коротким
+// таймаутом, предпочитая IPv4. Мёртвые адреса (частое явление для
+// ретрансляторов KeenDNS) быстро пропускаются.
+func routerDialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, err
+	}
+	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	var firstErr error
+	for _, ip := range preferIPv4(ips) {
+		d := net.Dialer{Timeout: routerDialTimeout}
+		conn, err := d.DialContext(ctx, network, net.JoinHostPort(ip.IP.String(), port))
+		if err == nil {
+			return conn, nil
+		}
+		if firstErr == nil {
+			firstErr = err
+		}
+	}
+	if firstErr == nil {
+		firstErr = fmt.Errorf("no addresses for %s", host)
+	}
+	return nil, firstErr
+}
+
+// newRouterTransport создаёт транспорт с диалером routerDialContext.
+func newRouterTransport(insecure bool) *http.Transport {
+	t := &http.Transport{
+		DialContext:         routerDialContext,
+		MaxIdleConns:        10,
+		IdleConnTimeout:     90 * time.Second,
+		TLSHandshakeTimeout: 15 * time.Second,
+	}
+	if insecure {
+		t.TLSClientConfig = &tls.Config{InsecureSkipVerify: true}
+	}
+	return t
+}
 
 // routerSchemeCache хранит схему (http/https), с которой роутер уже
 // отвечал успешно, чтобы при следующих подключениях не пробовать вторую.
@@ -102,7 +173,7 @@ func keeneticAuth(httpClient *http.Client, baseURL, login, password string) erro
 	challenge := strings.TrimSpace(resp.Header.Get("X-NDM-Challenge"))
 	realm := strings.TrimSpace(resp.Header.Get("X-NDM-Realm"))
 	if challenge == "" || realm == "" {
-		return fmt.Errorf("роутер не поддерживает NDMS auth")
+		return &authPermError{fmt.Errorf("роутер не поддерживает NDMS auth")}
 	}
 
 	md5Input := login + ":" + realm + ":" + password
@@ -119,15 +190,16 @@ func keeneticAuth(httpClient *http.Client, baseURL, login, password string) erro
 	}
 	resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("auth failed (HTTP %d)", resp.StatusCode)
+		return &authPermError{fmt.Errorf("auth failed (HTTP %d)", resp.StatusCode)}
 	}
 	return nil
 }
 
 func newKeeneticClient() *http.Client {
 	return &http.Client{
-		Jar:     mustCookieJar(),
-		Timeout: keeneticClientTimeout,
+		Jar:       mustCookieJar(),
+		Timeout:   keeneticClientTimeout,
+		Transport: newRouterTransport(false),
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
@@ -140,19 +212,30 @@ func mustCookieJar() *cookiejar.Jar {
 }
 
 func keeneticSetupClient(domain, login, password string) (*http.Client, string, error) {
+	var errs []string
 	for _, baseURL := range routerBaseURLs(domain) {
-		client := newKeeneticClient()
-		if strings.HasPrefix(baseURL, "https://") {
-			client.Transport = &http.Transport{
-				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+		for attempt := 1; attempt <= keeneticAuthAttempts; attempt++ {
+			client := newKeeneticClient()
+			if strings.HasPrefix(baseURL, "https://") {
+				client.Transport = newRouterTransport(true)
+			}
+			err := keeneticAuth(client, baseURL, login, password)
+			if err == nil {
+				rememberRouterScheme(domain, strings.SplitN(baseURL, "://", 2)[0])
+				return client, baseURL, nil
+			}
+			errs = append(errs, fmt.Sprintf("%s (попытка %d): %v", baseURL, attempt, err))
+			// Повторяем только сетевые сбои (мёртвый ретранслятор KeenDNS,
+			// таймаут): каждая попытка делает свежий DNS-запрос и попадает
+			// на другой узел. При отклонённых учётных данных повторы
+			// бессмысленны и могут привести к блокировке на роутере.
+			var perm *authPermError
+			if errors.As(err, &perm) {
+				break
 			}
 		}
-		if err := keeneticAuth(client, baseURL, login, password); err == nil {
-			rememberRouterScheme(domain, strings.SplitN(baseURL, "://", 2)[0])
-			return client, baseURL, nil
-		}
 	}
-	return nil, "", fmt.Errorf("auth failed for %s", domain)
+	return nil, "", fmt.Errorf("auth failed for %s: %s", domain, strings.Join(errs, "; "))
 }
 
 // keeneticGetWithTimeout выполняет GET с таймаутом, отличным от базового
