@@ -7,7 +7,7 @@ let previousPeerSigs = new Map();
 let refreshTimer = null;
 let expandedPeers = new Set();
 let peerSearch = '';
-let peerFilter = '';
+let peerFilter = 'routers';
 let sortField = 'createdAt';
 let sortDir = 'asc';
 let expandedInputs = {};
@@ -23,7 +23,8 @@ let routerCheckInterval = 60000;
 let routerCacheTTL = 900;
 let refreshInProgress = false;
 let refreshPending = false;
-let searchDebounceTimer = null;
+let refreshQueued = false;
+let lastPeers = null;
 const THEME_KEY = 'ncmanager_theme';
 const ROUTER_CACHE_KEY = 'ncmanager_router_cache';
 
@@ -191,6 +192,11 @@ function xhr(method, path, body, options) {
 		}
 		if (options && options.timeout) {
 			x.timeout = options.timeout;
+		} else {
+			// Таймаут по умолчанию: без него зависший запрос никогда
+			// не завершается, навсегда блокирует refresh() и занимает
+			// слот в пуле соединений браузера.
+			x.timeout = method === 'GET' ? 60000 : 300000;
 		}
 		x.onreadystatechange = function() {
 			if (x.readyState !== 4) return;
@@ -323,21 +329,32 @@ async function loadStatus() {
 
 function onPeerSearchChange(value) {
 	peerSearch = value.trim();
-	if (searchDebounceTimer) clearTimeout(searchDebounceTimer);
-	searchDebounceTimer = setTimeout(() => {
-		forceRender = true;
-		scheduleRefresh();
-	}, 300);
+	renderPeersFromCache();
 }
 
-function setPeerFilter(f) {
-	peerFilter = (peerFilter === f) ? '' : f;
+function updateFilterButtons() {
 	const btnR = document.getElementById('filterRouters');
 	const btnV = document.getElementById('filterVpn');
 	if (btnR) btnR.classList.toggle('filter-btn--active', peerFilter === 'routers');
 	if (btnV) btnV.classList.toggle('filter-btn--active', peerFilter === 'vpn');
-	forceRender = true;
-	scheduleRefresh();
+}
+
+// renderPeersFromCache мгновенно перерисовывает таблицу из последних
+// загруженных данных без сетевого запроса (поиск/фильтры/сортировка).
+function renderPeersFromCache() {
+	if (!lastPeers) {
+		scheduleRefresh();
+		return;
+	}
+	saveExpandedInputs();
+	renderPeers(lastPeers);
+	restoreExpandedInputs();
+}
+
+function setPeerFilter(f) {
+	peerFilter = (peerFilter === f) ? '' : f;
+	updateFilterButtons();
+	renderPeersFromCache();
 }
 
 function applySort(arr) {
@@ -370,8 +387,7 @@ function handleSort(field) {
 		sortField = field;
 		sortDir = 'asc';
 	}
-	forceRender = true;
-	scheduleRefresh();
+	renderPeersFromCache();
 }
 
 function updateSortIndicators() {
@@ -599,6 +615,8 @@ function updateRouterLed(peerId, routerDomain) {
 		});
 }
 
+const ROUTER_CHECK_CONCURRENCY = 4;
+
 function checkAllRouters() {
 	if (routerCheckRunning) return;
 	routerCheckRunning = true;
@@ -606,8 +624,8 @@ function checkAllRouters() {
 	const ledEls = document.querySelectorAll('.led');
 	const cache = getRouterCache();
 	const now = Date.now();
-	const promises = [];
 	const pendingUpdates = {};
+	const queue = [];
 	for (const led of ledEls) {
 		if (!led.id || !led.id.startsWith('router-led-')) continue;
 		const peerId = led.id.replace('router-led-', '');
@@ -615,30 +633,40 @@ function checkAllRouters() {
 		if (cached && cached.available && (now - cached.ts) < routerCacheTTL * 1000) {
 			continue;
 		}
-		const p = xhr('GET', '/peers/router-check/' + encodeURIComponent(peerId), null, { timeout: routerCheckTimeout })
-			.then(res => {
-				if (res.ok) {
-					const data = res.json();
-					pendingUpdates[peerId] = { available: data.available, model: data.model || '', version: data.version || '', ts: now };
-					if (data.available) {
-						led.className = 'led led-green';
-						led.title = data.model ? ('Модель: ' + data.model + ' | Версия: ' + data.version) : 'Роутер доступен';
+		queue.push({ peerId, led });
+	}
+	// Ограниченная параллельность: одновременный опрос всех роутеров
+	// забивает пул соединений браузера и тормозит остальные запросы.
+	let next = 0;
+	const workers = [];
+	for (let w = 0; w < ROUTER_CHECK_CONCURRENCY && w < queue.length; w++) {
+		workers.push((async () => {
+			while (next < queue.length) {
+				const { peerId, led } = queue[next++];
+				try {
+					const res = await xhr('GET', '/peers/router-check/' + encodeURIComponent(peerId), null, { timeout: routerCheckTimeout });
+					if (res.ok) {
+						const data = res.json();
+						pendingUpdates[peerId] = { available: data.available, model: data.model || '', version: data.version || '', ts: now };
+						if (data.available) {
+							led.className = 'led led-green';
+							led.title = data.model ? ('Модель: ' + data.model + ' | Версия: ' + data.version) : 'Роутер доступен';
+						} else {
+							led.className = 'led led-gray';
+							led.title = 'Роутер недоступен';
+						}
 					} else {
 						led.className = 'led led-gray';
-						led.title = 'Роутер недоступен';
+						led.title = 'Проверка невозможна';
 					}
-				} else {
+				} catch (e) {
 					led.className = 'led led-gray';
-					led.title = 'Проверка невозможна';
+					led.title = 'Ошибка проверки';
 				}
-			})
-			.catch(() => {
-				led.className = 'led led-gray';
-				led.title = 'Ошибка проверки';
-			});
-		promises.push(p);
+			}
+		})());
 	}
-	Promise.allSettled(promises).then(() => {
+	Promise.allSettled(workers).then(() => {
 		if (Object.keys(pendingUpdates).length > 0) {
 			const merged = { ...cache, ...pendingUpdates };
 			sessionStorage.setItem(ROUTER_CACHE_KEY, JSON.stringify(merged));
@@ -1775,13 +1803,17 @@ function scheduleRefresh() {
 }
 
 async function refresh() {
-	if (refreshInProgress) return;
+	if (refreshInProgress) {
+		// Не отбрасываем обновление — выполним после завершения текущего.
+		refreshQueued = true;
+		return;
+	}
 	const ae = document.activeElement;
 	const editing = ae && (ae.tagName === 'INPUT' || ae.tagName === 'TEXTAREA') && ae.closest('#peersTable');
 	refreshInProgress = true;
 	try {
-		const peers = await loadPeers();
-		const status = await loadStatus();
+		const [peers, status] = await Promise.all([loadPeers(), loadStatus()]);
+		lastPeers = peers;
 		const currentIds = new Set(peers.map(p => p.id));
 		let peersChanged = currentIds.size !== previousPeerIds.size || [...currentIds].some(id => !previousPeerIds.has(id));
 		if (!peersChanged) {
@@ -1820,8 +1852,13 @@ async function refresh() {
 		}
 	} catch (e) {
 		console.error('refresh error:', e);
+	} finally {
+		refreshInProgress = false;
+		if (refreshQueued) {
+			refreshQueued = false;
+			scheduleRefresh();
+		}
 	}
-	refreshInProgress = false;
 	if (currentTab === 'waniface') {
 		loadAmneziaInterfaces();
 	}
@@ -2117,6 +2154,7 @@ async function init() {
 	const saved = localStorage.getItem('ncmanager_tab') || 'peers';
 	const tabBtn = Array.from(document.querySelectorAll('.nav-link')).find(b => b.getAttribute('data-tab') === saved) || document.querySelector('.nav-link');
 	switchTab(saved, tabBtn);
+	updateFilterButtons();
 	initTheme();
 	startAutoRefresh();
 	refresh();

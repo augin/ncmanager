@@ -15,6 +15,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -22,6 +23,68 @@ type keeneticImportResult struct {
 	Created    string
 	Intersects string
 	Messages   []string
+}
+
+const (
+	// keeneticClientTimeout — базовый таймаут запросов к роутеру.
+	keeneticClientTimeout = 60 * time.Second
+	// keeneticRciDumpTimeout — таймаут для полных дампов /rci/
+	// (object-groups, интерфейсы): на загруженных роутерах они
+	// отдаются дольше обычных запросов.
+	keeneticRciDumpTimeout = 120 * time.Second
+)
+
+// routerSchemeCache хранит схему (http/https), с которой роутер уже
+// отвечал успешно, чтобы при следующих подключениях не пробовать вторую.
+var (
+	routerSchemeMu    sync.Mutex
+	routerSchemeCache = make(map[string]string)
+)
+
+func rememberRouterScheme(domain, scheme string) {
+	routerSchemeMu.Lock()
+	routerSchemeCache[strings.ToLower(strings.TrimSpace(domain))] = scheme
+	routerSchemeMu.Unlock()
+}
+
+func cachedRouterScheme(domain string) string {
+	routerSchemeMu.Lock()
+	defer routerSchemeMu.Unlock()
+	return routerSchemeCache[strings.ToLower(strings.TrimSpace(domain))]
+}
+
+// routerBaseURLs возвращает кандидатов базовых URL для подключения к
+// роутеру в порядке предпочтения. Явная схема в адресе (http:// или
+// https://) используется как есть. Для IP-адреса сначала пробуется http,
+// для доменного имени — https. Если схема уже подтверждалась успешным
+// подключением, она идёт первой.
+func routerBaseURLs(domain string) []string {
+	d := strings.TrimSpace(domain)
+	lower := strings.ToLower(d)
+	if strings.HasPrefix(lower, "https://") || strings.HasPrefix(lower, "http://") {
+		return []string{strings.TrimRight(d, "/")}
+	}
+	addr := d
+	host := d
+	if h, _, err := net.SplitHostPort(d); err == nil {
+		host = h
+	}
+	schemes := []string{"https", "http"}
+	if ip := net.ParseIP(strings.Trim(host, "[]")); ip != nil {
+		schemes = []string{"http", "https"}
+		// IPv6 без скобок оборачиваем: http://[::1]
+		if net.ParseIP(d) != nil && strings.Contains(d, ":") {
+			addr = "[" + d + "]"
+		}
+	}
+	if cached := cachedRouterScheme(d); cached != "" && cached != schemes[0] {
+		schemes = []string{cached, schemes[0]}
+	}
+	urls := make([]string, 0, len(schemes))
+	for _, scheme := range schemes {
+		urls = append(urls, scheme+"://"+addr)
+	}
+	return urls
 }
 
 func keeneticAuth(httpClient *http.Client, baseURL, login, password string) error {
@@ -64,7 +127,7 @@ func keeneticAuth(httpClient *http.Client, baseURL, login, password string) erro
 func newKeeneticClient() *http.Client {
 	return &http.Client{
 		Jar:     mustCookieJar(),
-		Timeout: 30 * time.Second,
+		Timeout: keeneticClientTimeout,
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
 		},
@@ -77,28 +140,27 @@ func mustCookieJar() *cookiejar.Jar {
 }
 
 func keeneticSetupClient(domain, login, password string) (*http.Client, string, error) {
-	for _, scheme := range []string{"http", "https"} {
-		baseURL := scheme + "://" + domain
-		var client *http.Client
-		if scheme == "https" {
-			client = &http.Client{
-				Jar:     mustCookieJar(),
-				Timeout: 30 * time.Second,
-				CheckRedirect: func(req *http.Request, via []*http.Request) error {
-					return http.ErrUseLastResponse
-				},
-				Transport: &http.Transport{
-					TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
-				},
+	for _, baseURL := range routerBaseURLs(domain) {
+		client := newKeeneticClient()
+		if strings.HasPrefix(baseURL, "https://") {
+			client.Transport = &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 			}
-		} else {
-			client = newKeeneticClient()
 		}
 		if err := keeneticAuth(client, baseURL, login, password); err == nil {
+			rememberRouterScheme(domain, strings.SplitN(baseURL, "://", 2)[0])
 			return client, baseURL, nil
 		}
 	}
 	return nil, "", fmt.Errorf("auth failed for %s", domain)
+}
+
+// keeneticGetWithTimeout выполняет GET с таймаутом, отличным от базового
+// таймаута клиента (например, для полных дампов /rci/).
+func keeneticGetWithTimeout(httpClient *http.Client, url string, timeout time.Duration) (*http.Response, error) {
+	c := *httpClient
+	c.Timeout = timeout
+	return c.Get(url)
 }
 
 func keeneticRciPost(httpClient *http.Client, baseURL string, payload any) ([]byte, int, error) {
@@ -132,7 +194,7 @@ func keeneticSave(httpClient *http.Client, baseURL string) error {
 }
 
 func keeneticGetInterfaces(httpClient *http.Client, baseURL string) (map[string]string, error) {
-	resp, err := httpClient.Get(baseURL + "/rci/")
+	resp, err := keeneticGetWithTimeout(httpClient, baseURL+"/rci/", keeneticRciDumpTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("get interfaces failed: %v", err)
 	}
@@ -160,7 +222,7 @@ func keeneticGetInterfaces(httpClient *http.Client, baseURL string) (map[string]
 }
 
 func keeneticGetObjectGroups(httpClient *http.Client, baseURL string) ([]string, error) {
-	resp, err := httpClient.Get(baseURL + "/rci/")
+	resp, err := keeneticGetWithTimeout(httpClient, baseURL+"/rci/", keeneticRciDumpTimeout)
 	if err != nil {
 		return nil, fmt.Errorf("get object-groups failed: %v", err)
 	}

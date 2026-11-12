@@ -2,6 +2,51 @@ package main
 
 import "testing"
 
+func TestRouterBaseURLs(t *testing.T) {
+	cases := []struct {
+		in   string
+		want []string
+	}{
+		// IP — сначала http, затем https
+		{"192.168.1.1", []string{"http://192.168.1.1", "https://192.168.1.1"}},
+		{"10.0.0.1:8080", []string{"http://10.0.0.1:8080", "https://10.0.0.1:8080"}},
+		// Домен — сначала https, затем http
+		{"keenetik0.netcraze.pro", []string{"https://keenetik0.netcraze.pro", "http://keenetik0.netcraze.pro"}},
+		{"router.local:8443", []string{"https://router.local:8443", "http://router.local:8443"}},
+		// IPv6 оборачивается в скобки
+		{"::1", []string{"http://[::1]", "https://[::1]"}},
+		{"[::1]:8080", []string{"http://[::1]:8080", "https://[::1]:8080"}},
+		// Явная схема используется как есть
+		{"https://router.local", []string{"https://router.local"}},
+		{"http://10.0.0.1/", []string{"http://10.0.0.1"}},
+	}
+	for _, tc := range cases {
+		got := routerBaseURLs(tc.in)
+		if len(got) != len(tc.want) {
+			t.Errorf("routerBaseURLs(%q) = %v, want %v", tc.in, got, tc.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != tc.want[i] {
+				t.Errorf("routerBaseURLs(%q) = %v, want %v", tc.in, got, tc.want)
+				break
+			}
+		}
+	}
+}
+
+func TestRouterBaseURLsRemembersWorkingScheme(t *testing.T) {
+	const host = "10.99.99.99"
+	if got := routerBaseURLs(host); got[0] != "http://"+host {
+		t.Fatalf("before remember: got %v, want http first", got)
+	}
+	rememberRouterScheme(host, "https")
+	got := routerBaseURLs(host)
+	if got[0] != "https://"+host || got[1] != "http://"+host {
+		t.Errorf("after remember: got %v, want https first", got)
+	}
+}
+
 func TestParseCIDRToMask(t *testing.T) {
 	cases := []struct {
 		in       string

@@ -41,7 +41,7 @@ func (s *Server) dumpRouterRCI(w http.ResponseWriter, r *http.Request) {
 		}
 		return
 	}
-	resp, err := httpClient.Get(baseURL + "/rci/")
+	resp, err := keeneticGetWithTimeout(httpClient, baseURL+"/rci/", keeneticRciDumpTimeout)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusBadGateway)
 		return

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/tls"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -201,17 +202,22 @@ func (s *Server) checkPeerRouter(w http.ResponseWriter, r *http.Request) {
 }
 
 func checkRouterHTTPAvailability(domain string) bool {
-	client := &http.Client{
-		Timeout: 5 * time.Second,
-		CheckRedirect: func(req *http.Request, via []*http.Request) error {
-			return http.ErrUseLastResponse
-		},
-	}
-	for _, scheme := range []string{"https", "http"} {
-		url := scheme + "://" + domain + "/"
-		resp, err := client.Get(url)
+	for _, baseURL := range routerBaseURLs(domain) {
+		client := &http.Client{
+			Timeout: 5 * time.Second,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		}
+		if strings.HasPrefix(baseURL, "https://") {
+			client.Transport = &http.Transport{
+				TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
+			}
+		}
+		resp, err := client.Get(baseURL + "/")
 		if err == nil {
 			resp.Body.Close()
+			rememberRouterScheme(domain, strings.SplitN(baseURL, "://", 2)[0])
 			return true
 		}
 	}
