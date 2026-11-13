@@ -131,15 +131,16 @@ func (s *Server) removePeer(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) updatePeer(w http.ResponseWriter, r *http.Request) {
 	var req struct {
-		ID             string `json:"id"`
-		Name           string `json:"name"`
-		RouterDomain   string `json:"routerDomain"`
-		RouterLogin    string `json:"routerLogin"`
-		RouterPassword string `json:"routerPassword"`
-		Description    string `json:"description"`
-		Paid           *bool  `json:"paid"`
-		VPNOnly        *bool  `json:"vpnOnly"`
-		CreatedAt      string `json:"createdAt"`
+		ID             string  `json:"id"`
+		Name           string  `json:"name"`
+		Phone          *string `json:"phone"`
+		RouterDomain   string  `json:"routerDomain"`
+		RouterLogin    string  `json:"routerLogin"`
+		RouterPassword string  `json:"routerPassword"`
+		Description    string  `json:"description"`
+		Paid           *bool   `json:"paid"`
+		VPNOnly        *bool   `json:"vpnOnly"`
+		CreatedAt      string  `json:"createdAt"`
 	}
 	if !decodeJSONBody(w, r, &req) {
 		return
@@ -172,6 +173,9 @@ func (s *Server) updatePeer(w http.ResponseWriter, r *http.Request) {
 		if peersCfg.Peers[i].ID == req.ID {
 			if req.Name != "" {
 				peersCfg.Peers[i].Name = strings.TrimSpace(req.Name)
+			}
+			if req.Phone != nil {
+				peersCfg.Peers[i].Phone = strings.TrimSpace(*req.Phone)
 			}
 			if req.RouterDomain != "" {
 				peersCfg.Peers[i].RouterDomain = req.RouterDomain

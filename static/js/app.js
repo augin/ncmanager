@@ -281,8 +281,12 @@ async function changePassword() {
 async function logout() {
 	stopAutoRefresh();
 	stopRouterCheck();
-	setToken('');
+	// Сначала разлогиниваемся на сервере (запрос с текущим токеном),
+	// затем чистим локальные токены — иначе страница входа «перелогинит»
+	// обратно, а сервер не удалит HttpOnly-куку.
 	try { await xhr('POST', '/logout'); } catch (e) {}
+	setToken('');
+	try { localStorage.removeItem('ncmanager_token'); } catch (e) {}
 	location.href = '/';
 }
 
@@ -297,6 +301,7 @@ function switchTab(name, btn) {
 	if (name === 'logs') loadLogs();
 	if (name === 'dns') loadDnsRoutes();
   if (name === 'waniface') loadAmneziaInterfaces();
+  if (name === 'telegram') loadTelegram();
   if (name !== 'waniface') cancelAmneziaPingRefresh();
 	try { localStorage.setItem('ncmanager_tab', name); } catch (e) {}
 	closeMobileMenu();
@@ -494,6 +499,7 @@ function renderPeers(peers) {
 				<div class="peer-details-content">
 					<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
 						<input type="text" id="rn-${p.id}" value="${escapeHtml(p.name)}" placeholder="Имя пира" class="peer-name-input" size="${Math.max((p.name || '').length + 2, 10)}" style="width:auto;flex:0 0 auto;margin-bottom:0" onkeydown="if(event.key==='Enter')savePeerRouter('${p.id}')">
+						<input type="text" id="rph-${p.id}" value="${escapeHtml(p.phone || '')}" placeholder="Телефон (+79991234567)" size="16" style="width:auto;flex:0 0 auto;margin-bottom:0" title="Номер телефона — по нему телеграм-бот привязывает пользователя к пиру" onchange="savePeerPhone('${p.id}')" onkeydown="if(event.key==='Enter')savePeerPhone('${p.id}')">
 						<label class="vpn-only-check"><input type='checkbox' id='rvpn-${p.id}' ${p.vpnOnly ? 'checked' : ''} onchange="toggleVpnOnly('${p.id}', this.checked)"><span class="vpn-only-label">Только VPN</span></label>
  						<label class="check-row"><input type='checkbox' id='rpaid-${p.id}' class="paid-input" ${p.paid ? 'checked' : ''} onchange="togglePeerPaid('${p.id}', this.checked)"><span class="paid-indicator ${p.paid ? 'paid-indicator--on' : 'paid-indicator--off'}"></span><span class="paid-label">Оплачено</span></label>
 					</div>
@@ -707,6 +713,8 @@ function togglePeerDetails(id, e) {
 
 async function savePeerRouter(id, silent) {
 	const name = document.getElementById('rn-' + id).value.trim();
+	const phoneEl = document.getElementById('rph-' + id);
+	const phone = phoneEl ? phoneEl.value.trim() : '';
 	const routerDomain = document.getElementById('rd-' + id).value.trim();
 	const routerLogin = document.getElementById('rl-' + id).value.trim();
 	const routerPassword = document.getElementById('rp-' + id).value;
@@ -719,6 +727,7 @@ async function savePeerRouter(id, silent) {
 		const res = await xhr('POST', '/peers/update', {
 			id: id,
 			name: name,
+			phone: phone,
 			routerDomain: routerDomain,
 			routerLogin: routerLogin,
 			routerPassword: routerPassword,
@@ -753,6 +762,20 @@ async function savePeerRouter(id, silent) {
 			}
 		}
 		return false;
+	}
+}
+
+// savePeerPhone сохраняет телефон пира (для привязки телеграм-бота).
+async function savePeerPhone(id) {
+	const el = document.getElementById('rph-' + id);
+	if (!el) return;
+	try {
+		const res = await xhr('POST', '/peers/update', { id: id, phone: el.value.trim() });
+		if (!res.ok) throw new Error(await res.text());
+		el.style.borderColor = 'var(--color-border)';
+	} catch (e) {
+		el.style.borderColor = '#ef4444';
+		alert('Ошибка сохранения телефона: ' + e.message);
 	}
 }
 
@@ -2109,6 +2132,133 @@ async function applyHTTPS() {
 	try {
 		const res = await xhr('POST', '/https/apply', {});
 		if (res.ok) startHttpsStatusPolling();
+	} catch (e) {
+		alert('Ошибка: ' + e.message);
+	}
+}
+
+// ---------------- Телеграм бот ----------------
+
+async function loadTelegram() {
+	try {
+		const [cfgRes, stRes, usersRes] = await Promise.all([
+			xhr('GET', '/telegram/config'),
+			xhr('GET', '/telegram/status'),
+			xhr('GET', '/telegram/users'),
+		]);
+		if (cfgRes.ok) {
+			const cfg = cfgRes.json();
+			document.getElementById('iTgEnabled').checked = !!cfg.enabled;
+			document.getElementById('iTgToken').value = cfg.token || '';
+			document.getElementById('iTgWelcome').value = cfg.welcome || '';
+		}
+		if (stRes.ok) renderTelegramStatus(stRes.json());
+		if (usersRes.ok) renderTelegramUsers(usersRes.json());
+	} catch (e) {}
+}
+
+function renderTelegramStatus(st) {
+	const box = document.getElementById('tgStatus');
+	if (!box || !st) return;
+	box.textContent = '';
+	const lines = [];
+	let state = 'выключен';
+	if (st.enabled && st.running) state = 'работает';
+	else if (st.enabled) state = 'не запущен';
+	lines.push(['Состояние', state + (st.botName ? ' (' + st.botName + ')' : '')]);
+	if (st.lastUpdate) lines.push(['Последнее обновление', new Date(st.lastUpdate).toLocaleString('ru-RU')]);
+	if (st.userCount !== undefined) lines.push(['Пользователей', st.userCount + ' (привязано: ' + (st.linkedCount || 0) + ')']);
+	if (st.lastError) lines.push(['Ошибка', st.lastError]);
+	for (const [k, v] of lines) {
+		const div = document.createElement('div');
+		div.className = 'https-status-line' + (k === 'Ошибка' ? ' https-status-error' : '');
+		div.textContent = k + ': ' + v;
+		box.appendChild(div);
+	}
+}
+
+async function renderTelegramUsers(users) {
+	const wrap = document.getElementById('tgUsersTable');
+	const meta = document.getElementById('tgUsersMeta');
+	if (!wrap) return;
+	if (meta) {
+		const linked = users.filter(u => u.peerId).length;
+		meta.textContent = users.length + ' всего / ' + linked + ' привязано';
+	}
+	if (!users.length) {
+		wrap.innerHTML = '<p style="color:#64748b;padding:8px 0">Пока нет пользователей. Попросите пользователя написать боту /start.</p>';
+		return;
+	}
+	let peers = [];
+	try {
+		const res = await xhr('GET', '/peers');
+		if (res.ok) peers = res.json();
+	} catch (e) {}
+	users = users.slice().sort((a, b) => new Date(b.lastSeen || 0) - new Date(a.lastSeen || 0));
+	let html = '<table><thead><tr><th>TG ID</th><th>Пользователь</th><th>Телефон</th><th>Пир</th><th>Активность</th><th></th></tr></thead><tbody>';
+	for (const u of users) {
+		const name = escapeHtml(u.name || u.username || ('id ' + u.tgId));
+		const uname = u.username ? ' <span style="color:#64748b">@' + escapeHtml(u.username) + '</span>' : '';
+		const lastSeen = u.lastSeen ? new Date(u.lastSeen).toLocaleString('ru-RU') : '—';
+		let options = '<option value="">— не привязан —</option>';
+		for (const p of peers) {
+			options += '<option value="' + p.id + '"' + (p.id === u.peerId ? ' selected' : '') + '>' + escapeHtml(p.name) + '</option>';
+		}
+		html += '<tr>' +
+			'<td><code>' + u.tgId + '</code></td>' +
+			'<td>' + name + uname + '</td>' +
+			'<td>' + (u.phone ? '<code>' + escapeHtml(u.phone) + '</code>' : '—') + '</td>' +
+			'<td><select class="form-control" style="max-width:180px" onchange="linkTelegramUser(' + u.tgId + ', this.value)">' + options + '</select></td>' +
+			'<td title="Сообщений: ' + u.msgCount + '">' + lastSeen + ' <span style="color:#64748b">(' + u.msgCount + ')</span></td>' +
+			'<td><button class="btn btn-outline-danger btn-icon-sm" onclick="deleteTelegramUser(' + u.tgId + ')" title="Удалить пользователя">🗑</button></td>' +
+			'</tr>';
+	}
+	html += '</tbody></table>';
+	wrap.innerHTML = html;
+}
+
+async function linkTelegramUser(tgId, peerId) {
+	try {
+		const res = await xhr('POST', '/telegram/users/update', { tgId: tgId, peerId: peerId });
+		if (!res.ok) throw new Error(await res.text());
+		loadTelegram();
+	} catch (e) {
+		alert('Ошибка привязки: ' + e.message);
+		loadTelegram();
+	}
+}
+
+async function deleteTelegramUser(tgId) {
+	if (!confirm('Удалить пользователя из списка?')) return;
+	try {
+		const res = await xhr('POST', '/telegram/users/delete', { tgId: tgId });
+		if (!res.ok) throw new Error(await res.text());
+		loadTelegram();
+	} catch (e) {
+		alert('Ошибка: ' + e.message);
+	}
+}
+
+async function saveTelegramConfig() {
+	const btn = document.getElementById('saveTgBtn');
+	try {
+		const res = await xhr('POST', '/telegram/config/save', {
+			enabled: document.getElementById('iTgEnabled').checked,
+			token: document.getElementById('iTgToken').value.trim(),
+			welcome: document.getElementById('iTgWelcome').value.trim(),
+		});
+		if (!res.ok) throw new Error(await res.text());
+		if (btn) {
+			const oldText = btn.textContent;
+			btn.textContent = 'Сохранено';
+			btn.classList.add('copied');
+			setTimeout(() => {
+				btn.textContent = oldText;
+				btn.classList.remove('copied');
+			}, 2000);
+		}
+		// Бот перезапускается в фоне — дадим ему время подняться.
+		setTimeout(loadTelegram, 1500);
 	} catch (e) {
 		alert('Ошибка: ' + e.message);
 	}

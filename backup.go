@@ -39,6 +39,7 @@ func (s *Server) createBackup(w http.ResponseWriter, r *http.Request) {
 	files := []string{
 		"data/config.json",
 		"data/peers.json",
+		"data/telegram.json",
 		serverPrivateKeyFile,
 		authHashFile,
 		authSecretFile,

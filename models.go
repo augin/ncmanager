@@ -47,6 +47,7 @@ type Peer struct {
 	Paid           bool      `json:"paid,omitempty"`
 	VPNActive      bool      `json:"vpnActive,omitempty"`
 	VPNOnly        bool      `json:"vpnOnly,omitempty"`
+	Phone          string    `json:"phone,omitempty"`
 }
 
 // HasRouterCreds reports whether the peer has complete Keenetic router credentials.
@@ -74,6 +75,9 @@ type Config struct {
 	CloudflareToken     string `json:"cloudflareToken,omitempty"`
 	CloudflareZone      string `json:"cloudflareZone,omitempty"`
 	ServerName          string `json:"serverName,omitempty"`
+	TelegramEnabled     bool   `json:"telegramEnabled,omitempty"`
+	TelegramToken       string `json:"telegramToken,omitempty"`
+	TelegramWelcome     string `json:"telegramWelcome,omitempty"`
 	RouterCheckTimeout  int    `json:"routerCheckTimeout,omitempty"`
 	RouterCheckInterval int    `json:"routerCheckInterval,omitempty"`
 	RouterCacheTTL      int    `json:"routerCacheTTL,omitempty"`

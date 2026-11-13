@@ -37,6 +37,7 @@
         <a class="nav-link nav-link--active" data-tab="peers" onclick="switchTab('peers', this)">Пиры</a>
         <a class="nav-link" data-tab="dns" onclick="switchTab('dns', this)">DNS маршрутизация</a>
         <a class="nav-link" data-tab="waniface" onclick="switchTab('waniface', this)">Интерфейс выхода</a>
+        <a class="nav-link" data-tab="telegram" onclick="switchTab('telegram', this)">Телеграм бот</a>
         <a class="nav-link" data-tab="settings" onclick="switchTab('settings', this)">Настройки</a>
         <a class="nav-link" data-tab="logs" onclick="switchTab('logs', this)">Логи</a>
         <a class="nav-link" data-tab="backup" onclick="switchTab('backup', this)">Бэкап</a>
@@ -54,6 +55,7 @@
       <a class="mobile-nav-link nav-link--active" data-tab="peers" onclick="switchTab('peers', this)">Пиры</a>
       <a class="mobile-nav-link nav-link" data-tab="dns" onclick="switchTab('dns', this)">DNS маршрутизация</a>
       <a class="mobile-nav-link nav-link" data-tab="waniface" onclick="switchTab('waniface', this)">Интерфейс выхода</a>
+      <a class="mobile-nav-link nav-link" data-tab="telegram" onclick="switchTab('telegram', this)">Телеграм бот</a>
       <a class="mobile-nav-link nav-link" data-tab="settings" onclick="switchTab('settings', this)">Настройки</a>
       <a class="mobile-nav-link nav-link" data-tab="logs" onclick="switchTab('logs', this)">Логи</a>
       <a class="mobile-nav-link nav-link" data-tab="backup" onclick="switchTab('backup', this)">Бэкап</a>
@@ -259,6 +261,33 @@ AllowedIPs = ..."></textarea>
         <h3>Импортированные AWG интерфейсы</h3>
         <div id="amneziaInterfaceList">
           <p style="color:#64748b">Загрузка...</p>
+        </div>
+      </div>
+    </section>
+
+    <section class="card" id="tab-telegram" style="display:none">
+      <h2 class="card-title">Телеграм бот</h2>
+      <p class="card-subtitle">
+        Бот регистрирует пользователей и привязывает их к адресам по номеру телефона:
+        пользователь отправляет номер телефона, бот находит адрес с таким номером и связывает записи.
+      </p>
+      <div class="grid-form">
+        <div class="form-section">
+          <h3>Настройки бота</h3>
+          <label class="toggle-switch" title="Включить бота">
+            <input type="checkbox" id="iTgEnabled">
+            <span class="toggle-slider"></span>
+          </label>
+          <label>Токен бота<input id="iTgToken" type="password" autocomplete="off" placeholder="123456789:AA..."></label>
+          <label>Приветственное сообщение<textarea id="iTgWelcome" rows="3" class="form-textarea" placeholder="Здравствуйте! Отправьте номер телефона, чтобы привязать аккаунт к адресу."></textarea></label>
+          <div id="tgStatus" class="https-status"></div>
+          <div class="actions">
+            <button type="button" id="saveTgBtn" class="btn btn-primary" onclick="saveTelegramConfig()">Сохранить</button>
+          </div>
+        </div>
+        <div class="form-section">
+          <h3>Пользователи <span id="tgUsersMeta" style="color:var(--color-text-muted);font-weight:400;font-size:0.8rem"></span></h3>
+          <div id="tgUsersTable"></div>
         </div>
       </div>
     </section>

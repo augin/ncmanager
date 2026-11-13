@@ -142,9 +142,18 @@ func main() {
 	api.HandleFunc("/server/restart-service", withAuth(server.restartService))
 	api.HandleFunc("/keys/generate", withAuth(generateKeys))
 	api.HandleFunc("/login", loginHandler)
-	api.HandleFunc("/logout", withAuth(logoutHandler))
+	// logout не требует авторизации: запрос лишь удаляет куку сессии и
+	// должен работать даже с истёкшим токеном (иначе клиент остаётся
+	// залогиненным через куку после «выхода»).
+	api.HandleFunc("/logout", logoutHandler)
 	api.HandleFunc("/auth/change-password", withAuth(changePasswordHandler))
 	api.HandleFunc("/logs", withAuth(server.getLogs))
+	api.HandleFunc("/telegram/config", withAuth(server.getTelegramConfig))
+	api.HandleFunc("/telegram/config/save", withAuth(server.saveTelegramConfig))
+	api.HandleFunc("/telegram/status", withAuth(server.getTelegramStatus))
+	api.HandleFunc("/telegram/users", withAuth(server.listTelegramUsers))
+	api.HandleFunc("/telegram/users/update", withAuth(server.updateTelegramUser))
+	api.HandleFunc("/telegram/users/delete", withAuth(server.deleteTelegramUser))
 	api.HandleFunc("/https/status", withAuth(server.getHttpsStatus))
 	api.HandleFunc("/https/apply", withAuth(server.applyHttps))
 	api.HandleFunc("/router/dump/", withAuth(server.dumpRouterRCI))
@@ -160,6 +169,7 @@ func main() {
 	http.Handle("/api/", http.StripPrefix("/api", api))
 
 	initHTTPS()
+	initTelegram()
 
 	go startAmneziaTrafficPoller()
 	go startAmneziaTrafficCleanup()

@@ -44,15 +44,17 @@ button:hover { background: #7dd3fc; }
     if (token) h['Authorization'] = 'Bearer ' + token;
     return fetch(path, { method: 'POST', headers: h, body: JSON.stringify(body || {}) });
   }
-  // Миграция старых сессий: токен из localStorage проверяется и
-  // переносится в HttpOnly-куку через служебный редирект.
+  // Миграция старых сессий: сохранённый токен проверяется и переносится
+  // в HttpOnly-куку через служебный редирект.
   var old = null;
-  try { old = localStorage.getItem(KEY); } catch (e) {}
+  try { old = sessionStorage.getItem('wg_token') || localStorage.getItem(KEY); } catch (e) {}
   if (old) {
     fetch('/api/version', { headers: { 'Authorization': 'Bearer ' + old } })
       .then(function (r) {
         if (r.ok) { location.replace('/?token=' + encodeURIComponent(old)); }
-        else { try { localStorage.removeItem(KEY); } catch (e) {} }
+        else {
+          try { sessionStorage.removeItem('wg_token'); localStorage.removeItem(KEY); } catch (e) {}
+        }
       })
       .catch(function () {});
   }
@@ -63,7 +65,10 @@ button:hover { background: #7dd3fc; }
       .then(function (r) { return r.json().then(function (d) { return { ok: r.ok, d: d }; }); })
       .then(function (x) {
         if (!x.ok) { err('Неверный пароль'); return; }
-        try { localStorage.setItem(KEY, x.d.token); } catch (e) {}
+        try {
+          sessionStorage.setItem('wg_token', x.d.token);
+          localStorage.setItem(KEY, x.d.token);
+        } catch (e) {}
         if (x.d.requirePasswordChange === 'true') {
           window._t = x.d.token;
           document.getElementById('f').style.display = 'none';
