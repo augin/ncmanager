@@ -1988,6 +1988,10 @@ async function saveGeneralConfig() {
 		tlsEnabled: document.getElementById('iTLSEnabled').checked,
 		tlsHost: document.getElementById('iTLSHost').value,
 		tlsCache: document.getElementById('iTLSCache').value,
+		tlsPort: parseInt(document.getElementById('iTLSPort').value) || 443,
+		tlsProvider: document.getElementById('iTLSProvider').value,
+		cloudflareToken: document.getElementById('iCloudflareToken').value.trim(),
+		cloudflareZone: document.getElementById('iCloudflareZone').value.trim(),
 		routerCheckTimeout: parseInt(document.getElementById('iRouterCheckTimeout').value) || 5,
 		routerCheckInterval: parseInt(document.getElementById('iRouterCheckInterval').value) || 60,
 		routerCacheTTL: parseInt(document.getElementById('iRouterCacheTTL').value) || 900,
@@ -2008,6 +2012,7 @@ async function saveGeneralConfig() {
 		routerCheckTimeout = cfg.routerCheckTimeout * 1000;
 		routerCheckInterval = cfg.routerCheckInterval * 1000;
 		routerCacheTTL = cfg.routerCacheTTL;
+		startHttpsStatusPolling();
 
 		if (cfg.httpPort && cfg.httpPort !== originalHttpPort) {
 			const msg = 'Порт веб-интерфейса будет применён после перезапуска сервиса. Перезапустить сейчас?';
@@ -2029,6 +2034,84 @@ async function saveGeneralConfig() {
   } catch (e) {
     alert('Ошибка: ' + e.message);
   }
+}
+
+function onTLSProviderChange() {
+	const sel = document.getElementById('iTLSProvider');
+	const box = document.getElementById('tlsCloudflareBox');
+	if (sel && box) box.style.display = sel.value === 'cloudflare' ? '' : 'none';
+}
+
+function renderHttpsStatus(st) {
+	const box = document.getElementById('httpsStatus');
+	if (!box || !st) return;
+	box.textContent = '';
+	const lines = [];
+	let state = 'выключен';
+	if (st.provisioning) state = 'выполняется настройка…';
+	else if (st.running) state = 'работает (порт ' + (st.port || 443) + ')';
+	else if (st.enabled) state = 'не запущен';
+	lines.push(['Состояние', state]);
+	if (st.host) lines.push(['Домен', st.host]);
+	if (st.dnsRecord) lines.push(['A-запись', st.dnsRecord]);
+	if (st.certExpiry) {
+		const d = new Date(st.certExpiry);
+		lines.push(['Сертификат', (st.certValid ? 'действителен до ' : 'истёк ') + d.toLocaleString()]);
+	}
+	if (st.lastError) lines.push(['Ошибка', st.lastError]);
+	else if (st.message) lines.push(['', st.message]);
+	for (const [k, v] of lines) {
+		const div = document.createElement('div');
+		div.className = 'https-status-line' + (k === 'Ошибка' ? ' https-status-error' : '');
+		div.textContent = k ? (k + ': ' + v) : v;
+		box.appendChild(div);
+	}
+}
+
+async function loadHttpsStatus() {
+	try {
+		const res = await xhr('GET', '/https/status');
+		if (res.ok) renderHttpsStatus(res.json());
+	} catch (e) {}
+}
+
+let httpsStatusTimer = null;
+
+function startHttpsStatusPolling() {
+	stopHttpsStatusPolling();
+	let tries = 0;
+	loadHttpsStatus();
+	httpsStatusTimer = setInterval(async () => {
+		tries++;
+		let st = null;
+		try {
+			const res = await xhr('GET', '/https/status');
+			if (res.ok) st = res.json();
+		} catch (e) {}
+		if (st) renderHttpsStatus(st);
+		// Останавливаемся, когда настройка завершена (или вышли по лимиту).
+		if (st && !st.provisioning && tries > 1) {
+			stopHttpsStatusPolling();
+		} else if (tries >= 60) {
+			stopHttpsStatusPolling();
+		}
+	}, 4000);
+}
+
+function stopHttpsStatusPolling() {
+	if (httpsStatusTimer) {
+		clearInterval(httpsStatusTimer);
+		httpsStatusTimer = null;
+	}
+}
+
+async function applyHTTPS() {
+	try {
+		const res = await xhr('POST', '/https/apply', {});
+		if (res.ok) startHttpsStatusPolling();
+	} catch (e) {
+		alert('Ошибка: ' + e.message);
+	}
 }
 
 async function createBackup() {
@@ -2139,6 +2222,12 @@ async function init() {
 	document.getElementById('iTLSEnabled').checked = cfg.tlsEnabled || false;
 	document.getElementById('iTLSHost').value = cfg.tlsHost || '';
 	document.getElementById('iTLSCache').value = cfg.tlsCache || 'data/tls-cache';
+	document.getElementById('iTLSPort').value = cfg.tlsPort || 443;
+	document.getElementById('iTLSProvider').value = cfg.tlsProvider === 'cloudflare' ? 'cloudflare' : 'http-01';
+	document.getElementById('iCloudflareToken').value = cfg.cloudflareToken || '';
+	document.getElementById('iCloudflareZone').value = cfg.cloudflareZone || '';
+	onTLSProviderChange();
+	loadHttpsStatus();
 	document.getElementById('wanInterface').value = cfg.wanInterface || '';
 	document.getElementById('iServerName').value = cfg.serverName || '';
 	applyServerName(cfg.serverName || '');

@@ -60,6 +60,10 @@ func (s *Server) getConfig(w http.ResponseWriter, r *http.Request) {
 		"tlsEnabled":          cfg.TLSEnabled,
 		"tlsHost":             cfg.TLSHost,
 		"tlsCache":            cfg.TLSCache,
+		"tlsPort":             cfg.TLSPort,
+		"tlsProvider":         cfg.TLSProvider,
+		"cloudflareToken":     cfg.CloudflareToken,
+		"cloudflareZone":      cfg.CloudflareZone,
 		"serverName":          cfg.ServerName,
 		"routerCheckTimeout":  cfg.RouterCheckTimeout,
 		"routerCheckInterval": cfg.RouterCheckInterval,
@@ -67,6 +71,37 @@ func (s *Server) getConfig(w http.ResponseWriter, r *http.Request) {
 		"peers":               peersCfg.Peers,
 		"dnsRoutes":           routes,
 	})
+}
+
+// applyTLSRequestFields разбирает поля HTTPS из запроса в конфиг.
+// Возвращает ошибку при недопустимых значениях.
+func applyTLSRequestFields(req map[string]any, cfg *Config) error {
+	if v, ok := req["tlsEnabled"].(bool); ok {
+		cfg.TLSEnabled = v
+	}
+	if v, ok := req["tlsHost"].(string); ok {
+		cfg.TLSHost = strings.TrimSpace(v)
+	}
+	if v, ok := req["tlsCache"].(string); ok {
+		cfg.TLSCache = strings.TrimSpace(v)
+	}
+	if v, ok := req["tlsPort"].(float64); ok {
+		p := int(v)
+		if p < 1 || p > 65535 {
+			return fmt.Errorf("invalid tlsPort: must be 1-65535")
+		}
+		cfg.TLSPort = p
+	}
+	if v, ok := req["tlsProvider"].(string); ok {
+		cfg.TLSProvider = normalizeTLSProvider(v)
+	}
+	if v, ok := req["cloudflareToken"].(string); ok {
+		cfg.CloudflareToken = strings.TrimSpace(v)
+	}
+	if v, ok := req["cloudflareZone"].(string); ok {
+		cfg.CloudflareZone = strings.TrimSpace(v)
+	}
+	return nil
 }
 
 func (s *Server) saveConfig(w http.ResponseWriter, r *http.Request) {
@@ -114,14 +149,10 @@ func (s *Server) saveConfig(w http.ResponseWriter, r *http.Request) {
 	if v, ok := req["endpoint"].(string); ok {
 		cfg.Endpoint = resolveEndpoint(v)
 	}
-	if v, ok := req["tlsEnabled"].(bool); ok {
-		cfg.TLSEnabled = v
-	}
-	if v, ok := req["tlsHost"].(string); ok {
-		cfg.TLSHost = strings.TrimSpace(v)
-	}
-	if v, ok := req["tlsCache"].(string); ok {
-		cfg.TLSCache = strings.TrimSpace(v)
+	if err := applyTLSRequestFields(req, cfg); err != nil {
+		s.mu.Unlock()
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 	if v, ok := req["serverName"].(string); ok && v != "" {
 		cfg.ServerName = strings.TrimSpace(v)
@@ -200,6 +231,8 @@ func (s *Server) saveConfig(w http.ResponseWriter, r *http.Request) {
 		log.Printf("saveConfig: ufw routes: %v", err)
 	}
 
+	go applyTLSFromConfig()
+
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok", "interfaceIP": getInterfaceIP(cfg.Subnet)})
 }
@@ -228,14 +261,10 @@ func (s *Server) saveGeneralConfig(w http.ResponseWriter, r *http.Request) {
 		}
 		cfg.HttpPort = p
 	}
-	if v, ok := req["tlsEnabled"].(bool); ok {
-		cfg.TLSEnabled = v
-	}
-	if v, ok := req["tlsHost"].(string); ok {
-		cfg.TLSHost = strings.TrimSpace(v)
-	}
-	if v, ok := req["tlsCache"].(string); ok {
-		cfg.TLSCache = strings.TrimSpace(v)
+	if err := applyTLSRequestFields(req, cfg); err != nil {
+		s.mu.Unlock()
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
 	}
 	if v, ok := req["routerCheckTimeout"].(float64); ok && v > 0 {
 		cfg.RouterCheckTimeout = int(v)
@@ -255,7 +284,8 @@ func (s *Server) saveGeneralConfig(w http.ResponseWriter, r *http.Request) {
 	if cfg.RouterCacheTTL > 0 {
 		setRouterCacheTTLSeconds(cfg.RouterCacheTTL)
 	}
-	log.Printf("saveGeneralConfig: serverName=%s httpPort=%d", cfg.ServerName, cfg.HttpPort)
+	log.Printf("saveGeneralConfig: serverName=%s httpPort=%d tlsEnabled=%v tlsHost=%s tlsProvider=%s", cfg.ServerName, cfg.HttpPort, cfg.TLSEnabled, cfg.TLSHost, cfg.TLSProvider)
+	go applyTLSFromConfig()
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }

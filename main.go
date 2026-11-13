@@ -7,8 +7,6 @@ import (
 	"os"
 	"strings"
 	"time"
-
-	"golang.org/x/crypto/acme/autocert"
 )
 
 func main() {
@@ -147,6 +145,8 @@ func main() {
 	api.HandleFunc("/logout", withAuth(logoutHandler))
 	api.HandleFunc("/auth/change-password", withAuth(changePasswordHandler))
 	api.HandleFunc("/logs", withAuth(server.getLogs))
+	api.HandleFunc("/https/status", withAuth(server.getHttpsStatus))
+	api.HandleFunc("/https/apply", withAuth(server.applyHttps))
 	api.HandleFunc("/router/dump/", withAuth(server.dumpRouterRCI))
 	api.HandleFunc("/amnezia/status", withAuth(server.getAmneziaStatus))
 	api.HandleFunc("/amnezia/install", withAuth(server.installAmnezia))
@@ -159,24 +159,7 @@ func main() {
 	api.HandleFunc("/peers/router-check/", withAuth(server.checkPeerRouter))
 	http.Handle("/api/", http.StripPrefix("/api", api))
 
-	if cfg.TLSEnabled && cfg.TLSHost != "" {
-		cacheDir := cfg.TLSCache
-		if cacheDir == "" {
-			cacheDir = "data/tls-cache"
-		}
-		_ = os.MkdirAll(cacheDir, 0700)
-		certManager := autocert.Manager{
-			Prompt:     autocert.AcceptTOS,
-			HostPolicy: autocert.HostWhitelist(cfg.TLSHost),
-			Cache:      autocert.DirCache(cacheDir),
-		}
-		go http.ListenAndServe(":http", certManager.HTTPHandler(nil))
-		tlsConfig := certManager.TLSConfig()
-		server := &http.Server{Addr: ":https", Handler: http.Handler(nil)}
-		server.TLSConfig = tlsConfig
-		log.Printf("NC Manager starting on https://%s", cfg.TLSHost)
-		log.Fatalf("HTTPS server error: %v", server.ListenAndServeTLS("", ""))
-	}
+	initHTTPS()
 
 	go startAmneziaTrafficPoller()
 	go startAmneziaTrafficCleanup()

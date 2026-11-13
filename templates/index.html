@@ -131,7 +131,23 @@
               <span class="toggle-slider"></span>
             </label>
             <label>Домен (TLS Host)<input id="iTLSHost" placeholder="example.com"></label>
+            <label>Порт HTTPS<input id="iTLSPort" type="number" value="443" min="1" max="65535"></label>
+            <label>Способ выпуска сертификата
+              <select id="iTLSProvider" class="form-control" onchange="onTLSProviderChange()">
+                <option value="http-01">HTTP-01 (порт 80)</option>
+                <option value="cloudflare">DNS-01 — Cloudflare</option>
+              </select>
+            </label>
+            <div id="tlsCloudflareBox" style="display:none">
+              <label>Cloudflare API Token<input id="iCloudflareToken" type="password" autocomplete="off" placeholder="Zone.DNS: Edit, Zone.Zone: Read"></label>
+              <label>Зона Cloudflare (необязательно)<input id="iCloudflareZone" placeholder="example.com"></label>
+              <p class="hint">После сохранения A-запись домена создаётся автоматически, сертификат Let's Encrypt выпускается по DNS-01, HTTPS начинает слушать порт 443.</p>
+            </div>
             <label>Папка кэша (TLS Cache)<input id="iTLSCache" placeholder="data/tls-cache"></label>
+            <div id="httpsStatus" class="https-status"></div>
+            <div class="actions">
+              <button type="button" id="httpsApplyBtn" class="btn btn-secondary" onclick="applyHTTPS()">Обновить сертификат</button>
+            </div>
           </div>
 
           <div class="form-section">

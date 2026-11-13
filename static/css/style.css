@@ -1119,6 +1119,17 @@ code {
 .login-box input { background: #0f172a; border: 1px solid #334155; color: #e2e8f0; padding: 10px; border-radius: 4px; }
 .login-box button { background: #38bdf8; border: none; color: #0f172a; padding: 10px; border-radius: 4px; cursor: pointer; font-weight: 600; }
 .hint { font-size: 0.7rem; color: #64748b; margin-top: 12px; }
+.https-status {
+  margin-top: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 6px;
+  background: var(--color-bg-primary);
+  font-size: 0.78rem;
+  color: var(--color-text-muted);
+}
+.https-status-line { line-height: 1.6; word-break: break-word; }
+.https-status-error { color: var(--color-danger, #ef4444); }
 .form-group { margin-bottom: 12px; }
 .form-group label { display: block; font-size: 0.85rem; color: #475569; margin-bottom: 4px; }
 .form-group input, .form-group textarea, .form-group select { width: 100%; padding: 8px; border-radius: 6px; background: var(--color-bg-primary); color: var(--color-text-primary); border: 1px solid var(--color-border); font-family: inherit; font-size: 0.9rem; }

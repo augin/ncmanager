@@ -69,6 +69,10 @@ type Config struct {
 	TLSEnabled          bool   `json:"tlsEnabled,omitempty"`
 	TLSHost             string `json:"tlsHost,omitempty"`
 	TLSCache            string `json:"tlsCache,omitempty"`
+	TLSPort             int    `json:"tlsPort,omitempty"`
+	TLSProvider         string `json:"tlsProvider,omitempty"`
+	CloudflareToken     string `json:"cloudflareToken,omitempty"`
+	CloudflareZone      string `json:"cloudflareZone,omitempty"`
 	ServerName          string `json:"serverName,omitempty"`
 	RouterCheckTimeout  int    `json:"routerCheckTimeout,omitempty"`
 	RouterCheckInterval int    `json:"routerCheckInterval,omitempty"`
