@@ -18,7 +18,7 @@ import (
 	"unicode"
 )
 
-const appVersion = "1.19.0"
+const appVersion = "1.19.1"
 
 const dataFile = "data/config.json"
 
@@ -156,9 +156,27 @@ func getCIDRPrefix(ipnet *net.IPNet) int {
 	return ones
 }
 
+// serveIndex отдаёт веб-интерфейс: без авторизации — минимальную страницу
+// входа (без структуры приложения и статики), после авторизации —
+// полноценное приложение. Авторизация для HTML-загрузок идёт по
+// HttpOnly-куке, которую loginHandler ставит при входе.
 func serveIndex(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	// ?token=... — переход из старых сессий (токен был только в
+	// localStorage): запоминаем его в куке и убираем из адресной строки.
+	if tok := r.URL.Query().Get("token"); tok != "" {
+		if validateToken(tok) {
+			setSessionCookie(w, r, tok)
+		}
+		http.Redirect(w, r, "/", http.StatusFound)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	if !validateRequestAuth(r) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(loginPageHTML))
+		return
+	}
 	http.ServeFile(w, r, "templates/index.html")
 }
 

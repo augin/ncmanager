@@ -101,10 +101,10 @@ func main() {
 	}
 
 	http.HandleFunc("/", serveIndex)
-	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("static"))))
+	http.Handle("/static/", staticAuth(http.StripPrefix("/static/", http.FileServer(http.Dir("static")))))
 
 	api := http.NewServeMux()
-	api.HandleFunc("/version", server.getVersion)
+	api.HandleFunc("/version", withAuth(server.getVersion))
 	api.HandleFunc("/status", withAuth(server.getStatus))
 	api.HandleFunc("/config", withAuth(server.getConfig))
 	api.HandleFunc("/config/save", withAuth(server.saveConfig))

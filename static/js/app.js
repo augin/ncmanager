@@ -282,8 +282,8 @@ async function logout() {
 	stopAutoRefresh();
 	stopRouterCheck();
 	setToken('');
-	await xhr('POST', '/logout');
-	showLogin();
+	try { await xhr('POST', '/logout'); } catch (e) {}
+	location.href = '/';
 }
 
 function switchTab(name, btn) {
@@ -2320,7 +2320,7 @@ document.getElementById('changePasswordForm').addEventListener('submit', functio
 });
 
 window.addEventListener('DOMContentLoaded', async function() {
-	// Load version immediately (public endpoint)
+	// Load version immediately (requires auth)
 	await loadVersion();
 	
 	try {

@@ -184,7 +184,15 @@ func checkPassword(pw string) bool {
 	return false
 }
 
-func requireAuth(w http.ResponseWriter, r *http.Request) bool {
+// sessionCookieName — имя HttpOnly-куки с токеном сессии. Кука нужна,
+// потому что браузер не присылает заголовок Authorization при загрузке
+// HTML-страницы и статических файлов: по ней отдаётся полный интерфейс,
+// без неё — только минимальная страница входа.
+const sessionCookieName = "ncmanager_token"
+
+// tokenFromRequest извлекает токен сессии: заголовок Authorization,
+// X-Session-Token или HttpOnly-кука.
+func tokenFromRequest(r *http.Request) string {
 	token := r.Header.Get("Authorization")
 	if strings.HasPrefix(token, "Bearer ") {
 		token = strings.TrimPrefix(token, "Bearer ")
@@ -192,13 +200,67 @@ func requireAuth(w http.ResponseWriter, r *http.Request) bool {
 	if token == "" {
 		token = r.Header.Get("X-Session-Token")
 	}
-	if token != "" && validateToken(token) {
+	if token == "" {
+		if c, err := r.Cookie(sessionCookieName); err == nil {
+			token = c.Value
+		}
+	}
+	return token
+}
+
+// validateRequestAuth проверяет токен запроса (заголовок или кука).
+func validateRequestAuth(r *http.Request) bool {
+	token := tokenFromRequest(r)
+	return token != "" && validateToken(token)
+}
+
+// setSessionCookie запоминает токен в HttpOnly-куке (Strict — защита от
+// CSRF: кука не уходит в межсайтовых запросах).
+func setSessionCookie(w http.ResponseWriter, r *http.Request, token string) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    token,
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   r.TLS != nil,
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   int((168 * time.Hour).Seconds()),
+	})
+}
+
+// clearSessionCookie удаляет куку сессии при выходе.
+func clearSessionCookie(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		Secure:   r.TLS != nil,
+		SameSite: http.SameSiteStrictMode,
+		MaxAge:   -1,
+	})
+}
+
+func requireAuth(w http.ResponseWriter, r *http.Request) bool {
+	if validateRequestAuth(r) {
 		return true
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusUnauthorized)
 	json.NewEncoder(w).Encode(map[string]string{"error": "unauthorized"})
 	return false
+}
+
+// staticAuth отдаёт статические файлы только авторизованным запросам;
+// остальным — 404, чтобы не раскрывать структуру приложения.
+func staticAuth(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !validateRequestAuth(r) {
+			http.NotFound(w, r)
+			return
+		}
+		next.ServeHTTP(w, r)
+	})
 }
 
 func withAuth(handler http.HandlerFunc) http.HandlerFunc {
@@ -226,6 +288,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 	if checkPassword(req.Password) {
 		hash := currentPasswordHash()
 		token := generateToken("admin", hash, 168*time.Hour)
+		setSessionCookie(w, r, token)
 		resp := map[string]string{"status": "ok", "token": token}
 		if hash == sha256String("admin") {
 			resp["requirePasswordChange"] = "true"
@@ -242,6 +305,7 @@ func loginHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func logoutHandler(w http.ResponseWriter, r *http.Request) {
+	clearSessionCookie(w, r)
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
 }
