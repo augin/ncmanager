@@ -225,12 +225,34 @@ function xhr(method, path, body, options) {
 	});
 }
 
+// Chrome не заполняет readonly-поля: пока пользователь не коснулся
+// фильтра пиров, держим его readonly. Иначе Chrome считает страницу
+// формой входа (из-за пустых парольных полей) и подставляет сохранённый
+// логин в первое свободное текстовое поле — autocomplete="off" он при
+// этом игнорирует.
+['mousedown', 'touchstart', 'focusin'].forEach(function (ev) {
+	document.addEventListener(ev, function (e) {
+		if (e.target && e.target.id === 'peerName') e.target.readOnly = false;
+	}, true);
+});
+
 function showLogin() {
-	document.getElementById('loginOverlay').classList.remove('hidden');
+	// Сессия недействительна — перенаправляем на страницу входа (сервер
+	// отдаст минимальную страницу входа). Показывать форму логина здесь
+	// нельзя: оставленная в DOM форма с парольным полем провоцирует
+	// Chrome подставлять сохранённый логин в «свободные» текстовые поля
+	// приложения (например, в фильтр пиров).
+	location.href = '/';
 }
 
 function hideLogin() {
-	document.getElementById('loginOverlay').classList.add('hidden');
+	const o = document.getElementById('loginOverlay');
+	if (!o) return;
+	o.classList.add('hidden');
+	// Удаляем форму входа из DOM: Chrome видит парольное поле без поля
+	// логина и заполняет сохранённым логином первое свободное текстовое
+	// поле страницы — autocomplete="off" на нём Chrome игнорирует.
+	o.remove();
 }
 
 async function login() {
@@ -302,6 +324,7 @@ function switchTab(name, btn) {
 	if (name === 'dns') loadDnsRoutes();
   if (name === 'waniface') loadAmneziaInterfaces();
   if (name === 'telegram') loadTelegram();
+  setTokenInputVisible('iTgToken', name === 'telegram');
   if (name !== 'waniface') cancelAmneziaPingRefresh();
 	try { localStorage.setItem('ncmanager_tab', name); } catch (e) {}
 	closeMobileMenu();
@@ -507,7 +530,7 @@ function renderPeers(peers) {
 						<div id="router-creds-${p.id}" style="display:${p.vpnOnly ? 'none' : 'contents'}">
 						<label>Домен<input id="rd-${p.id}" value="${escapeHtml(p.routerDomain || '')}" placeholder="router.local"></label>
 						<label>Логин<input id="rl-${p.id}" value="${escapeHtml(p.routerLogin || '')}" placeholder="admin"></label>
-  <label>Пароль<span class="pwd-wrap"><input type='password' id='rp-${p.id}' value='${escapeHtml(p.routerPassword || '')}' placeholder='••••••'><button type='button' class='pwd-toggle' onclick="togglePwd('rp-${p.id}', this)" title="Показать/скрыть">👁</button></span></label>
+  <label>Пароль<span class="pwd-wrap"><input type='${isExpanded ? 'password' : 'hidden'}' id='rp-${p.id}' value='${escapeHtml(p.routerPassword || '')}' placeholder='••••••'><button type='button' class='pwd-toggle' onclick="togglePwd('rp-${p.id}', this)" title="Показать/скрыть">👁</button></span></label>
   						</div>
   						<p id="routerStatus-${p.id}" style="grid-column:1/-1;color:#059669;font-size:0.85rem"></p>
   						<label style="grid-column:1/-1">Описание<textarea id='rdesc-${p.id}' rows="4" style="width:100%;padding:6px;border-radius:4px;background:var(--color-bg-primary);color:var(--color-text-primary);border:1px solid var(--color-border);font-family:var(--font-sans);font-size:0.85rem;resize:vertical;min-height:100px" placeholder='Комментарий'>${escapeHtml(p.description || '')}</textarea></label>
@@ -707,6 +730,16 @@ function togglePeerDetails(id, e) {
 		document.querySelectorAll('.peer-details').forEach(r => {
 			const rid = r.id.replace('details-', '');
 			r.style.display = expandedPeers.has(rid) ? '' : 'none';
+			// Пустое парольное поле в скрытой строке — «якорь»
+			// автозаполнения Chrome; показываем поле только в раскрытой.
+			const rp = document.getElementById('rp-' + rid);
+			if (rp) {
+				if (expandedPeers.has(rid)) {
+					if (rp.type === 'hidden') rp.type = 'password';
+				} else {
+					rp.type = 'hidden';
+				}
+			}
 		});
 	}
 }
@@ -2063,6 +2096,15 @@ function onTLSProviderChange() {
 	const sel = document.getElementById('iTLSProvider');
 	const box = document.getElementById('tlsCloudflareBox');
 	if (sel && box) box.style.display = sel.value === 'cloudflare' ? '' : 'none';
+	setTokenInputVisible('iCloudflareToken', sel && sel.value === 'cloudflare');
+}
+
+// setTokenInputVisible держит поле токена type="hidden", пока его секция
+// скрыта: пустое парольное поле в DOM служит «якорем» автозаполнения
+// Chrome — он подставляет сохранённый логин в свободные текстовые поля.
+function setTokenInputVisible(id, visible) {
+	const el = document.getElementById(id);
+	if (el) el.type = visible ? 'password' : 'hidden';
 }
 
 function renderHttpsStatus(st) {
@@ -2470,6 +2512,10 @@ document.getElementById('changePasswordForm').addEventListener('submit', functio
 });
 
 window.addEventListener('DOMContentLoaded', async function() {
+	// Убираем форму входа из DOM сразу: страница отдаётся только
+	// авторизованным, а поле пароля в DOM «приманивает» автозаполнение
+	// Chrome (логин попадает в фильтр пиров).
+	hideLogin();
 	// Load version immediately (requires auth)
 	await loadVersion();
 	

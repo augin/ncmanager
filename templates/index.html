@@ -76,7 +76,7 @@
         </div>
       </div>
       <div class="add-peer">
-        <input type="text" id="peerName" class="peer-search" placeholder="Поиск или имя пира" oninput="onPeerSearchChange(this.value)">
+        <input type="text" id="peerName" class="peer-search" placeholder="Поиск или имя пира" readonly oninput="onPeerSearchChange(this.value)">
         <button onclick="addPeer()" class="btn btn-primary size-sm">+ Добавить</button>
       </div>
       <div class="peer-filters" id="peerFilters">
@@ -141,7 +141,7 @@
               </select>
             </label>
             <div id="tlsCloudflareBox" style="display:none">
-              <label>Cloudflare API Token<input id="iCloudflareToken" type="password" autocomplete="off" placeholder="Zone.DNS: Edit, Zone.Zone: Read"></label>
+              <label>Cloudflare API Token<input id="iCloudflareToken" type="hidden" autocomplete="off" placeholder="Zone.DNS: Edit, Zone.Zone: Read"></label>
               <label>Зона Cloudflare (необязательно)<input id="iCloudflareZone" placeholder="example.com"></label>
               <p class="hint">После сохранения A-запись домена создаётся автоматически, сертификат Let's Encrypt выпускается по DNS-01, HTTPS начинает слушать порт 443.</p>
             </div>
@@ -278,7 +278,7 @@ AllowedIPs = ..."></textarea>
             <input type="checkbox" id="iTgEnabled">
             <span class="toggle-slider"></span>
           </label>
-          <label>Токен бота<input id="iTgToken" type="password" autocomplete="off" placeholder="123456789:AA..."></label>
+          <label>Токен бота<input id="iTgToken" type="hidden" autocomplete="off" placeholder="123456789:AA..."></label>
           <label>Приветственное сообщение<textarea id="iTgWelcome" rows="3" class="form-textarea" placeholder="Здравствуйте! Отправьте номер телефона, чтобы привязать аккаунт к адресу."></textarea></label>
           <div id="tgStatus" class="https-status"></div>
           <div class="actions">
